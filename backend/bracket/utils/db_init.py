@@ -116,21 +116,28 @@ async def init_db_when_empty() -> UserId | None:
     table_count = await database.fetch_val(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
     )
-    if config.admin_email and config.admin_password:
-        if table_count <= 1 or (
-            environment is Environment.DEVELOPMENT and await get_user(config.admin_email) is None
-        ):
-            logger.warning("Empty db detected, creating tables...")
-            metadata.create_all(engine)
-            with engine.begin() as connection:
-                connection.exec_driver_sql(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS "
-                    "ix_users_email_lower ON users (LOWER(email));"
-                )
-            alembic_stamp_head()
+    if table_count <= 1:
+        logger.warning("Empty db detected, creating tables...")
+        metadata.create_all(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "ix_users_email_lower ON users (LOWER(email));"
+            )
+        alembic_stamp_head()
 
+        if config.admin_email and config.admin_password:
             logger.warning("Empty db detected, creating admin user...")
             return await create_admin_user()
+
+    if (
+        config.admin_email
+        and config.admin_password
+        and environment is Environment.DEVELOPMENT
+        and await get_user(config.admin_email) is None
+    ):
+        logger.warning("Admin user missing, creating admin user...")
+        return await create_admin_user()
 
     return None
 

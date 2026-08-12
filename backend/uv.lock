@@ -423,7 +423,6 @@ dependencies = [
     { name = "gunicorn" },
     { name = "heliclockter" },
     { name = "parameterized" },
-    { name = "passlib" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -436,7 +435,6 @@ dependencies = [
     { name = "sqlalchemy-stubs" },
     { name = "starlette" },
     { name = "types-aiofiles" },
-    { name = "types-passlib" },
     { name = "types-simplejson" },
     { name = "uvicorn" },
 ]
@@ -472,7 +470,6 @@ requires-dist = [
     { name = "gunicorn", specifier = "==26.0.0" },
     { name = "heliclockter", specifier = "==3.0.1" },
     { name = "parameterized", specifier = "==0.9.0" },
-    { name = "passlib", specifier = "==1.7.4" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "pydantic", specifier = "==2.13.2" },
     { name = "pydantic-settings", specifier = "==2.14.2" },
@@ -485,7 +482,6 @@ requires-dist = [
     { name = "sqlalchemy-stubs", specifier = "==0.4" },
     { name = "starlette", specifier = "==1.3.1" },
     { name = "types-aiofiles", specifier = "==25.1.0.20251011" },
-    { name = "types-passlib", specifier = "==1.7.7.20241221" },
     { name = "types-simplejson", specifier = "==3.20.0.20250218" },
     { name = "uvicorn", specifier = "==0.51.0" },
 ]
@@ -1301,15 +1297,6 @@ wheels = [
 ]
 
 [[package]]
-name = "passlib"
-version = "1.7.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b6/06/9da9ee59a67fae7761aab3ccc84fa4f3f33f125b370f1ccdb915bf967c11/passlib-1.7.4.tar.gz", hash = "sha256:defd50f72b65c5402ab2c573830a6978e5f202ad0d984793c8dde2c4152ebe04", size = 689844, upload-time = "2020-10-08T19:00:52.121Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/a4/ab6b7589382ca3df236e03faa71deac88cae040af60c071a78d254a62172/passlib-1.7.4-py2.py3-none-any.whl", hash = "sha256:aa6bca462b8d8bda89c70b382f0c298a20b5560af6cbfa2dce410c0a2fb669f1", size = 525554, upload-time = "2020-10-08T19:00:49.856Z" },
-]
-
-[[package]]
 name = "pathspec"
 version = "1.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1896,15 +1883,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/84/6c/6d23908a8217e36704aa9c79d99a620f2fdd388b66a4b7f72fbc6b6ff6c6/types_aiofiles-25.1.0.20251011.tar.gz", hash = "sha256:1c2b8ab260cb3cd40c15f9d10efdc05a6e1e6b02899304d80dfa0410e028d3ff", size = 14535, upload-time = "2025-10-11T02:44:51.237Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/0f/76917bab27e270bb6c32addd5968d69e558e5b6f7fb4ac4cbfa282996a96/types_aiofiles-25.1.0.20251011-py3-none-any.whl", hash = "sha256:8ff8de7f9d42739d8f0dadcceeb781ce27cd8d8c4152d4a7c52f6b20edb8149c", size = 14338, upload-time = "2025-10-11T02:44:50.054Z" },
-]
-
-[[package]]
-name = "types-passlib"
-version = "1.7.7.20241221"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d9/65/2af3d80436091cf59f06864ca2780499ab14a85ee06a6255bc653ad76913/types_passlib-1.7.7.20241221.tar.gz", hash = "sha256:c7e7d2d836aef2ef26a650110fc89cff896163767aebd8f5d6d5b2675e460173", size = 23128, upload-time = "2024-12-21T02:40:28.229Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/71/759a7c7f679ea041c06fca673e29e3ee09fe37fb12176bfa1d29826e6255/types_passlib-1.7.7.20241221-py3-none-any.whl", hash = "sha256:2376ac4e4b6c179205e987c28d77df9cceba1ebb1f79cfa23623a9cc581dde07", size = 37998, upload-time = "2024-12-21T02:40:26.329Z" },
 ]
 
 [[package]]

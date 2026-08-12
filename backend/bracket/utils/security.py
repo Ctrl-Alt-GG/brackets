@@ -3,7 +3,6 @@ from collections.abc import Iterable
 
 import bcrypt
 from email_validator import EmailNotValidError, validate_email
-from passlib.context import CryptContext
 
 COMMON_PASSWORDS = {
     "12345678",
@@ -12,7 +11,6 @@ COMMON_PASSWORDS = {
     "adminadmin",
     "letmein123",
     "password",
-    "password1",
     "password12",
     "password123",
     "qwerty123",
@@ -21,21 +19,14 @@ COMMON_PASSWORDS = {
 
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 72
-PASSWORD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    try:
-        return PASSWORD_CONTEXT.hash(password)
-    except Exception:
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return PASSWORD_CONTEXT.verify(plain_password, hashed_password)
-    except Exception:
-        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def normalize_email(email: str) -> str:
