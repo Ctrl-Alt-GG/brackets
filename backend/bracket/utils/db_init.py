@@ -122,6 +122,11 @@ async def init_db_when_empty() -> UserId | None:
         ):
             logger.warning("Empty db detected, creating tables...")
             metadata.create_all(engine)
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "ix_users_email_lower ON users (LOWER(email));"
+                )
             alembic_stamp_head()
 
             logger.warning("Empty db detected, creating admin user...")
@@ -159,11 +164,12 @@ async def sql_create_dev_db() -> UserId:
     }
 
     async def insert_dummy[BaseModelT: BaseModel](
-        obj_to_insert: BaseModelT, update_data: dict[str, Any] = {}
+        obj_to_insert: BaseModelT, update_data: dict[str, Any] | None = None
     ) -> int:
+        resolved_update_data = update_data or {}
         record_id, _ = await insert_generic(
             database,
-            obj_to_insert.model_copy(update=update_data),
+            obj_to_insert.model_copy(update=resolved_update_data),
             table_lookup[type(obj_to_insert)],
             type(obj_to_insert),
         )

@@ -1,0 +1,1 @@
+window.__BRACKET_RUNTIME_CONFIG__ = window.__BRACKET_RUNTIME_CONFIG__ ?? {};

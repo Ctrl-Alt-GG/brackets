@@ -71,6 +71,15 @@ async def sql_delete_stage_item(stage_item_id: StageItemId) -> None:
     await database.execute(query=query, values={"stage_item_id": stage_item_id})
 
 
+async def sql_update_stage_item_name(stage_item_id: StageItemId, name: str) -> None:
+    query = """
+        UPDATE stage_items
+        SET name = :name
+        WHERE stage_items.id = :stage_item_id
+        """
+    await database.execute(query=query, values={"stage_item_id": stage_item_id, "name": name})
+
+
 async def get_stage_item(
     tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> StageItemWithRounds:

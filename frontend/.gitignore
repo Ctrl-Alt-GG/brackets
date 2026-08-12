@@ -32,3 +32,4 @@ npm-debug.log*
 # vercel
 .vercel
 *.tsbuildinfo
+__pycache__/

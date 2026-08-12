@@ -1,10 +1,9 @@
-import os
 from typing import Literal
-from uuid import uuid4
 
 import aiofiles.os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from starlette import status
+from starlette.responses import FileResponse
 
 from bracket.config import config
 from bracket.database import database
@@ -36,6 +35,7 @@ from bracket.sql.rankings import (
 from bracket.sql.tournaments import (
     sql_create_tournament,
     sql_delete_tournament,
+    sql_get_public_tournaments,
     sql_get_tournament,
     sql_get_tournament_by_endpoint_name,
     sql_get_tournaments,
@@ -51,6 +51,7 @@ from bracket.utils.errors import (
 )
 from bracket.utils.id_types import TournamentId
 from bracket.utils.logging import logger
+from bracket.utils.uploads import get_image_media_type, store_validated_image_upload
 
 router = APIRouter(prefix=config.api_prefix)
 
@@ -78,7 +79,7 @@ async def get_tournaments(
 ) -> TournamentsResponse:
     match user, endpoint_name:
         case None, None:
-            raise unauthorized_exception
+            return TournamentsResponse(data=await sql_get_public_tournaments(filter_="OPEN"))
 
         case _, str() as endpoint_name:
             tournament = await sql_get_tournament_by_endpoint_name(endpoint_name)
@@ -189,25 +190,14 @@ async def upload_logo(
 ) -> TournamentResponse:
     old_logo_path = await get_tournament_logo_path(tournament_id)
     filename: str | None = None
-    new_logo_path: str | None = None
 
     if file:
-        assert file.filename is not None
-        extension = os.path.splitext(file.filename)[1]
-        assert extension in (".png", ".jpg", ".jpeg")
+        filename = await store_validated_image_upload(file, "tournament-logos")
 
-        filename = f"{uuid4()}{extension}"
-        new_logo_path = f"static/tournament-logos/{filename}" if file is not None else None
-
-        if new_logo_path:
-            await aiofiles.os.makedirs("static/tournament-logos", exist_ok=True)
-            async with aiofiles.open(new_logo_path, "wb") as f:
-                await f.write(await file.read())
-
-    if old_logo_path is not None and old_logo_path != new_logo_path:
+    if old_logo_path is not None and old_logo_path != filename:
         try:
             await aiofiles.os.remove(old_logo_path)
-        except Exception as exc:
+        except OSError as exc:
             logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
 
     await database.execute(
@@ -215,3 +205,16 @@ async def upload_logo(
         values={"logo_path": filename},
     )
     return TournamentResponse(data=await sql_get_tournament(tournament_id))
+
+
+@router.get("/tournaments/{tournament_id}/logo")
+async def get_tournament_logo(
+    tournament_id: TournamentId,
+    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> FileResponse:
+    tournament = await sql_get_tournament(tournament_id)
+    logo_path = await get_tournament_logo_path(tournament_id)
+    if tournament.logo_path is None or logo_path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
+
+    return FileResponse(logo_path, media_type=get_image_media_type(tournament.logo_path))

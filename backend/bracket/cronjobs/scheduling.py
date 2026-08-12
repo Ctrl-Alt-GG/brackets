@@ -3,26 +3,10 @@ from collections.abc import Awaitable, Callable
 
 from heliclockter import timedelta
 
-from bracket.models.db.account import UserAccountType
-from bracket.sql.users import delete_user_and_owned_clubs, get_expired_demo_users
 from bracket.utils.asyncio import AsyncioTasksManager
 from bracket.utils.logging import logger
 
 CronjobT = Callable[[], Awaitable[None]]
-
-
-async def delete_demo_accounts() -> None:
-    demo_users = await get_expired_demo_users()
-    if len(demo_users) < 1:
-        return
-
-    logger.info(f"Deleting {len(demo_users)} expired demo accounts")
-
-    for demo_user in demo_users:
-        assert demo_user.account_type is UserAccountType.DEMO
-        user_id = demo_user.id
-
-        await delete_user_and_owned_clubs(user_id)
 
 
 async def run_cronjob(cronjob_entrypoint: CronjobT, delta_time: timedelta) -> None:
@@ -35,7 +19,7 @@ async def run_cronjob(cronjob_entrypoint: CronjobT, delta_time: timedelta) -> No
             logger.exception(f"Could not run cronjob {cronjob_entrypoint.__name__}: {e}")
 
 
-CRONJOBS = ((timedelta(minutes=5), delete_demo_accounts),)
+CRONJOBS: tuple[tuple[timedelta, CronjobT], ...] = ()
 
 
 def start_cronjobs() -> None:

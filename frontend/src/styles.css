@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Outfit', 'Segoe UI', sans-serif;
+  --font-display: 'Sora', 'Outfit', 'Segoe UI', sans-serif;
+
+  --color-brand-50: #fff1f1;
+  --color-brand-100: #ffdcdc;
+  --color-brand-200: #ffb5b5;
+  --color-brand-300: #ff8a8a;
+  --color-brand-400: #ff5d5d;
+  --color-brand-500: #f13c3c;
+  --color-brand-600: #dd2525;
+  --color-brand-700: #b81e1e;
+  --color-brand-800: #8f1717;
+  --color-brand-900: #641010;
+  --color-brand-950: #220606;
+
+  --color-accent-300: #eac667;
+  --color-accent-400: #ddb534;
+  --color-accent-500: #c8960c;
+
+  --color-surface-900: #120f12;
+  --color-surface-800: #1a1619;
+  --color-surface-700: #241f24;
+  --color-surface-600: #352d35;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply min-h-screen bg-[radial-gradient(circle_at_top,_rgba(221,37,37,0.18),_transparent_28%),linear-gradient(180deg,#171114_0%,#0c090b_100%)] text-zinc-100 antialiased;
+  }
+
+  a {
+    @apply transition-colors;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}

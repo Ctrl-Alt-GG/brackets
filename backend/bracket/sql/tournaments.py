@@ -46,13 +46,29 @@ async def sql_get_tournaments(
     params: dict[str, Any] = {"club_ids": club_ids}
 
     if endpoint_name is not None:
-        query += "AND dashboard_endpoint = :endpoint_name"
-        params = {**params, "endpoint_name": endpoint_name}
+        query += " AND dashboard_endpoint = :endpoint_name"
+        params["endpoint_name"] = endpoint_name
 
-    if filter_ == "OPEN":
-        query += "AND status = 'OPEN'"
-    elif filter_ == "ARCHIVED":
-        query += "AND status = 'ARCHIVED'"
+    if filter_ != "ALL":
+        query += " AND status = :status"
+        params["status"] = filter_
+
+    result = await database.fetch_all(query=query, values=params)
+    return [Tournament.model_validate(x) for x in result]
+
+
+async def sql_get_public_tournaments(
+    filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "OPEN",
+) -> list[Tournament]:
+    query = """
+        SELECT *
+        FROM tournaments
+        """
+    params: dict[str, Any] = {}
+
+    if filter_ != "ALL":
+        query += " WHERE status = :status"
+        params["status"] = filter_
 
     result = await database.fetch_all(query=query, values=params)
     return [Tournament.model_validate(x) for x in result]

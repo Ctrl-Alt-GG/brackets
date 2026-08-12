@@ -1,5 +1,5 @@
 # Build static files
-FROM node:25-alpine AS builder
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -7,19 +7,22 @@ ENV NODE_ENV=production
 
 COPY . .
 
-RUN apk add pnpm && \
+RUN corepack enable && \
     CI=true pnpm install && \
     pnpm build
 
-# Production image, copy all the static files and run next
-FROM caddy:2-alpine AS runner
+# Production image, copy all the static files and run nginx as an unprivileged user
+FROM nginxinc/nginx-unprivileged:stable-bookworm AS runner
 
-WORKDIR /app
+WORKDIR /usr/share/nginx/html
 
-COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/Caddyfile /etc/caddy/Caddyfile
+ENV API_BASE_URL=http://localhost:8400/api
 
-EXPOSE 3000
+COPY --from=builder --chown=101:101 /app/dist/ /usr/share/nginx/html/
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=755 ./docker-entrypoint.sh /docker-entrypoint.sh
 
-HEALTHCHECK --interval=3s --timeout=5s --retries=10 \
-    CMD ["wget", "-O", "/dev/null", "http://localhost:3000"]
+EXPOSE 8080
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

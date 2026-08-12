@@ -184,7 +184,6 @@ users = Table(
         "account_type",
         Enum(
             "REGULAR",
-            "DEMO",
             name="account_type",
         ),
         nullable=False,

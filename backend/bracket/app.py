@@ -1,11 +1,10 @@
-import glob
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.extension import _rate_limit_exceeded_handler
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
@@ -36,12 +35,13 @@ from bracket.utils.alembic import alembic_run_migrations
 from bracket.utils.asyncio import AsyncioTasksManager
 from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
+from bracket.utils.rate_limit import limiter
 
 init_sentry()
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     await database.connect()
     await init_db_when_empty()
 
@@ -101,8 +101,6 @@ GitHub: <https://github.com/evroon/bracket>
 
 Docs: <https://docs.bracketapp.nl>
 
-Demo: <https://www.bracketapp.nl/demo>
-
 API docs (Redoc): <https://api.bracketapp.nl/redoc>
 
 API docs (Swagger UI): <https://api.bracketapp.nl/docs>
@@ -121,11 +119,20 @@ app = FastAPI(
     },
 )
 
+
+async def handle_rate_limit_exceeded(request: Request, exc: Exception) -> Response:
+    assert isinstance(exc, RateLimitExceeded)
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.cors_origins,
-    allow_origin_regex=config.cors_origin_regex,
-    allow_credentials=True,
+    allow_origin_regex=config.cors_origin_regex or None,
+    allow_credentials=config.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -139,6 +146,22 @@ async def add_process_time_header(request: Request, call_next: RequestResponseEn
     response = await call_next(request)
     process_time = time.time() - start_time
     request_metrics.response_time[RequestDefinition.from_request(request)] = process_time
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+    if environment is Environment.PRODUCTION:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("text/html"):
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
+            "form-action 'self'; img-src 'self' data: https:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
+        )
     return response
 
 
@@ -149,6 +172,9 @@ async def validation_exception_handler(request: Request, exc: HTTPException) -> 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "Unhandled request error for %s %s", request.method, request.url.path, exc_info=exc
+    )
     return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
 
@@ -157,26 +183,3 @@ app.mount(f"{config.api_prefix}/static", StaticFiles(directory="static"), name="
 for tag, router in routers.items():
     assert router.prefix == config.api_prefix, f"Prefix not set on router with tag `{tag}`"
     app.include_router(router, tags=[tag])
-
-if config.serve_frontend:
-    msg = "API_PREFIX env var must be set (e.g. `/api`) when serving the frontend"
-    assert config.api_prefix.startswith("/"), msg
-
-    frontend_root = Path("frontend-dist")
-    allowed_paths = list(glob.iglob("frontend-dist/**/*", recursive=True))
-
-    @app.get("/{full_path:path}")
-    async def frontend(full_path: str) -> FileResponse:
-        path = frontend_root / Path(full_path)
-
-        # Checking `str(path) in allowed_paths` should be enough here but we check for more cases
-        # to be sure and avoid AI tools raising false positives.
-        if (
-            path.exists()
-            and path.is_file()
-            and str(path) in allowed_paths
-            and frontend_root in path.parents
-        ):
-            return FileResponse(path)
-
-        return FileResponse(frontend_root / Path("index.html"))

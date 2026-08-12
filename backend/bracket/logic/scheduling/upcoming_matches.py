@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from starlette import status
 
 from bracket.logic.scheduling.ladder_teams import get_possible_upcoming_matches_for_swiss
 from bracket.models.db.match import MatchFilter, SuggestedMatch
@@ -23,7 +24,10 @@ async def get_draft_round_in_stage_item(
         (None, None),
     )
     if draft_round is None or stage_item is None:
-        raise HTTPException(400, "There is no draft round, so no matches can be scheduled.")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "There is no draft round, so no matches can be scheduled.",
+        )
     return draft_round, stage_item
 
 
@@ -33,10 +37,13 @@ def get_upcoming_matches_for_swiss(
     draft_round: RoundWithMatches | None = None,
 ) -> list[SuggestedMatch]:
     if stage_item.type is not StageType.SWISS:
-        raise HTTPException(400, "Expected stage item to be of type SWISS.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Expected stage item to be of type SWISS.")
 
     if draft_round is not None and not draft_round.is_draft:
-        raise HTTPException(400, "There is no draft round, so no matches can be scheduled.")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "There is no draft round, so no matches can be scheduled.",
+        )
 
     return get_possible_upcoming_matches_for_swiss(
         match_filter, stage_item.rounds, stage_item.inputs, draft_round

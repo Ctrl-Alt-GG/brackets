@@ -1,5 +1,0 @@
-.fullWithMobile {
-  @media (max-width: $mantine-breakpoint-sm) {
-    width: 100%;
-  }
-}

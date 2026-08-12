@@ -175,7 +175,6 @@ async def update_match_by_id(
         match_body.custom_duration_minutes != match.custom_duration_minutes
         or match_body.custom_margin_minutes != match.custom_margin_minutes
     ):
-        tournament = await sql_get_tournament(tournament_id)
         scheduled_matches = get_scheduled_matches(await get_full_tournament_details(tournament_id))
         await reorder_matches_for_court(tournament, scheduled_matches, assert_some(match.court_id))
 

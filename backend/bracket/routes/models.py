@@ -88,6 +88,15 @@ class TokenResponse(DataResponse[Token]):
     pass
 
 
+class AuthFeatureFlags(BaseModel):
+    user_registration_enabled: bool
+    password_reset_enabled: bool = False
+
+
+class AuthFeatureFlagsResponse(DataResponse[AuthFeatureFlags]):
+    pass
+
+
 class CourtsResponse(DataResponse[list[Court]]):
     pass
 

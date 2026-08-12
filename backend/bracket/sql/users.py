@@ -7,6 +7,7 @@ from bracket.sql.clubs import get_clubs_for_user_id, sql_delete_club
 from bracket.sql.tournaments import sql_get_tournaments
 from bracket.utils.db import fetch_one_parsed
 from bracket.utils.id_types import ClubId, TournamentId, UserId
+from bracket.utils.security import normalize_email
 from bracket.utils.types import assert_some
 
 
@@ -42,7 +43,8 @@ async def update_user(user_id: UserId, user: UserToUpdate) -> None:
         WHERE id = :user_id
         """
     await database.execute(
-        query=query, values={"user_id": user_id, "name": user.name, "email": user.email}
+        query=query,
+        values={"user_id": user_id, "name": user.name, "email": normalize_email(user.email)},
     )
 
 
@@ -76,17 +78,6 @@ async def get_user_by_id(user_id: UserId) -> UserPublic | None:
     return UserPublic.model_validate(dict(result._mapping)) if result is not None else None
 
 
-async def get_expired_demo_users() -> list[UserPublic]:
-    query = """
-        SELECT *
-        FROM users
-        WHERE account_type='DEMO'
-        AND created <= NOW() - INTERVAL '30 minutes'
-        """
-    result = await database.fetch_all(query=query)
-    return [UserPublic.model_validate(demo_user) for demo_user in result]
-
-
 async def create_user(user: UserInsertable) -> User:
     query = """
         INSERT INTO users (email, name, password_hash, created, account_type)
@@ -98,7 +89,7 @@ async def create_user(user: UserInsertable) -> User:
         values={
             "password_hash": user.password_hash,
             "name": user.name,
-            "email": user.email,
+            "email": normalize_email(user.email),
             "created": user.created,
             "account_type": user.account_type.value,
         },
@@ -118,14 +109,17 @@ async def check_whether_email_is_in_use(email: str) -> bool:
     query = """
         SELECT id
         FROM users
-        WHERE email = :email
+        WHERE LOWER(email) = LOWER(:email)
         """
-    result = await database.fetch_one(query=query, values={"email": email})
+    result = await database.fetch_one(query=query, values={"email": normalize_email(email)})
     return result is not None
 
 
 async def get_user(email: str) -> UserInDB | None:
-    return await fetch_one_parsed(database, UserInDB, users.select().where(users.c.email == email))
+    normalized_email = normalize_email(email)
+    return await fetch_one_parsed(
+        database, UserInDB, users.select().where(users.c.email.ilike(normalized_email))
+    )
 
 
 async def delete_user_and_owned_clubs(user_id: UserId) -> None:

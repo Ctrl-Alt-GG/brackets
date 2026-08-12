@@ -1,14 +1,11 @@
-from uuid import uuid4
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from heliclockter import datetime_utc, timedelta
 from starlette import status
+from starlette.requests import Request
 
 from bracket.config import config
-from bracket.logic.subscriptions import setup_demo_account
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import (
-    DemoUserToRegister,
     UserInsertable,
     UserPasswordToUpdate,
     UserPublic,
@@ -16,7 +13,6 @@ from bracket.models.db.user import (
     UserToUpdate,
 )
 from bracket.routes.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     Token,
     create_access_token,
     user_authenticated,
@@ -30,7 +26,8 @@ from bracket.sql.users import (
     update_user_password,
 )
 from bracket.utils.id_types import UserId
-from bracket.utils.security import hash_password, verify_captcha_token
+from bracket.utils.rate_limit import limiter
+from bracket.utils.security import hash_password
 from bracket.utils.types import assert_some
 
 router = APIRouter(prefix=config.api_prefix)
@@ -78,12 +75,14 @@ async def put_user_password(
 
 
 @router.post("/users/register", response_model=TokenResponse)
-async def register_user(user_to_register: UserToRegister) -> TokenResponse:
+@limiter.limit("5/15minutes")
+async def register_user(
+    request: Request, response: Response, user_to_register: UserToRegister
+) -> TokenResponse:
     if not config.allow_user_registration:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account creation is unavailable for now")
 
-    if not await verify_captcha_token(user_to_register.captcha_token):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Failed to validate captcha")
+    del request, response
 
     user = UserInsertable(
         email=user_to_register.email,
@@ -96,42 +95,16 @@ async def register_user(user_to_register: UserToRegister) -> TokenResponse:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address already in use")
 
     user_created = await create_user(user)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=config.access_token_expire_minutes)
     access_token = create_access_token(
-        data={"user": user_created.email}, expires_delta=access_token_expires
+        data={"sub": user_created.email, "user": user_created.email},
+        expires_delta=access_token_expires,
     )
     return TokenResponse(
-        data=Token(access_token=access_token, token_type="bearer", user_id=user_created.id)
-    )
-
-
-@router.post("/users/register_demo", response_model=TokenResponse)
-async def register_demo_user(user_to_register: DemoUserToRegister) -> TokenResponse:
-    if not config.allow_demo_user_registration:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "Demo account creation is unavailable for now"
+        data=Token(
+            access_token=access_token,
+            token_type="bearer",
+            user_id=user_created.id,
+            name=user_created.name,
         )
-
-    if not await verify_captcha_token(user_to_register.captcha_token):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Failed to validate captcha")
-
-    username = f"demo-{uuid4()}"
-    user = UserInsertable(
-        email=f"{username}@example.org",
-        password_hash=hash_password(str(uuid4())),
-        name=username,
-        created=datetime_utc.now(),
-        account_type=UserAccountType.DEMO,
-    )
-    if await check_whether_email_is_in_use(user.email):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address already in use")
-
-    user_created = await create_user(user)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"user": user_created.email}, expires_delta=access_token_expires
-    )
-    await setup_demo_account(user_created.id)
-    return TokenResponse(
-        data=Token(access_token=access_token, token_type="bearer", user_id=user_created.id)
     )

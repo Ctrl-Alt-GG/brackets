@@ -35,11 +35,8 @@ async def insert_generic[BaseModelT: BaseModel](
     assert environment is not Environment.PRODUCTION, "Below code can allow SQL injection"
     try:
         mapping = to_string_mapping(data_model)
-        values = ", ".join([f"'{x}'" for x in mapping.values()])
-        query = (
-            f"INSERT INTO {table.name} ({', '.join(mapping.keys())}) VALUES ({values}) RETURNING *"
-        )
-        last_record_id: int = await database.execute(query)
+        insert_statement = table.insert().values(**mapping).returning(table.c.id)
+        last_record_id = await database.execute(insert_statement)
         row_inserted = await fetch_one_parsed(
             database, return_type, table.select().where(table.c.id == last_record_id)
         )

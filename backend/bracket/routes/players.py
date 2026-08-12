@@ -6,7 +6,10 @@ from bracket.logic.subscriptions import check_requirement
 from bracket.models.db.player import Player, PlayerBody, PlayerMultiBody
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.routes.auth import user_authenticated_for_tournament
+from bracket.routes.auth import (
+    user_authenticated_for_tournament,
+    user_authenticated_or_public_dashboard,
+)
 from bracket.routes.models import (
     PaginatedPlayers,
     PlayersResponse,
@@ -34,7 +37,7 @@ async def get_players(
     tournament_id: TournamentId,
     not_in_team: bool = False,
     pagination: PaginationPlayers = Depends(),
-    _: UserPublic = Depends(user_authenticated_for_tournament),
+    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
 ) -> PlayersResponse:
     return PlayersResponse(
         data=PaginatedPlayers(

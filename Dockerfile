@@ -1,17 +1,4 @@
-# Build static frontend files
-FROM node:26-alpine AS builder
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY frontend .
-
-RUN apk add pnpm && \
-    CI=true pnpm install && \
-    VITE_API_BASE_URL=http://localhost:8400/api pnpm build
-
-# Build backend image that also serves frontend (stored in `/app/frontend-dist`)
+# Build backend image
 FROM python:3.14-alpine3.22
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -27,8 +14,6 @@ RUN addgroup --system bracket && \
 USER bracket
 
 RUN uv sync --no-dev --locked
-
-COPY --from=builder /app/dist /app/frontend-dist
 
 EXPOSE 8400
 

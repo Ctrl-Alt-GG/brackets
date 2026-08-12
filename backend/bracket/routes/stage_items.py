@@ -3,7 +3,6 @@ from heliclockter import datetime_utc
 from starlette import status
 
 from bracket.config import config
-from bracket.database import database
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import update_start_times_of_matches
 from bracket.logic.planning.rounds import (
@@ -51,6 +50,7 @@ from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
 from bracket.sql.stage_items import (
     get_stage_item,
     sql_create_stage_item_with_empty_inputs,
+    sql_update_stage_item_name,
 )
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament
@@ -109,21 +109,7 @@ async def update_stage_item(
     __: Tournament = Depends(disallow_archived_tournament),
     stage_item: StageItemWithRounds = Depends(stage_item_dependency),
 ) -> SuccessResponse:
-    if stage_item is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not find all stages",
-        )
-
-    query = """
-        UPDATE stage_items
-        SET name = :name
-        WHERE stage_items.id = :stage_item_id
-    """
-    await database.execute(
-        query=query,
-        values={"stage_item_id": stage_item_id, "name": stage_item_body.name},
-    )
+    await sql_update_stage_item_name(stage_item.id, stage_item_body.name)
     await recalculate_ranking_for_stage_item(tournament_id, stage_item)
     if stage_item.type == StageType.SINGLE_ELIMINATION:
         await update_inputs_in_complete_elimination_stage_item(stage_item)

@@ -1,11 +1,10 @@
 import csv
-import os
-from uuid import uuid4
 
-import aiofiles
 import aiofiles.os
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from heliclockter import datetime_utc
+from starlette import status
+from starlette.responses import FileResponse
 
 from bracket.config import config
 from bracket.database import database
@@ -51,6 +50,7 @@ from bracket.utils.id_types import PlayerId, TeamId, TournamentId
 from bracket.utils.logging import logger
 from bracket.utils.pagination import PaginationTeams
 from bracket.utils.types import assert_some
+from bracket.utils.uploads import get_image_media_type, store_validated_image_upload
 
 router = APIRouter(prefix=config.api_prefix)
 
@@ -132,25 +132,14 @@ async def update_team_logo(
 ) -> SingleTeamResponse:
     old_logo_path = await get_team_logo_path(tournament_id, team.id)
     filename: str | None = None
-    new_logo_path: str | None = None
 
     if file:
-        assert file.filename is not None
-        extension = os.path.splitext(file.filename)[1]
-        assert extension in (".png", ".jpg", ".jpeg")
+        filename = await store_validated_image_upload(file, "team-logos")
 
-        filename = f"{uuid4()}{extension}"
-        new_logo_path = f"static/team-logos/{filename}" if file is not None else None
-
-        if new_logo_path:
-            await aiofiles.os.makedirs("static/team-logos", exist_ok=True)
-            async with aiofiles.open(new_logo_path, "wb") as f:
-                await f.write(await file.read())
-
-    if old_logo_path is not None and old_logo_path != new_logo_path:
+    if old_logo_path is not None and old_logo_path != filename:
         try:
             await aiofiles.os.remove(old_logo_path)
-        except Exception as exc:
+        except OSError as exc:
             logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
 
     await database.execute(
@@ -158,6 +147,20 @@ async def update_team_logo(
         values={"logo_path": filename},
     )
     return SingleTeamResponse(data=assert_some(await get_team_by_id(team.id, tournament_id)))
+
+
+@router.get("/tournaments/{tournament_id}/teams/{team_id}/logo")
+async def get_team_logo(
+    tournament_id: TournamentId,
+    team_id: TeamId,
+    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> FileResponse:
+    team = assert_some(await get_team_by_id(team_id, tournament_id))
+    logo_path = await get_team_logo_path(tournament_id, team_id)
+    if team.logo_path is None or logo_path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
+
+    return FileResponse(logo_path, media_type=get_image_media_type(team.logo_path))
 
 
 @router.delete("/tournaments/{tournament_id}/teams/{team_id}", response_model=SuccessResponse)

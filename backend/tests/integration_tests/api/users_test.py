@@ -48,21 +48,8 @@ async def test_create_user(
         "name": "Some new name",
         "email": "some_email@email.com",
         "password": "my test pass",
-        "captcha_token": "my token",
     }
     response = await send_request(HTTPMethod.POST, "users/register", None, body)
-    assert "data" in response, response
-    assert response["data"]["token_type"] == "bearer"
-    assert response["data"]["user_id"]
-    await delete_user(response["data"]["user_id"])
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_create_demo_user(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
-) -> None:
-    body = {"captcha_token": "my token"}
-    response = await send_request(HTTPMethod.POST, "users/register_demo", None, body)
     assert "data" in response, response
     assert response["data"]["token_type"] == "bearer"
     assert response["data"]["user_id"]

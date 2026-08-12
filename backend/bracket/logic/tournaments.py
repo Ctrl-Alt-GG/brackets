@@ -1,5 +1,3 @@
-import aiofiles.os
-
 from bracket.sql.courts import sql_delete_courts_of_tournament
 from bracket.sql.players import sql_delete_players_of_tournament
 from bracket.sql.rankings import get_all_rankings_in_tournament, sql_delete_ranking
@@ -9,18 +7,18 @@ from bracket.sql.stages import get_full_tournament_details, sql_delete_stage
 from bracket.sql.teams import sql_delete_teams_of_tournament
 from bracket.sql.tournaments import sql_delete_tournament, sql_get_tournament
 from bracket.utils.id_types import TournamentId
+from bracket.utils.uploads import get_existing_upload_path, remove_existing_upload
 
 
 async def get_tournament_logo_path(tournament_id: TournamentId) -> str | None:
     tournament = await sql_get_tournament(tournament_id)
-    logo_path = f"static/tournament-logos/{tournament.logo_path}" if tournament.logo_path else None
-    return logo_path if logo_path is not None and await aiofiles.os.path.exists(logo_path) else None
+    logo_path = await get_existing_upload_path("tournament-logos", tournament.logo_path)
+    return str(logo_path) if logo_path is not None else None
 
 
 async def delete_tournament_logo(tournament_id: TournamentId) -> None:
-    logo_path = await get_tournament_logo_path(tournament_id)
-    if logo_path is not None:
-        await aiofiles.os.remove(logo_path)
+    tournament = await sql_get_tournament(tournament_id)
+    await remove_existing_upload("tournament-logos", tournament.logo_path)
 
 
 async def sql_delete_tournament_completely(tournament_id: TournamentId) -> None:
