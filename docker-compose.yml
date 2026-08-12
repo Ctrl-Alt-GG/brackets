@@ -9,7 +9,7 @@ volumes:
 services:
   bracket-backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: bracket-backend
     depends_on:
@@ -19,6 +19,20 @@ services:
       CORS_ORIGINS: http://localhost:8080
       PG_DSN: postgresql://bracket_dev:bracket_dev@postgres:5432/bracket_dev
       API_PREFIX: /api
+      # Local development only - never reuse this value outside compose.
+      JWT_SECRET: dev-only-insecure-jwt-secret-change-me-0123456789
+    healthcheck:
+      # Path must include API_PREFIX above.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8400/api/ping')",
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 10
     networks:
       - bracket_lan
     ports:
