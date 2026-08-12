@@ -117,7 +117,7 @@ async def init_db_when_empty() -> UserId | None:
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
     )
     if config.admin_email and config.admin_password:
-        if (table_count <= 1 and environment != Environment.CI) or (
+        if table_count <= 1 or (
             environment is Environment.DEVELOPMENT and await get_user(config.admin_email) is None
         ):
             logger.warning("Empty db detected, creating tables...")

@@ -1,10 +1,8 @@
 import logging
 import os
-import sys
 from enum import auto
 from typing import Annotated, Any
 
-import sentry_sdk
 from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,11 +13,9 @@ from bracket.utils.types import EnumAutoStr
 class Environment(EnumAutoStr):
     PRODUCTION = auto()
     DEVELOPMENT = auto()
-    CI = auto()
 
     def get_log_level(self) -> int:
         return {
-            Environment.CI: logging.WARNING,
             Environment.DEVELOPMENT: logging.DEBUG,
             Environment.PRODUCTION: logging.INFO,
         }[self]
@@ -45,7 +41,6 @@ class Config(BaseSettings):
     access_token_expire_minutes: int = 30
     auto_run_migrations: bool = True
     pg_dsn: PostgresDsn = PostgresDsn("postgresql://user:pass@localhost:5432/db")
-    sentry_dsn: str | None = None
     api_prefix: str = ""
     rate_limit_storage_uri: str = "memory://"
     upload_dir: str = "uploads"
@@ -99,10 +94,6 @@ class Config(BaseSettings):
         return self
 
 
-class CIConfig(Config):
-    model_config = SettingsConfigDict(env_file="ci.env")
-
-
 class DevelopmentConfig(Config):
     admin_email: Annotated[str | None, Field("test@example.org")]
     allow_insecure_http_sso: Annotated[bool, Field(True)]
@@ -115,18 +106,12 @@ class ProductionConfig(Config):
     model_config = SettingsConfigDict(env_file="prod.env")
 
 
-def currently_testing() -> bool:
-    return "pytest" in sys.modules
-
-
 environment = Environment(
-    os.getenv("ENVIRONMENT", "CI" if currently_testing() else "DEVELOPMENT").upper()
+    os.getenv("ENVIRONMENT", "DEVELOPMENT").upper()
 )
 config: Config
 
 match environment:
-    case Environment.CI:
-        config = CIConfig()  # type: ignore[call-arg]
     case Environment.DEVELOPMENT:
         config = DevelopmentConfig()  # type: ignore[call-arg]
     case Environment.PRODUCTION:
@@ -137,12 +122,3 @@ if environment is Environment.PRODUCTION and config.rate_limit_storage_uri == "m
         "RATE_LIMIT_STORAGE_URI must use a shared backend in production; "
         "memory:// is not sufficient"
     )
-
-
-def init_sentry() -> None:
-    if config.sentry_dsn:
-        sentry_sdk.init(
-            dsn=config.sentry_dsn,
-            environment=str(environment.value),
-            include_local_variables=False,
-        )

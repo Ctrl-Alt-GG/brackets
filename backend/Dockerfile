@@ -27,4 +27,4 @@ COPY --chown=10001:10001 static ./static
 USER 10001:10001
 EXPOSE 8400
 
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "bracket.app:app", "--bind", "0.0.0.0:8400", "--workers", "1"]
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "bracket.app:app", "--bind", "0.0.0.0:8400", "--workers", "1", "--no-control-socket"]

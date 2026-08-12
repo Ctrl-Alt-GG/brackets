@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.staticfiles import StaticFiles
 
-from bracket.config import Environment, config, environment, init_sentry
+from bracket.config import Environment, config, environment
 from bracket.cronjobs.scheduling import start_cronjobs
 from bracket.database import database
 from bracket.models.metrics import RequestDefinition, get_request_metrics
@@ -37,15 +37,12 @@ from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
 from bracket.utils.rate_limit import limiter
 
-init_sentry()
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     await database.connect()
     await init_db_when_empty()
 
-    if config.auto_run_migrations and environment is not Environment.CI:
+    if config.auto_run_migrations:
         alembic_run_migrations()
 
     if environment is Environment.PRODUCTION:
@@ -56,8 +53,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 
     yield
 
-    if environment is not Environment.CI:
-        await database.disconnect()
+    await database.disconnect()
 
     await AsyncioTasksManager.gather()
 
