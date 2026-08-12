@@ -30,7 +30,8 @@ export function ClubsPage({
 
   async function createClub(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     await runAction(
       setFlash,
       async () => {
@@ -41,7 +42,7 @@ export function ClubsPage({
       },
       'Club created successfully.',
       () => {
-        event.currentTarget.reset();
+        form.reset();
         clubs.refresh();
       },
     );
