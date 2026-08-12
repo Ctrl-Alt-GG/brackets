@@ -2,25 +2,24 @@ networks:
   bracket_lan:
     driver: bridge
 
-volumes:
-  bracket_pg_data:
-  bracket_static_data:
-
 services:
   bracket-backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
     container_name: bracket-backend
+    image: ghcr.io/ctrl-alt-gg/bracket-backend:v0.1
     depends_on:
-      - postgres
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
     environment:
-      ENVIRONMENT: DEVELOPMENT
-      CORS_ORIGINS: http://localhost:8080
-      PG_DSN: postgresql://bracket_dev:bracket_dev@postgres:5432/bracket_dev
+      ENVIRONMENT: PRODUCTION
+      BASE_URL: https://bracket.ctrl-alt-gg.hu
+      CORS_ORIGINS: https://bracket.ctrl-alt-gg.hu
+      PG_DSN: postgresql://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
       API_PREFIX: /api
-      # Local development only - never reuse this value outside compose.
-      JWT_SECRET: dev-only-insecure-jwt-secret-change-me-0123456789
+      ALLOW_USER_REGISTRATION: "true"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
     healthcheck:
       # Path must include API_PREFIX above.
       test:
@@ -36,34 +35,44 @@ services:
     networks:
       - bracket_lan
     ports:
-      - 8400:8400
+      - 127.0.0.1:8400:8400
     restart: unless-stopped
     volumes:
-      - bracket_static_data:/app/static
+      - ./backend:/app/static
 
   bracket-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
     container_name: bracket-frontend
+    image: ghcr.io/ctrl-alt-gg/bracket-frontend:v0.1
     depends_on:
       - bracket-backend
     environment:
-      API_BASE_URL: http://localhost:8400/api
+      API_BASE_URL: https://bracket.ctrl-alt-gg.hu/api/
     networks:
       - bracket_lan
     ports:
-      - 8080:8080
+      - 127.0.0.1:3000:8080
     restart: unless-stopped
 
   postgres:
     environment:
-      POSTGRES_DB: bracket_dev
-      POSTGRES_PASSWORD: bracket_dev
-      POSTGRES_USER: bracket_dev
-    image: postgres
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+    image: postgres:18
     networks:
       - bracket_lan
     restart: always
     volumes:
-      - bracket_pg_data:/var/lib/postgresql
+      - ./postgres:/var/lib/postgresql
+
+  redis:
+    image: redis
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bracket_lan
+    restart: always
