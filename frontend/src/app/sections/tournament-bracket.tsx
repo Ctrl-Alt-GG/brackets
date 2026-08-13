@@ -4,7 +4,7 @@ import * as OpenApi from '../../openapi';
 import { StageItemVisualization } from './tournament-overview';
 import type { TournamentBundle } from '../types';
 import { cx } from '../utils';
-import { Surface } from '../ui';
+import { Surface, SurfaceHeading } from '../ui';
 
 export function BracketSection({
   bundle,
@@ -34,12 +34,7 @@ export function BracketSection({
 
   return (
     <Surface className="space-y-4">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-          Follow the road to the final
-        </p>
-        <h2 className="mt-2 font-display text-2xl font-semibold text-white">Brackets and groups</h2>
-      </div>
+      <SurfaceHeading title="Brackets and groups" />
       {stageItems.length > 1 ? (
         <div className="flex flex-wrap gap-2">
           {stageItems.map(({ stage, stageItem }) => (

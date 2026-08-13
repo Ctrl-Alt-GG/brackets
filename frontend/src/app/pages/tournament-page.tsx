@@ -98,7 +98,7 @@ const TOURNAMENT_STATUS_LABELS: Record<OpenApi.TournamentStatus, string> = {
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">{label}</p>
+      <p className="text-sm text-zinc-400">{label}</p>
       <p className="mt-3 font-display text-2xl font-semibold text-white">{value}</p>
     </div>
   );

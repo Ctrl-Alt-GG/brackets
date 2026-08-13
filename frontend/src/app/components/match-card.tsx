@@ -74,11 +74,11 @@ export function MatchCard({
     <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {showContext ? (
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+          <p className="text-xs text-zinc-500">
             {stageItem.name || stageItem.type_name} · {round.name}
           </p>
         ) : (
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{stage.name}</p>
+          <p className="text-xs text-zinc-500">{stage.name}</p>
         )}
         <span
           className={cx(

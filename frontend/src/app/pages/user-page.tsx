@@ -16,6 +16,7 @@ import {
   PageShell,
   Pill,
   Surface,
+  SurfaceHeading,
 } from '../ui';
 
 export function UserPage({
@@ -79,14 +80,7 @@ export function UserPage({
             return (
               <div className="grid gap-6 xl:grid-cols-2">
                 <Surface className="space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                      Profile
-                    </p>
-                    <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                      Identity
-                    </h2>
-                  </div>
+                  <SurfaceHeading title="Identity" />
                   <form
                     className="space-y-4"
                     onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -124,14 +118,7 @@ export function UserPage({
                 </Surface>
 
                 <Surface className="space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                      Security
-                    </p>
-                    <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                      Password
-                    </h2>
-                  </div>
+                  <SurfaceHeading title="Password" />
                   <form
                     className="space-y-4"
                     onSubmit={async (event: FormEvent<HTMLFormElement>) => {

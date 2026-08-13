@@ -45,6 +45,15 @@ export function Surface({ children, className }: { children: ReactNode; classNam
   );
 }
 
+export function SurfaceHeading({ actions, title }: { actions?: ReactNode; title: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 className="font-display text-2xl font-semibold text-white">{title}</h2>
+      {actions}
+    </div>
+  );
+}
+
 export function Pill({
   children,
   tone = 'default',
@@ -199,10 +208,7 @@ export function ErrorState({
 }) {
   return (
     <Surface className="space-y-4 border-red-400/30 bg-red-500/10 text-red-100">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-red-200">Error</p>
-        <h2 className="mt-2 text-xl font-semibold">{title}</h2>
-      </div>
+      <h2 className="text-xl font-semibold">{title}</h2>
       <p className="text-sm text-red-100/90">{error}</p>
       {action}
     </Surface>
@@ -220,9 +226,6 @@ export function EmptyState({
 }) {
   return (
     <Surface className="space-y-3 text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-        No content yet
-      </p>
       <h3 className="font-display text-2xl font-semibold text-white">{title}</h3>
       <p className="mx-auto max-w-xl text-sm text-zinc-300">{text}</p>
       {action}

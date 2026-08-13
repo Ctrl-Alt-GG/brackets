@@ -5,15 +5,10 @@ import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
 import { inputLabel, isScored, matchStatus } from '../utils';
 import { Link } from 'react-router';
-import { Pill, Surface } from '../ui';
+import { Pill, Surface, SurfaceHeading } from '../ui';
 
-function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">{eyebrow}</p>
-      <h2 className="mt-2 font-display text-2xl font-semibold text-white">{title}</h2>
-    </div>
-  );
+function SectionHeading({ title }: { title: string }) {
+  return <SurfaceHeading title={title} />;
 }
 
 export function OverviewSection({
@@ -36,10 +31,7 @@ export function OverviewSection({
   return (
     <div className="space-y-6">
       <Surface className="space-y-4">
-        <SectionHeading
-          eyebrow={live.length > 0 ? 'On the tables right now' : 'Next up'}
-          title={live.length > 0 ? 'Playing now' : 'Coming up next'}
-        />
+        <SectionHeading title={live.length > 0 ? 'Playing now' : 'Coming up next'} />
         {live.length === 0 && upcoming.length === 0 ? (
           <p className="text-sm text-zinc-400">
             No matches are running or scheduled at the moment.
@@ -52,9 +44,7 @@ export function OverviewSection({
         </div>
         {live.length > 0 && upcoming.length > 0 ? (
           <>
-            <p className="pt-2 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">
-              Coming up next
-            </p>
+            <p className="pt-2 text-sm font-medium text-zinc-300">Coming up next</p>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {upcoming.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
@@ -66,7 +56,7 @@ export function OverviewSection({
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Surface className="space-y-4">
-          <SectionHeading eyebrow="How this tournament runs" title="Stages and groups" />
+          <SectionHeading title="Stages and groups" />
           {bundle.stages.length === 0 ? (
             <p className="text-sm text-zinc-400">The tournament format has not been set up yet.</p>
           ) : null}
@@ -88,9 +78,7 @@ export function OverviewSection({
                         key={stageItem.id}
                         to={`/tournaments/${tournamentKey}/dashboard/bracket`}
                       >
-                        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                          {stageItem.type_name}
-                        </p>
+                        <p className="text-xs text-zinc-500">{stageItem.type_name}</p>
                         <h4 className="mt-2 font-semibold text-white">
                           {stageItem.name || stageItem.type_name}
                         </h4>
@@ -109,7 +97,7 @@ export function OverviewSection({
 
         <div className="space-y-6">
           <Surface className="space-y-4">
-            <SectionHeading eyebrow="Already played" title="Latest results" />
+            <SectionHeading title="Latest results" />
             {finished.length === 0 ? (
               <p className="text-sm text-zinc-400">No results yet.</p>
             ) : (
@@ -123,7 +111,7 @@ export function OverviewSection({
 
           {isAuthenticated && bundle.upcomingMatches.length > 0 ? (
             <Surface className="space-y-4">
-              <SectionHeading eyebrow="Organisers only" title="Suggested pairings" />
+              <SectionHeading title="Suggested pairings" />
               <div className="space-y-3">
                 {bundle.upcomingMatches.slice(0, 8).map((entry, index) => (
                   <div
@@ -131,9 +119,7 @@ export function OverviewSection({
                     key={`${entry.stageItemId}-${index}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                        {entry.stageItemName}
-                      </p>
+                      <p className="text-xs text-zinc-500">{entry.stageItemName}</p>
                       {entry.suggestion.is_recommended ? (
                         <Pill tone="success">recommended</Pill>
                       ) : null}
@@ -150,7 +136,7 @@ export function OverviewSection({
 
           {isAuthenticated ? (
             <Surface className="space-y-3">
-              <SectionHeading eyebrow="Organisers only" title="Manage this tournament" />
+              <SectionHeading title="Manage this tournament" />
               <div className="grid gap-2">
                 {[
                   ['players', 'Players'],
@@ -225,7 +211,7 @@ export function StageItemVisualization({
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Table</p>
+            <p className="text-sm font-medium text-zinc-300">Table</p>
             <div className="space-y-2">
               {standings.length === 0 ? (
                 <p className="text-sm text-zinc-400">No teams have been added yet.</p>
@@ -252,7 +238,7 @@ export function StageItemVisualization({
             </div>
           </div>
           <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Matches</p>
+            <p className="text-sm font-medium text-zinc-300">Matches</p>
             <div className="grid gap-3">
               {stageItem.rounds.map((round) => (
                 <div

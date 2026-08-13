@@ -4,7 +4,7 @@ import * as OpenApi from '../../openapi';
 import { runAction } from '../hooks';
 import type { FlashMessage, TournamentBundle } from '../types';
 import { toCheckbox } from '../utils';
-import { Button, FormField, Input, Pill, Surface, Textarea } from '../ui';
+import { Button, FormField, Input, Pill, Surface, SurfaceHeading, Textarea } from '../ui';
 
 export function PlayersSection({
   bundle,
@@ -18,10 +18,7 @@ export function PlayersSection({
   return (
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <Surface className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">Create</p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-white">Roster intake</h2>
-        </div>
+        <SurfaceHeading title="Roster intake" />
         <form
           className="space-y-4"
           onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -96,15 +93,10 @@ export function PlayersSection({
       </Surface>
 
       <Surface className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Roster
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Players</h2>
-          </div>
-          <Pill>{`${bundle.players.length} players`}</Pill>
-        </div>
+        <SurfaceHeading
+          actions={<Pill>{`${bundle.players.length} players`}</Pill>}
+          title="Players"
+        />
         <div className="space-y-4">
           {bundle.players.map((player) => (
             <details
@@ -199,12 +191,7 @@ export function TeamsSection({
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Surface className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Create
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Single team</h2>
-          </div>
+          <SurfaceHeading title="Single team" />
           <form
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -265,12 +252,7 @@ export function TeamsSection({
         </Surface>
 
         <Surface className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">Bulk</p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-              Batch team creation
-            </h2>
-          </div>
+          <SurfaceHeading title="Batch team creation" />
           <form
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -307,15 +289,7 @@ export function TeamsSection({
       </div>
 
       <Surface className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Roster
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Teams</h2>
-          </div>
-          <Pill>{`${bundle.teams.length} teams`}</Pill>
-        </div>
+        <SurfaceHeading actions={<Pill>{`${bundle.teams.length} teams`}</Pill>} title="Teams" />
         <div className="grid gap-4 lg:grid-cols-2">
           {bundle.teams.map((team) => (
             <details

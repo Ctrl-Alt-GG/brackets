@@ -16,6 +16,7 @@ import {
   PageShell,
   Pill,
   Surface,
+  SurfaceHeading,
 } from '../ui';
 
 export function ClubsPage({
@@ -78,12 +79,7 @@ export function ClubsPage({
     <PageShell title="Event manager">
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <Surface className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Create
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">New event</h2>
-          </div>
+          <SurfaceHeading title="New event" />
           <form className="space-y-4" onSubmit={createClub}>
             <FormField error={nameError} label="Event name">
               <Input
@@ -98,17 +94,10 @@ export function ClubsPage({
         </Surface>
 
         <Surface className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                Inventory
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                Existing events
-              </h2>
-            </div>
-            <Pill>{`${clubs.data?.length ?? 0} events`}</Pill>
-          </div>
+          <SurfaceHeading
+            actions={<Pill>{`${clubs.data?.length ?? 0} events`}</Pill>}
+            title="Existing events"
+          />
           {clubs.loading ? <LoadingState title="Loading events…" /> : null}
           {clubs.error ? (
             <ErrorState

@@ -27,6 +27,7 @@ import {
   Pill,
   Select,
   Surface,
+  SurfaceHeading,
 } from '../ui';
 import { useState } from 'react';
 
@@ -95,15 +96,10 @@ export function HomePage({
 
   const tournamentList = (
     <Surface className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-            Live inventory
-          </p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-white">Tournaments</h2>
-        </div>
-        <Pill>{`${tournaments.data?.length ?? 0} total`}</Pill>
-      </div>
+      <SurfaceHeading
+        actions={<Pill>{`${tournaments.data?.length ?? 0} total`}</Pill>}
+        title="Tournaments"
+      />
       <div className="grid gap-4 md:grid-cols-2">
         {tournaments.data?.map((tournament) => {
           const dashboardEndpoint = normalizeDashboardEndpoint(tournament.dashboard_endpoint);
@@ -130,9 +126,7 @@ export function HomePage({
                     {tournament.duration_minutes} min with {tournament.margin_minutes} min margins.
                   </p>
                 </div>
-                <div className="text-right text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  #{tournament.id}
-                </div>
+                <div className="text-right text-xs text-zinc-500">#{tournament.id}</div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {session ? (
@@ -219,14 +213,7 @@ export function HomePage({
           {tournamentList}
           {session ? (
             <Surface className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                  Create
-                </p>
-                <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                  New tournament
-                </h2>
-              </div>
+              <SurfaceHeading title="New tournament" />
               {clubs.data && clubs.data.length > 0 ? (
                 <form className="space-y-4" onSubmit={handleCreateTournament}>
                   <FormField label="Tournament name">

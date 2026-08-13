@@ -18,7 +18,7 @@ import {
   toOptionalNumber,
   toOptionalString,
 } from '../utils';
-import { Button, FormField, Input, Pill, Select, Surface, Textarea } from '../ui';
+import { Button, FormField, Input, Pill, Select, Surface, SurfaceHeading, Textarea } from '../ui';
 
 export function ScheduleSection({
   compact,
@@ -49,34 +49,31 @@ export function ScheduleSection({
     <div className="space-y-6">
       {!compact ? (
         <Surface className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                Scheduler
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-white">Court lanes</h2>
-            </div>
-            {isAuthenticated ? (
-              <Button
-                onClick={async () => {
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost({
-                        path: { tournament_id: tournamentId },
-                        throwOnError: true,
-                      });
-                    },
-                    'Scheduling completed successfully.',
-                    onRefresh,
-                  );
-                }}
-                type="button"
-              >
-                Schedule all matches
-              </Button>
-            ) : null}
-          </div>
+          <SurfaceHeading
+            actions={
+              isAuthenticated ? (
+                <Button
+                  onClick={async () => {
+                    await runAction(
+                      setFlash,
+                      async () => {
+                        await OpenApi.scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost({
+                          path: { tournament_id: tournamentId },
+                          throwOnError: true,
+                        });
+                      },
+                      'Scheduling completed successfully.',
+                      onRefresh,
+                    );
+                  }}
+                  type="button"
+                >
+                  Schedule all matches
+                </Button>
+              ) : null
+            }
+            title="Court lanes"
+          />
           {isAuthenticated ? (
             <form
               className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]"
@@ -114,10 +111,7 @@ export function ScheduleSection({
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Court</p>
-                    <p className="mt-2 font-display text-2xl font-semibold text-white">
-                      {court.name}
-                    </p>
+                    <p className="font-display text-2xl font-semibold text-white">{court.name}</p>
                   </div>
                   <Pill>#{court.id}</Pill>
                 </summary>
@@ -181,7 +175,6 @@ export function ScheduleSection({
           <Surface className="space-y-4" key={court.id}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Court</p>
                 <h2
                   className={cx(
                     'font-display font-semibold text-white',
@@ -216,7 +209,7 @@ export function ScheduleSection({
                     className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
                     key={match.id}
                   >
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+                    <p className="text-xs text-zinc-400">
                       {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
                     </p>
                     <h3 className="mt-2 text-lg font-semibold text-white">
@@ -285,10 +278,7 @@ export function ScheduleSection({
         ))}
         {!compact ? (
           <Surface className="space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Unscheduled</p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-white">Waiting room</h2>
-            </div>
+            <SurfaceHeading title="Waiting room" />
             <div className="space-y-3">
               {unscheduled.length === 0 ? (
                 <p className="text-sm text-zinc-400">All matches are scheduled.</p>
@@ -298,7 +288,7 @@ export function ScheduleSection({
                   className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
                   key={match.id}
                 >
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
                   </p>
                   <h3 className="mt-2 text-lg font-semibold text-white">
@@ -332,15 +322,7 @@ export function StandingsSection({
   return (
     <div className="space-y-6">
       <Surface className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Who is winning
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Standings</h2>
-          </div>
-          <Pill>{`${standings.length} teams`}</Pill>
-        </div>
+        <SurfaceHeading actions={<Pill>{`${standings.length} teams`}</Pill>} title="Standings" />
         {compact ? (
           <div className="grid gap-3">
             {rankedStandings.length === 0 ? (
@@ -404,14 +386,7 @@ export function StandingsSection({
       </Surface>
       {!compact ? (
         <Surface className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Scoring rules
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-              How points are awarded
-            </h2>
-          </div>
+          <SurfaceHeading title="How points are awarded" />
           <div className="grid gap-4 lg:grid-cols-2">
             {rankings.map((ranking) => (
               <div
@@ -447,12 +422,7 @@ export function RankingsSection({
       <StandingsSection rankings={bundle.rankings} standings={standings} />
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Surface className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Create
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Ranking rule</h2>
-          </div>
+          <SurfaceHeading title="Ranking rule" />
           <form
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -504,17 +474,10 @@ export function RankingsSection({
         </Surface>
 
         <Surface className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-                Rules
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                Ranking definitions
-              </h2>
-            </div>
-            <Pill>{`${bundle.rankings.length} rankings`}</Pill>
-          </div>
+          <SurfaceHeading
+            actions={<Pill>{`${bundle.rankings.length} rankings`}</Pill>}
+            title="Ranking definitions"
+          />
           <div className="space-y-4">
             {bundle.rankings.map((ranking) => (
               <details
@@ -632,19 +595,14 @@ export function ResultsSection({
 
   return (
     <Surface className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-            Scoreboard
-          </p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-white">Latest results</h2>
-        </div>
-        <Pill>{`${scoredMatches.length} scored matches`}</Pill>
-      </div>
+      <SurfaceHeading
+        actions={<Pill>{`${scoredMatches.length} scored matches`}</Pill>}
+        title="Latest results"
+      />
       <div className="grid gap-3">
         {scoredMatches.map(({ match, round, stage, stageItem }) => (
           <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4" key={match.id}>
-            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+            <p className="text-xs text-zinc-400">
               {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
             </p>
             <h3 className="mt-2 text-xl font-semibold text-white">
@@ -680,14 +638,7 @@ export function SettingsSection({
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
       <Surface className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-            Tournament settings
-          </p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-            Metadata and policy
-          </h2>
-        </div>
+        <SurfaceHeading title="Metadata and policy" />
         <form
           className="grid gap-4 md:grid-cols-2"
           onSubmit={async (event: FormEvent<HTMLFormElement>) => {
@@ -786,14 +737,7 @@ export function SettingsSection({
       </Surface>
 
       <Surface className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-            Lifecycle
-          </p>
-          <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-            Status and sharing
-          </h2>
-        </div>
+        <SurfaceHeading title="Status and sharing" />
         <p className="text-sm text-zinc-300">
           Public dashboard link:{' '}
           <Link
@@ -866,74 +810,71 @@ export function StagesSection({
   return (
     <div className="space-y-6">
       <Surface className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              Stages
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Bracket editor</h2>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={async () => {
-                await runAction(
-                  setFlash,
-                  async () => {
-                    await OpenApi.createStageApiTournamentsTournamentIdStagesPost({
-                      path: { tournament_id: bundle.tournament.id },
-                      throwOnError: true,
-                    });
-                  },
-                  'Stage created successfully.',
-                  onRefresh,
-                );
-              }}
-              type="button"
-            >
-              Add stage
-            </Button>
-            <Button
-              onClick={async () => {
-                await runAction(
-                  setFlash,
-                  async () => {
-                    await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
-                      body: { direction: 'next' },
-                      path: { tournament_id: bundle.tournament.id },
-                      throwOnError: true,
-                    });
-                  },
-                  'Moved active stage forward.',
-                  onRefresh,
-                );
-              }}
-              tone="secondary"
-              type="button"
-            >
-              Activate next stage
-            </Button>
-            <Button
-              onClick={async () => {
-                await runAction(
-                  setFlash,
-                  async () => {
-                    await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
-                      body: { direction: 'previous' },
-                      path: { tournament_id: bundle.tournament.id },
-                      throwOnError: true,
-                    });
-                  },
-                  'Moved active stage backward.',
-                  onRefresh,
-                );
-              }}
-              tone="ghost"
-              type="button"
-            >
-              Activate previous stage
-            </Button>
-          </div>
-        </div>
+        <SurfaceHeading
+          actions={
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={async () => {
+                  await runAction(
+                    setFlash,
+                    async () => {
+                      await OpenApi.createStageApiTournamentsTournamentIdStagesPost({
+                        path: { tournament_id: bundle.tournament.id },
+                        throwOnError: true,
+                      });
+                    },
+                    'Stage created successfully.',
+                    onRefresh,
+                  );
+                }}
+                type="button"
+              >
+                Add stage
+              </Button>
+              <Button
+                onClick={async () => {
+                  await runAction(
+                    setFlash,
+                    async () => {
+                      await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
+                        body: { direction: 'next' },
+                        path: { tournament_id: bundle.tournament.id },
+                        throwOnError: true,
+                      });
+                    },
+                    'Moved active stage forward.',
+                    onRefresh,
+                  );
+                }}
+                tone="secondary"
+                type="button"
+              >
+                Activate next stage
+              </Button>
+              <Button
+                onClick={async () => {
+                  await runAction(
+                    setFlash,
+                    async () => {
+                      await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
+                        body: { direction: 'previous' },
+                        path: { tournament_id: bundle.tournament.id },
+                        throwOnError: true,
+                      });
+                    },
+                    'Moved active stage backward.',
+                    onRefresh,
+                  );
+                }}
+                tone="ghost"
+                type="button"
+              >
+                Activate previous stage
+              </Button>
+            </div>
+          }
+          title="Bracket editor"
+        />
         {focusStageItem ? (
           <div className="rounded-[1.25rem] border border-accent-400/30 bg-accent-500/10 p-4 text-sm text-accent-100">
             Focusing stage item <strong>{focusStageItem.name || focusStageItem.type_name}</strong>{' '}
@@ -1153,9 +1094,7 @@ export function StagesSection({
                         />
                         <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
                           <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                              Slot inputs
-                            </p>
+                            <p className="text-sm text-zinc-400">Slot inputs</p>
                             <h5 className="mt-2 font-semibold text-white">Seeding and winners</h5>
                           </div>
                           <div className="space-y-3">
@@ -1272,9 +1211,7 @@ export function StagesSection({
                       <div className="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
                         <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
                           <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                              Round controls
-                            </p>
+                            <p className="text-sm text-zinc-400">Round controls</p>
                             <h5 className="mt-2 font-semibold text-white">Round flow</h5>
                           </div>
                           <form
@@ -1345,9 +1282,7 @@ export function StagesSection({
                           </form>
                           {bundle.nextStageRankings[String(stageItem.id)] ? (
                             <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                                Next-stage ranking view
-                              </p>
+                              <p className="text-sm text-zinc-400">Next-stage ranking view</p>
                               <div className="mt-3 space-y-2 text-sm text-zinc-200">
                                 {bundle.nextStageRankings[String(stageItem.id)].map((entry) => (
                                   <div
