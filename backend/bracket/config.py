@@ -106,9 +106,7 @@ class ProductionConfig(Config):
     model_config = SettingsConfigDict(env_file="prod.env")
 
 
-environment = Environment(
-    os.getenv("ENVIRONMENT", "DEVELOPMENT").upper()
-)
+environment = Environment(os.getenv("ENVIRONMENT", "DEVELOPMENT").upper())
 config: Config
 
 match environment:
