@@ -31,8 +31,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --dev
 
-      - name: Run static checks
-        run: uv run ./check.sh
+      - name: Check Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Run mypy
+        run: uv run python -m mypy bracket
 
   frontend:
     name: Frontend
