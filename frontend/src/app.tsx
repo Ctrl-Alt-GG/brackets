@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Route, Routes, useLocation } from 'react-router';
 
@@ -31,8 +31,12 @@ export function App() {
     });
   }, [setSession, setMessage]);
 
+  // Only wipe cached data on logout. Clearing on mount would also drop the
+  // anonymous queries that are already in flight, leaving them stuck pending.
+  const hadSession = useRef(Boolean(session));
   useEffect(() => {
-    if (!session) queryClient.clear();
+    if (hadSession.current && !session) queryClient.clear();
+    hadSession.current = Boolean(session);
   }, [queryClient, session]);
 
   return (
