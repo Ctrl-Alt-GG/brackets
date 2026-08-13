@@ -121,8 +121,7 @@ async def init_db_when_empty() -> UserId | None:
         metadata.create_all(engine)
         with engine.begin() as connection:
             connection.exec_driver_sql(
-                "CREATE UNIQUE INDEX IF NOT EXISTS "
-                "ix_users_email_lower ON users (LOWER(email));"
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (LOWER(email));"
             )
         alembic_stamp_head()
 

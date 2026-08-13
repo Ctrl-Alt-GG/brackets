@@ -36,13 +36,17 @@ regular_subscription = Subscription(
 
 subscription_lookup = {"REGULAR": regular_subscription}
 
+# `clubs` is presented as "events" in the UI.
+subscription_attribute_labels = {"max_clubs": "events"}
+
 
 def check_requirement(array: list[Any], user: UserBase, attribute: str, additions: int = 1) -> None:
     subscription = subscription_lookup[user.account_type.value]
     constraint: int = getattr(subscription, attribute)
     if len(array) + additions > constraint:
+        label = subscription_attribute_labels.get(attribute, attribute.replace("max_", ""))
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"Your `{user.account_type.value}` subscription allows a maximum of "
-            f"{constraint} {attribute.replace('max_', '')}.",
+            f"{constraint} {label}.",
         )

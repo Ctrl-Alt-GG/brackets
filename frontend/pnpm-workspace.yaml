@@ -3,3 +3,5 @@ ignoredOptionalDependencies:
 allowBuilds:
   '@tailwindcss/oxide': true
   esbuild: false
+overrides:
+  js-yaml: 4.3.1

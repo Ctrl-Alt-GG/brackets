@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -6,7 +6,17 @@ import { unwrap } from '../api';
 import { runAction, useResource } from '../hooks';
 import type { FlashMessage, Session } from '../types';
 import { formatDateTime } from '../utils';
-import { Button, EmptyState, ErrorState, FormField, Input, PageShell, Pill, Surface } from '../ui';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  FormField,
+  Input,
+  LoadingState,
+  PageShell,
+  Pill,
+  Surface,
+} from '../ui';
 
 export function ClubsPage({
   session,
@@ -23,45 +33,67 @@ export function ClubsPage({
     [session?.access_token],
     Boolean(session),
   );
+  const [nameError, setNameError] = useState<string | null>(null);
 
   if (!session) {
     return <Navigate replace to="/login" />;
   }
 
+  function findDuplicate(name: string, ignoreClubId?: number) {
+    const normalized = name.trim().toLocaleLowerCase();
+    return clubs.data?.some(
+      (club) => club.id !== ignoreClubId && club.name.trim().toLocaleLowerCase() === normalized,
+    );
+  }
+
   async function createClub(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const name = String(formData.get('name') ?? '');
+
+    if (findDuplicate(name)) {
+      setNameError('An event with this name already exists.');
+      return;
+    }
+    setNameError(null);
+
     await runAction(
       setFlash,
       async () => {
         await OpenApi.createNewClubApiClubsPost({
-          body: { name: String(formData.get('name') ?? '') },
+          body: { name },
           throwOnError: true,
         });
       },
-      'Club created successfully.',
+      'Event created successfully.',
       () => {
-        event.currentTarget.reset();
+        form.reset();
         clubs.refresh();
       },
     );
   }
 
   return (
-    <PageShell title="Club manager">
+    <PageShell title="Event manager">
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <Surface className="space-y-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
               Create
             </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">New club</h2>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-white">New event</h2>
           </div>
           <form className="space-y-4" onSubmit={createClub}>
-            <FormField label="Club name">
-              <Input name="name" placeholder="Ctrl-Alt-GG" required />
+            <FormField error={nameError} label="Event name">
+              <Input
+                name="name"
+                onChange={() => setNameError(null)}
+                placeholder="Ctrl-Alt-GG"
+                required
+              />
             </FormField>
-            <Button type="submit">Create club</Button>
+            <Button type="submit">Create event</Button>
           </form>
         </Surface>
 
@@ -72,16 +104,16 @@ export function ClubsPage({
                 Inventory
               </p>
               <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-                Existing clubs
+                Existing events
               </h2>
             </div>
-            <Pill>{`${clubs.data?.length ?? 0} clubs`}</Pill>
+            <Pill>{`${clubs.data?.length ?? 0} events`}</Pill>
           </div>
-          {clubs.loading ? <div className="hidden" /> : null}
+          {clubs.loading ? <LoadingState title="Loading events…" /> : null}
           {clubs.error ? (
             <ErrorState
               error={clubs.error}
-              title="Unable to load clubs"
+              title="Unable to load events"
               action={
                 <Button onClick={clubs.refresh} type="button">
                   Retry
@@ -107,16 +139,26 @@ export function ClubsPage({
                   onSubmit={async (event) => {
                     event.preventDefault();
                     const formData = new FormData(event.currentTarget);
+                    const name = String(formData.get('name') ?? '');
+
+                    if (findDuplicate(name, club.id)) {
+                      setFlash({
+                        text: 'An event with this name already exists.',
+                        tone: 'error',
+                      });
+                      return;
+                    }
+
                     await runAction(
                       setFlash,
                       async () => {
                         await OpenApi.updateClubApiClubsClubIdPut({
-                          body: { name: String(formData.get('name') ?? '') },
+                          body: { name },
                           path: { club_id: club.id },
                           throwOnError: true,
                         });
                       },
-                      'Club updated successfully.',
+                      'Event updated successfully.',
                       clubs.refresh,
                     );
                   }}
@@ -135,7 +177,7 @@ export function ClubsPage({
                               throwOnError: true,
                             });
                           },
-                          'Club deleted successfully.',
+                          'Event deleted successfully.',
                           clubs.refresh,
                         );
                       }}

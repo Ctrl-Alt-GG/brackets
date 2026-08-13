@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { FlashMessage, Session } from './types';
 import { getErrorMessage, readSession, writeSession } from './utils';
@@ -53,10 +53,10 @@ export function useResource<T>(
 export function useSessionState() {
   const [session, setSession] = useState<Session>(() => readSession());
 
-  const updateSession = (nextSession: Session) => {
+  const updateSession = useCallback((nextSession: Session) => {
     writeSession(nextSession);
     setSession(nextSession);
-  };
+  }, []);
 
   return { session, setSession: updateSession };
 }

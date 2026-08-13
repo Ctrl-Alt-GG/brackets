@@ -3,12 +3,13 @@ import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
 import { runAction } from '../hooks';
+import { DateTimeField } from '../components/date-time-field';
+import { MatchCard } from '../components/match-card';
 import { StageItemVisualization } from './tournament-overview';
 import type { FlashMessage, FlattenedMatch, TournamentBundle } from '../types';
 import {
   cx,
   formatDateTime,
-  formatDateTimeForInput,
   inputLabel,
   isScored,
   normalizeDashboardEndpoint,
@@ -194,81 +195,91 @@ export function ScheduleSection({
             </div>
             <div className="space-y-3">
               {courtMatches.length === 0 ? (
-                <p className="text-sm text-zinc-400">No matches scheduled on this court yet.</p>
+                <p className="text-sm text-zinc-400">No matches on this court yet.</p>
               ) : null}
-              {courtMatches.map(({ match, round, stage, stageItem }) => (
-                <div
-                  className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                  key={match.id}
-                >
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                    {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
-                  </p>
-                  <h3
-                    className={cx(
-                      'mt-2 font-semibold text-white',
-                      compact ? 'text-2xl' : 'text-lg',
-                    )}
+              {courtMatches.map((entry) => {
+                const { match, round, stage, stageItem } = entry;
+
+                if (compact) {
+                  return (
+                    <MatchCard
+                      entry={entry}
+                      key={match.id}
+                      size="lg"
+                      stageItemsById={stageItemsById}
+                    />
+                  );
+                }
+
+                return (
+                  <div
+                    className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
+                    key={match.id}
                   >
-                    {inputLabel(match.stage_item_input1, stageItemsById)}{' '}
-                    <span className="text-brand-300">{match.stage_item_input1_score}</span> -{' '}
-                    <span className="text-brand-300">{match.stage_item_input2_score}</span>{' '}
-                    {inputLabel(match.stage_item_input2, stageItemsById)}
-                  </h3>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    {formatDateTime(match.start_time)} · position{' '}
-                    {match.position_in_schedule ?? 'TBD'}
-                  </p>
-                  {!compact && isAuthenticated ? (
-                    <form
-                      className="mt-4 grid gap-3 md:grid-cols-2"
-                      onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                        event.preventDefault();
-                        const formData = new FormData(event.currentTarget);
-                        await runAction(
-                          setFlash,
-                          async () => {
-                            await OpenApi.rescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePost(
-                              {
-                                body: {
-                                  new_court_id: toNumber(formData.get('new_court_id')),
-                                  new_position: toNumber(formData.get('new_position')),
-                                  old_court_id: match.court_id ?? 0,
-                                  old_position: match.position_in_schedule ?? 0,
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+                      {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">
+                      {inputLabel(match.stage_item_input1, stageItemsById)}{' '}
+                      <span className="text-brand-300">{match.stage_item_input1_score}</span> -{' '}
+                      <span className="text-brand-300">{match.stage_item_input2_score}</span>{' '}
+                      {inputLabel(match.stage_item_input2, stageItemsById)}
+                    </h3>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {formatDateTime(match.start_time)} · position{' '}
+                      {match.position_in_schedule ?? 'TBD'}
+                    </p>
+                    {isAuthenticated ? (
+                      <form
+                        className="mt-4 grid gap-3 md:grid-cols-2"
+                        onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+                          event.preventDefault();
+                          const formData = new FormData(event.currentTarget);
+                          await runAction(
+                            setFlash,
+                            async () => {
+                              await OpenApi.rescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePost(
+                                {
+                                  body: {
+                                    new_court_id: toNumber(formData.get('new_court_id')),
+                                    new_position: toNumber(formData.get('new_position')),
+                                    old_court_id: match.court_id ?? 0,
+                                    old_position: match.position_in_schedule ?? 0,
+                                  },
+                                  path: { match_id: match.id, tournament_id: tournamentId },
+                                  throwOnError: true,
                                 },
-                                path: { match_id: match.id, tournament_id: tournamentId },
-                                throwOnError: true,
-                              },
-                            );
-                          },
-                          'Match rescheduled successfully.',
-                          onRefresh,
-                        );
-                      }}
-                    >
-                      <FormField label="Move to court id">
-                        <Input
-                          defaultValue={match.court_id ?? ''}
-                          name="new_court_id"
-                          type="number"
-                        />
-                      </FormField>
-                      <FormField label="New position">
-                        <Input
-                          defaultValue={match.position_in_schedule ?? ''}
-                          name="new_position"
-                          type="number"
-                        />
-                      </FormField>
-                      <div className="md:col-span-2">
-                        <Button tone="secondary" type="submit">
-                          Reschedule
-                        </Button>
-                      </div>
-                    </form>
-                  ) : null}
-                </div>
-              ))}
+                              );
+                            },
+                            'Match rescheduled successfully.',
+                            onRefresh,
+                          );
+                        }}
+                      >
+                        <FormField label="Move to court id">
+                          <Input
+                            defaultValue={match.court_id ?? ''}
+                            name="new_court_id"
+                            type="number"
+                          />
+                        </FormField>
+                        <FormField label="New position">
+                          <Input
+                            defaultValue={match.position_in_schedule ?? ''}
+                            name="new_position"
+                            type="number"
+                          />
+                        </FormField>
+                        <div className="md:col-span-2">
+                          <Button tone="secondary" type="submit">
+                            Reschedule
+                          </Button>
+                        </div>
+                      </form>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </Surface>
         ))}
@@ -324,20 +335,16 @@ export function StandingsSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-200">
-              {compact ? 'Present standings' : 'Standings'}
+              Who is winning
             </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-              {compact ? 'Presentation leaderboard' : 'Leaderboard'}
-            </h2>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-white">Standings</h2>
           </div>
-          <Pill>{compact ? 'presentation mode' : `${standings.length} teams`}</Pill>
+          <Pill>{`${standings.length} teams`}</Pill>
         </div>
         {compact ? (
           <div className="grid gap-3">
             {rankedStandings.length === 0 ? (
-              <p className="text-sm text-zinc-400">
-                No teams are available yet, so the leaderboard is empty.
-              </p>
+              <p className="text-sm text-zinc-400">No teams have been added yet.</p>
             ) : null}
             {rankedStandings.map(({ rank, team }) => (
               <div
@@ -345,19 +352,13 @@ export function StandingsSection({
                 key={team.id}
               >
                 <div className="min-w-12 text-center">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">rank</p>
-                  <p className="mt-1 font-display text-2xl font-semibold text-white">#{rank}</p>
+                  <p className="font-display text-3xl font-semibold text-white">{rank}</p>
                 </div>
-                <div>
-                  <p className="font-display text-2xl font-semibold text-white">{team.name}</p>
-                  <p className="mt-1 text-sm text-zinc-300">
-                    {team.wins}W - {team.draws}D - {team.losses}L
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Swiss</p>
-                  <p className="mt-1 text-xl font-semibold text-brand-200">{team.swiss_score}</p>
-                </div>
+                <p className="font-display text-2xl font-semibold text-white">{team.name}</p>
+                <p className="text-right text-lg text-zinc-300">
+                  <span className="font-semibold text-emerald-300">{team.wins}</span> won ·{' '}
+                  {team.draws} drawn · {team.losses} lost
+                </p>
               </div>
             ))}
           </div>
@@ -366,34 +367,34 @@ export function StandingsSection({
             <table className="min-w-full text-left text-sm text-zinc-200">
               <thead>
                 <tr className="border-b border-white/10 text-xs uppercase tracking-[0.3em] text-zinc-400">
+                  <th className="px-3 py-3">#</th>
                   <th className="px-3 py-3">Team</th>
                   <th className="px-3 py-3">Players</th>
-                  <th className="px-3 py-3">W</th>
-                  <th className="px-3 py-3">D</th>
-                  <th className="px-3 py-3">L</th>
-                  <th className="px-3 py-3">Swiss</th>
-                  <th className="px-3 py-3">ELO</th>
+                  <th className="px-3 py-3">Played</th>
+                  <th className="px-3 py-3">Won</th>
+                  <th className="px-3 py-3">Drawn</th>
+                  <th className="px-3 py-3">Lost</th>
                 </tr>
               </thead>
               <tbody>
                 {standings.length === 0 ? (
                   <tr>
                     <td className="px-3 py-6 text-sm text-zinc-400" colSpan={7}>
-                      No teams are available yet, so the leaderboard is empty.
+                      No teams have been added yet.
                     </td>
                   </tr>
                 ) : null}
-                {standings.map((team) => (
+                {rankedStandings.map(({ rank, team }) => (
                   <tr className="border-b border-white/5" key={team.id}>
+                    <td className="px-3 py-4 text-zinc-500">{rank}</td>
                     <td className="px-3 py-4 font-semibold text-white">{team.name}</td>
                     <td className="px-3 py-4 text-zinc-400">
                       {team.players.map((player) => player.name).join(', ') || '—'}
                     </td>
+                    <td className="px-3 py-4">{team.wins + team.draws + team.losses}</td>
                     <td className="px-3 py-4">{team.wins}</td>
                     <td className="px-3 py-4">{team.draws}</td>
                     <td className="px-3 py-4">{team.losses}</td>
-                    <td className="px-3 py-4">{team.swiss_score}</td>
-                    <td className="px-3 py-4">{team.elo_score}</td>
                   </tr>
                 ))}
               </tbody>
@@ -408,7 +409,7 @@ export function StandingsSection({
               Scoring rules
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold text-white">
-              Ranking definitions
+              How points are awarded
             </h2>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -417,12 +418,9 @@ export function StandingsSection({
                 className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
                 key={ranking.id}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-white">Ranking #{ranking.position}</h3>
-                  <Pill>{ranking.add_score_points ? 'score-aware' : 'flat points'}</Pill>
-                </div>
-                <p className="mt-3 text-sm text-zinc-300">
-                  Win {ranking.win_points} · Draw {ranking.draw_points} · Loss {ranking.loss_points}
+                <p className="text-sm text-zinc-300">
+                  A win is worth {ranking.win_points} points, a draw {ranking.draw_points} and a
+                  loss {ranking.loss_points}.
                 </p>
               </div>
             ))}
@@ -709,7 +707,7 @@ export function SettingsSection({
                     players_can_be_in_multiple_teams: toCheckbox(
                       formData.get('players_can_be_in_multiple_teams'),
                     ),
-                    start_time: new Date(String(formData.get('start_time') ?? '')).toISOString(),
+                    start_time: String(formData.get('start_time') ?? ''),
                   },
                   path: { tournament_id: tournament.id },
                   throwOnError: true,
@@ -739,11 +737,7 @@ export function SettingsSection({
             />
           </FormField>
           <FormField label="Start time">
-            <Input
-              defaultValue={formatDateTimeForInput(tournament.start_time)}
-              name="start_time"
-              type="datetime-local"
-            />
+            <DateTimeField defaultValue={tournament.start_time} name="start_time" />
           </FormField>
           <FormField label="Tournament logo">
             <Input accept="image/*" name="logo" type="file" />
@@ -1155,6 +1149,7 @@ export function StagesSection({
                           stageItem={stageItem}
                           stageItemsById={stageItemsById}
                           teamMap={teamLookup}
+                          tournamentId={bundle.tournament.id}
                         />
                         <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
                           <div>
@@ -1325,13 +1320,8 @@ export function StagesSection({
                                   await OpenApi.startNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPost(
                                     {
                                       body: {
-                                        adjust_to_time: toOptionalString(
-                                          formData.get('adjust_to_time'),
-                                        )
-                                          ? new Date(
-                                              String(formData.get('adjust_to_time')),
-                                            ).toISOString()
-                                          : null,
+                                        adjust_to_time:
+                                          toOptionalString(formData.get('adjust_to_time')) ?? null,
                                       },
                                       path: {
                                         stage_item_id: stageItem.id,
@@ -1347,7 +1337,7 @@ export function StagesSection({
                             }}
                           >
                             <FormField label="Adjust to time before advancing">
-                              <Input name="adjust_to_time" type="datetime-local" />
+                              <DateTimeField name="adjust_to_time" />
                             </FormField>
                             <Button tone="ghost" type="submit">
                               Start next round

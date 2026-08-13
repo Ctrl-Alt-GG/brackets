@@ -19,7 +19,8 @@ from bracket.sql.users import (
     create_user,
 )
 from bracket.utils.db_init import sql_create_dev_db
-from bracket.utils.security import hash_password
+from bracket.utils.rate_limit import reset_account_failures
+from bracket.utils.security import hash_password, normalize_email
 from openapi import openapi  # noqa: F401
 
 OPENAPI_JSON_PATH = "openapi/openapi.json"
@@ -70,6 +71,14 @@ def hash_password_cmd() -> None:
         hashed_pwd = hash_password(config.admin_password)
         logger.info("Hashed password:")
         logger.info(hashed_pwd)
+
+
+@cli.command()
+@click.option("--email", prompt="Email", help="The email used to log into the account.")
+def clear_user_lock(email: str) -> None:
+    normalized_email = normalize_email(email)
+    reset_account_failures(normalized_email)
+    logger.info(f"Cleared login lock for {normalized_email}")
 
 
 @cli.command()

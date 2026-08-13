@@ -46,7 +46,7 @@ services:
     depends_on:
       - bracket-backend
     environment:
-      API_BASE_URL: https://bracket.ctrl-alt-gg.hu/api/
+      API_BASE_URL: https://bracket.ctrl-alt-gg.hu
     networks:
       - bracket_lan
     ports:

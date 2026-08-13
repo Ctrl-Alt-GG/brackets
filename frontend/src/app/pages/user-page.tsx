@@ -6,7 +6,17 @@ import { unwrap } from '../api';
 import { runAction, useResource } from '../hooks';
 import type { FlashMessage, Session } from '../types';
 import { formatDateTime } from '../utils';
-import { Button, EmptyState, ErrorState, FormField, Input, PageShell, Pill, Surface } from '../ui';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  FormField,
+  Input,
+  LoadingState,
+  PageShell,
+  Pill,
+  Surface,
+} from '../ui';
 
 export function UserPage({
   session,
@@ -50,7 +60,7 @@ export function UserPage({
 
   return (
     <PageShell title="Account">
-      {profile.loading ? <div className="hidden" /> : null}
+      {profile.loading ? <LoadingState title="Loading account…" /> : null}
       {profile.error ? (
         <ErrorState
           error={profile.error}

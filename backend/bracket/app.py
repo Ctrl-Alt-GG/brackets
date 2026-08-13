@@ -37,6 +37,7 @@ from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
 from bracket.utils.rate_limit import limiter
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     await database.connect()
