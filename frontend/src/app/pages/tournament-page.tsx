@@ -5,9 +5,10 @@ import * as OpenApi from '../../openapi';
 import { fetchTournamentBundle } from '../api';
 import { useResource } from '../hooks';
 import type { FlashMessage, Session, TournamentSection } from '../types';
-import { compareMatchesByTime, cx, flattenMatches } from '../utils';
+import { compareMatchesByTime, cx, flattenMatches, isScored } from '../utils';
 import { Button, ErrorState, LoadingState, PageShell, Surface } from '../ui';
 import { OverviewSection } from '../sections/tournament-overview';
+import { BracketSection } from '../sections/tournament-bracket';
 import { PlayersSection, TeamsSection } from '../sections/tournament-roster';
 import {
   RankingsSection,
@@ -30,9 +31,9 @@ function TournamentNav({
   const items = dashboardMode
     ? [
         ['dashboard', 'Overview'],
+        ['dashboard/bracket', 'Bracket'],
         ['dashboard/standings', 'Standings'],
         ['dashboard/present/courts', 'Courts'],
-        ['dashboard/present/standings', 'Present standings'],
       ]
     : [
         ['', 'Overview'],
@@ -54,7 +55,7 @@ function TournamentNav({
       ];
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {items.map(([suffix, label]) => {
         const target = suffix
           ? `/tournaments/${tournamentKey}/${suffix}`
@@ -70,15 +71,29 @@ function TournamentNav({
               )
             }
             key={label}
+            end
             to={target}
           >
             {label}
           </NavLink>
         );
       })}
+      {dashboardMode ? (
+        <NavLink
+          className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 transition hover:text-zinc-300"
+          to={`/tournaments/${tournamentKey}/dashboard/present/standings`}
+        >
+          Big screen
+        </NavLink>
+      ) : null}
     </div>
   );
 }
+
+const TOURNAMENT_STATUS_LABELS: Record<OpenApi.TournamentStatus, string> = {
+  ARCHIVED: 'Finished',
+  OPEN: 'Running',
+};
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -207,13 +222,11 @@ export function TournamentPage({
       }
     >
       <Surface className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Status" value={tournament.status} />
-        <MetricCard label="Configured courts" value={String(workspace.data.courts.length)} />
+        <MetricCard label="Status" value={TOURNAMENT_STATUS_LABELS[tournament.status]} />
+        <MetricCard label="Teams" value={String(workspace.data.teams.length)} />
         <MetricCard
-          label="Stage items"
-          value={String(
-            workspace.data.stages.reduce((sum, stage) => sum + stage.stage_items.length, 0),
-          )}
+          label="Matches played"
+          value={`${matches.filter((entry) => isScored(entry.match)).length} of ${matches.length}`}
         />
       </Surface>
 
@@ -223,8 +236,11 @@ export function TournamentPage({
           isAuthenticated={canManage}
           matches={matches}
           stageItemsById={stageItemsById}
-          teamMap={teamMap}
+          tournamentKey={tournamentKey}
         />
+      ) : null}
+      {section === 'dashboard-bracket' ? (
+        <BracketSection bundle={workspace.data} stageItemsById={stageItemsById} teamMap={teamMap} />
       ) : null}
       {section === 'players' ? (
         <PlayersSection bundle={workspace.data} onRefresh={workspace.refresh} setFlash={setFlash} />

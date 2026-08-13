@@ -10,7 +10,7 @@ clubs = Table(
     "clubs",
     metadata,
     Column("id", BigInteger, primary_key=True, index=True, autoincrement=True),
-    Column("name", String, nullable=False, index=True),
+    Column("name", String, nullable=False, index=True, unique=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
 )
 
@@ -48,7 +48,13 @@ stages = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("name", String, nullable=False, index=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), index=True, nullable=False),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    ),
     Column("is_active", Boolean, nullable=False, server_default="false"),
 )
 
@@ -58,9 +64,20 @@ stage_items = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("name", Text, nullable=False),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("stage_id", BigInteger, ForeignKey("stages.id"), index=True, nullable=False),
+    Column(
+        "stage_id",
+        BigInteger,
+        ForeignKey("stages.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    ),
     Column("team_count", Integer, nullable=False),
-    Column("ranking_id", BigInteger, ForeignKey("rankings.id"), nullable=False),
+    Column(
+        "ranking_id",
+        BigInteger,
+        ForeignKey("rankings.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
     Column(
         "type",
         Enum(
@@ -78,7 +95,13 @@ stage_item_inputs = Table(
     metadata,
     Column("id", BigInteger, primary_key=True, index=True),
     Column("slot", Integer, nullable=False),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), index=True, nullable=False),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    ),
     Column(
         "stage_item_id",
         BigInteger,
@@ -87,7 +110,12 @@ stage_item_inputs = Table(
         nullable=False,
     ),
     Column("team_id", BigInteger, ForeignKey("teams.id"), nullable=True),
-    Column("winner_from_stage_item_id", BigInteger, ForeignKey("stage_items.id"), nullable=True),
+    Column(
+        "winner_from_stage_item_id",
+        BigInteger,
+        ForeignKey("stage_items.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
     Column("winner_position", Integer, nullable=True),
     Column("points", Float, nullable=False, server_default="0"),
     Column("wins", Integer, nullable=False, server_default="0"),
@@ -104,7 +132,12 @@ rounds = Table(
     Column("name", Text, nullable=False),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
     Column("is_draft", Boolean, nullable=False),
-    Column("stage_item_id", BigInteger, ForeignKey("stage_items.id"), nullable=False),
+    Column(
+        "stage_item_id",
+        BigInteger,
+        ForeignKey("stage_items.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
 )
 
 
@@ -118,7 +151,7 @@ matches = Table(
     Column("margin_minutes", Integer, nullable=True),
     Column("custom_duration_minutes", Integer, nullable=True),
     Column("custom_margin_minutes", Integer, nullable=True),
-    Column("round_id", BigInteger, ForeignKey("rounds.id"), nullable=False),
+    Column("round_id", BigInteger, ForeignKey("rounds.id", ondelete="CASCADE"), nullable=False),
     Column("stage_item_input1_id", BigInteger, ForeignKey("stage_item_inputs.id"), nullable=True),
     Column("stage_item_input2_id", BigInteger, ForeignKey("stage_item_inputs.id"), nullable=True),
     Column("stage_item_input1_conflict", Boolean, nullable=False),
@@ -126,16 +159,16 @@ matches = Table(
     Column(
         "stage_item_input1_winner_from_match_id",
         BigInteger,
-        ForeignKey("matches.id"),
+        ForeignKey("matches.id", ondelete="SET NULL"),
         nullable=True,
     ),
     Column(
         "stage_item_input2_winner_from_match_id",
         BigInteger,
-        ForeignKey("matches.id"),
+        ForeignKey("matches.id", ondelete="SET NULL"),
         nullable=True,
     ),
-    Column("court_id", BigInteger, ForeignKey("courts.id"), nullable=True),
+    Column("court_id", BigInteger, ForeignKey("courts.id", ondelete="SET NULL"), nullable=True),
     Column("stage_item_input1_score", Integer, nullable=False),
     Column("stage_item_input2_score", Integer, nullable=False),
     Column("position_in_schedule", Integer, nullable=True),
@@ -147,7 +180,13 @@ teams = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("name", String, nullable=False, index=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), index=True, nullable=False),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    ),
     Column("active", Boolean, nullable=False, index=True, server_default="t"),
     Column("elo_score", Float, nullable=False, server_default="0"),
     Column("swiss_score", Float, nullable=False, server_default="0"),
@@ -163,7 +202,13 @@ players = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("name", String, nullable=False, index=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), index=True, nullable=False),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    ),
     Column("elo_score", Float, nullable=False),
     Column("swiss_score", Float, nullable=False),
     Column("wins", Integer, nullable=False),
@@ -222,7 +267,13 @@ courts = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("name", Text, nullable=False),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), nullable=False, index=True),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
 )
 
 rankings = Table(
@@ -230,7 +281,13 @@ rankings = Table(
     metadata,
     Column("id", BigInteger, primary_key=True, index=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column("tournament_id", BigInteger, ForeignKey("tournaments.id"), nullable=False, index=True),
+    Column(
+        "tournament_id",
+        BigInteger,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
     Column("position", Integer, nullable=False),
     Column("win_points", Float, nullable=False),
     Column("draw_points", Float, nullable=False),

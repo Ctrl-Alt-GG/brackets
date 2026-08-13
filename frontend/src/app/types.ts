@@ -1,9 +1,20 @@
 import * as OpenApi from '../openapi';
+import type { BracketViewerData } from './bracket-adapter';
 
 declare global {
   interface Window {
     __BRACKET_RUNTIME_CONFIG__?: {
       apiBaseUrl?: string;
+    };
+    bracketsViewer?: {
+      render: (
+        data: BracketViewerData,
+        config: {
+          clear?: boolean;
+          customRoundName?: (info: { roundCount: number; roundNumber: number }) => string;
+          selector?: string;
+        },
+      ) => Promise<void>;
     };
   }
 }
@@ -25,6 +36,7 @@ export type TournamentSection =
   | 'results'
   | 'stages'
   | 'dashboard'
+  | 'dashboard-bracket'
   | 'dashboard-standings'
   | 'dashboard-courts'
   | 'dashboard-present-standings';

@@ -9,14 +9,60 @@
     <meta content="IE=edge" http-equiv="X-UA-Compatible" />
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <!-- Loaded non-blocking: a slow fonts.googleapis.com must never delay first paint. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap"
+      media="print"
+      onload="this.media = 'all'"
       rel="stylesheet"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <link rel="shortcut icon" href="/favicon.svg" />
+    <style>
+      /* Mirrors src/styles.css so the shell is branded before the bundle loads. */
+      html {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top, rgba(221, 37, 37, 0.18), transparent 28%),
+          linear-gradient(180deg, #171114 0%, #0c090b 100%);
+        color: #f4f4f5;
+        font-family: 'Outfit', 'Segoe UI', sans-serif;
+      }
+      #app-boot {
+        display: flex;
+        min-height: 60vh;
+        align-items: center;
+        justify-content: center;
+      }
+      #app-boot span {
+        display: block;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: 2px solid rgba(255, 181, 181, 0.3);
+        border-top-color: #ff8a8a;
+        border-radius: 9999px;
+        animation: app-boot-spin 0.8s linear infinite;
+      }
+      @keyframes app-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-boot"><span></span></div>
+    </div>
     <script src="/runtime-config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,8 +1,12 @@
-import type { ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
 
 import type { AuthFeatures, FlashMessage, Session } from './types';
 import { cx } from './utils';
+
+const BUTTON_BASE_CLASS =
+  'inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
+const BUTTON_GHOST_CLASS = 'border border-white/10 bg-transparent text-zinc-200 hover:bg-white/10';
 
 export function PageShell({
   children,
@@ -126,30 +130,32 @@ export function Button({
     tone === 'secondary'
       ? 'bg-white/10 text-white hover:bg-white/20'
       : tone === 'ghost'
-        ? 'border border-white/10 bg-transparent text-zinc-200 hover:bg-white/10'
+        ? BUTTON_GHOST_CLASS
         : tone === 'danger'
           ? 'bg-red-600 text-white hover:bg-red-500'
           : 'bg-brand-600 text-white hover:bg-brand-500';
 
   return (
-    <button
-      {...props}
-      className={cx(
-        'inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
-        toneClass,
-        className,
-      )}
-    >
+    <button {...props} className={cx(BUTTON_BASE_CLASS, toneClass, className)}>
       {children}
     </button>
   );
 }
 
-export function FormField({ children, label }: { children: ReactNode; label: string }) {
+export function FormField({
+  children,
+  error,
+  label,
+}: {
+  children: ReactNode;
+  error?: string | null;
+  label: string;
+}) {
   return (
     <label className="block space-y-2 text-sm text-zinc-300">
       <span className="font-medium text-zinc-100">{label}</span>
       {children}
+      {error ? <span className="block text-xs font-medium text-brand-300">{error}</span> : null}
     </label>
   );
 }
@@ -263,6 +269,7 @@ export function TopNav({
                   isActive && 'bg-white/10 text-white',
                 )
               }
+              end
               to="/"
             >
               Tournaments
@@ -274,20 +281,9 @@ export function TopNav({
                   isActive && 'bg-white/10 text-white',
                 )
               }
-              to="/clubs"
+              to="/events"
             >
-              Clubs
-            </NavLink>
-            <NavLink
-              className={({ isActive }) =>
-                cx(
-                  'rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white',
-                  isActive && 'bg-white/10 text-white',
-                )
-              }
-              to="/user"
-            >
-              Account
+              Events
             </NavLink>
           </nav>
         ) : null}
@@ -295,7 +291,9 @@ export function TopNav({
         <div className="flex flex-wrap items-center gap-3">
           {session ? (
             <>
-              <Pill tone="success">{currentUserName ?? 'Signed in'}</Pill>
+              <Link className={cx(BUTTON_BASE_CLASS, BUTTON_GHOST_CLASS)} to="/user">
+                {currentUserName ?? 'Signed in'}
+              </Link>
               <Button tone="ghost" onClick={onLogout}>
                 Log out
               </Button>
@@ -322,4 +320,36 @@ export function TopNav({
       </div>
     </header>
   );
+}
+
+export class ErrorBoundary extends Component<
+  { children: ReactNode; title?: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[bracket] render error', error, info.componentStack);
+  }
+
+  render() {
+    const { error } = this.state;
+    if (!error) return this.props.children;
+
+    return (
+      <ErrorState
+        action={
+          <Button onClick={() => window.location.reload()} tone="secondary">
+            Reload the page
+          </Button>
+        }
+        error={error.message || 'An unexpected error occurred.'}
+        title={this.props.title ?? 'Something went wrong'}
+      />
+    );
+  }
 }

@@ -16,7 +16,7 @@ FROM nginxinc/nginx-unprivileged:stable-bookworm AS runner
 
 WORKDIR /usr/share/nginx/html
 
-ENV API_BASE_URL=http://localhost:8400/api
+ENV API_BASE_URL=http://localhost:8400
 
 COPY --from=builder --chown=101:101 /app/dist/ /usr/share/nginx/html/
 COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf

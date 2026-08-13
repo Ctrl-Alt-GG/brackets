@@ -1,0 +1,11 @@
+{
+	"dependencies": {
+		"@tanstack/react-query": "^5.101.4",
+		"@hookform/resolvers": "^5.7.1",
+		"clsx": "^2.1.1",
+		"react-hook-form": "^7.85.0",
+		"sonner": "^2.0.8",
+		"tailwind-merge": "^3.6.0",
+		"zod": "^4.4.3"
+	}
+}

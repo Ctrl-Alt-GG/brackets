@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from starlette import status
 
 from bracket.config import config
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
@@ -70,6 +71,15 @@ async def delete_ranking(
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
+    stage_item_ids = await get_stage_item_input_ids_by_ranking_id(ranking_id)
+    if stage_item_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Could not delete ranking since it's used by {len(stage_item_ids)} stage items"
+            ),
+        )
+
     await sql_delete_ranking(tournament_id, ranking_id)
     return SuccessResponse()
 

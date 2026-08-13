@@ -1,12 +1,14 @@
 import type { AxiosError } from 'axios';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 import * as OpenApi from '../openapi';
 import type { FlattenedMatch, Session } from './types';
 
 const SESSION_STORAGE_KEY = 'login';
 
-export function cx(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(' ');
+export function cx(...values: ClassValue[]) {
+  return twMerge(clsx(values));
 }
 
 export function isNumericIdentifier(value: string) {
@@ -63,11 +65,15 @@ export function getApiBaseUrl() {
   const runtimeConfig =
     typeof window !== 'undefined' ? window.__BRACKET_RUNTIME_CONFIG__ : undefined;
   const runtimeValue = runtimeConfig?.apiBaseUrl?.trim();
-  if (runtimeValue) return runtimeValue;
 
-  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  return normalizeApiBaseUrl(
+    runtimeValue || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8400',
+  );
+}
 
-  return 'http://localhost:8400';
+// Callers append `/api/...` themselves, so a configured value ending in `/api` would double it.
+function normalizeApiBaseUrl(value: string) {
+  return value.replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
 export function getErrorMessage(error: unknown) {
@@ -101,15 +107,6 @@ export function formatDateTime(value: string | null) {
   }
 }
 
-export function formatDateTimeForInput(value: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const offset = date.getTimezoneOffset();
-  const normalized = new Date(date.getTime() - offset * 60_000);
-  return normalized.toISOString().slice(0, 16);
-}
-
 export function normalizeDashboardEndpoint(value: unknown) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
@@ -124,20 +121,54 @@ export function inputLabel(
 ) {
   if (!input) return 'TBD';
   if ('team' in input && input.team) return input.team.name;
-  if (input.team_id != null) return `Team #${input.team_id}`;
-  if (input.winner_from_stage_item_id != null && input.winner_position != null) {
+  if (input.winner_from_stage_item_id != null) {
     const stageItem = stageItemsById.get(input.winner_from_stage_item_id);
-    const sourceName =
-      stageItem?.name || stageItem?.type_name || `Stage item #${input.winner_from_stage_item_id}`;
-    return `Winner of ${sourceName} slot ${input.winner_position}`;
+    const sourceName = stageItem?.name || stageItem?.type_name;
+    return sourceName ? `Winner of ${sourceName}` : 'TBD';
   }
 
-  return `Open slot ${input.slot}`;
+  return 'TBD';
 }
 
 export function isScored(match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive) {
   return match.stage_item_input1_score !== 0 || match.stage_item_input2_score !== 0;
 }
+
+export type MatchOutcome = 1 | 2 | 'draw' | null;
+
+/** Scores are the only completion signal the API exposes, so an unplayed match reads as 0-0. */
+export function matchWinner(
+  match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
+): MatchOutcome {
+  if (!isScored(match)) return null;
+  if (match.stage_item_input1_score > match.stage_item_input2_score) return 1;
+  if (match.stage_item_input2_score > match.stage_item_input1_score) return 2;
+  return 'draw';
+}
+
+export type MatchStatus = 'finished' | 'live' | 'scheduled' | 'waiting';
+
+export function matchStatus(
+  match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
+  now = Date.now(),
+): MatchStatus {
+  if (isScored(match)) return 'finished';
+  if (match.stage_item_input1 == null || match.stage_item_input2 == null) return 'waiting';
+  if (match.start_time) {
+    const start = new Date(match.start_time).getTime();
+    if (Number.isFinite(start) && now >= start && now < start + match.duration_minutes * 60_000) {
+      return 'live';
+    }
+  }
+  return 'scheduled';
+}
+
+export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
+  finished: 'Finished',
+  live: 'Playing now',
+  scheduled: 'Scheduled',
+  waiting: 'Waiting for teams',
+};
 
 export function compareMatchesByTime(left: FlattenedMatch, right: FlattenedMatch) {
   const leftTime = left.match.start_time

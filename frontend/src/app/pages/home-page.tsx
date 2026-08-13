@@ -1,12 +1,15 @@
 import type { FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
 import { fetchTournaments, unwrap } from '../api';
-import { useResource, runAction } from '../hooks';
+import { DateTimeField } from '../components/date-time-field';
+import { runAction } from '../hooks';
 import type { FlashMessage, Session } from '../types';
 import {
   formatDateTime,
+  getErrorMessage,
   normalizeDashboardEndpoint,
   toCheckbox,
   toNumber,
@@ -19,6 +22,7 @@ import {
   ErrorState,
   FormField,
   Input,
+  LoadingState,
   PageShell,
   Pill,
   Select,
@@ -35,22 +39,29 @@ export function HomePage({
 }) {
   const [filter, setFilter] = useState<'ALL' | 'ARCHIVED' | 'OPEN'>(session ? 'ALL' : 'OPEN');
   const visibleFilter = session ? filter : 'OPEN';
-  const tournaments = useResource(
-    () => fetchTournaments(visibleFilter, undefined, session?.access_token),
-    [visibleFilter, session?.access_token],
-  );
-  const clubs = useResource(
-    async () => {
+  const queryClient = useQueryClient();
+  const tournaments = useQuery({
+    queryKey: ['tournaments', visibleFilter, session?.access_token],
+    queryFn: () => fetchTournaments(visibleFilter, undefined, session?.access_token),
+  });
+  const clubs = useQuery({
+    enabled: Boolean(session),
+    queryKey: ['clubs', session?.access_token],
+    queryFn: async () => {
       const response = await unwrap(OpenApi.getClubsApiClubsGet({ throwOnError: true }));
       return response.data;
     },
-    [session?.access_token],
-    Boolean(session),
-  );
+  });
 
   async function handleCreateTournament(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const startTime = String(formData.get('start_time') ?? '');
+
+    if (!startTime) {
+      setFlash({ text: 'Pick a start date and time.', tone: 'error' });
+      return;
+    }
 
     const success = await runAction(
       setFlash,
@@ -67,19 +78,19 @@ export function HomePage({
             players_can_be_in_multiple_teams: toCheckbox(
               formData.get('players_can_be_in_multiple_teams'),
             ),
-            start_time: new Date(String(formData.get('start_time') ?? '')).toISOString(),
+            start_time: startTime,
           },
           throwOnError: true,
         });
       },
       'Tournament created successfully.',
       () => {
-        tournaments.refresh();
+        void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         event.currentTarget.reset();
       },
     );
 
-    if (success) clubs.refresh();
+    if (success) void queryClient.invalidateQueries({ queryKey: ['clubs'] });
   }
 
   const tournamentList = (
@@ -163,11 +174,14 @@ export function HomePage({
   if (!session) {
     return (
       <section className="space-y-6">
-        {tournaments.loading ? <div className="hidden" /> : null}
+        {tournaments.isPending ? <LoadingState title="Loading tournaments…" /> : null}
         {tournaments.error ? (
-          <ErrorState error={tournaments.error} title="Unable to load tournaments" />
+          <ErrorState
+            error={getErrorMessage(tournaments.error)}
+            title="Unable to load tournaments"
+          />
         ) : null}
-        {!tournaments.loading && !tournaments.error ? tournamentList : null}
+        {!tournaments.isPending && !tournaments.error ? tournamentList : null}
       </section>
     );
   }
@@ -195,12 +209,12 @@ export function HomePage({
         </div>
       }
     >
-      {tournaments.loading ? <div className="hidden" /> : null}
+      {tournaments.isPending ? <LoadingState title="Loading tournaments…" /> : null}
       {tournaments.error ? (
-        <ErrorState error={tournaments.error} title="Unable to load tournaments" />
+        <ErrorState error={getErrorMessage(tournaments.error)} title="Unable to load tournaments" />
       ) : null}
 
-      {!tournaments.loading && !tournaments.error ? (
+      {!tournaments.isPending && !tournaments.error ? (
         <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
           {tournamentList}
           {session ? (
@@ -218,7 +232,7 @@ export function HomePage({
                   <FormField label="Tournament name">
                     <Input name="name" placeholder="Ctrl-Alt-GG Summer Cup" required />
                   </FormField>
-                  <FormField label="Owning club">
+                  <FormField label="Owning event">
                     <Select name="club_id" required>
                       {clubs.data.map((club) => (
                         <option key={club.id} value={club.id}>
@@ -229,7 +243,7 @@ export function HomePage({
                   </FormField>
                   <div className="grid gap-4 md:grid-cols-2">
                     <FormField label="Start time">
-                      <Input name="start_time" required type="datetime-local" />
+                      <DateTimeField name="start_time" required />
                     </FormField>
                     <FormField label="Dashboard endpoint">
                       <Input name="dashboard_endpoint" placeholder="summer-cup-2026" />
@@ -283,14 +297,14 @@ export function HomePage({
                 </form>
               ) : (
                 <EmptyState
-                  text="You need at least one club before you can create a tournament."
-                  title="Create a club first"
+                  text="You need at least one event before you can create a tournament."
+                  title="Create an event first"
                   action={
                     <Link
                       className="inline-flex rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
-                      to="/clubs"
+                      to="/events"
                     >
-                      Open club manager
+                      Open event manager
                     </Link>
                   }
                 />
