@@ -14,6 +14,8 @@ RUN corepack enable && \
 # Production image, copy all the static files and run nginx as an unprivileged user
 FROM nginxinc/nginx-unprivileged:stable-bookworm AS runner
 
+LABEL org.opencontainers.image.description="Bracket frontend for the Ctrl-Alt-GG LAN tournament system: React 19 and Vite SPA served by nginx."
+
 WORKDIR /usr/share/nginx/html
 
 ENV API_BASE_URL=http://localhost:8400
