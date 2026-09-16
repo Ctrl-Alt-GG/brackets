@@ -7,6 +7,8 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 jobs:
   publish:
@@ -30,10 +32,18 @@ jobs:
         shell: bash
         run: echo "namespace=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: ./${{ matrix.component }}
           push: true
           tags: |
             ghcr.io/${{ steps.image.outputs.namespace }}/bracket-${{ matrix.component }}:${{ github.ref_name }}
             ghcr.io/${{ steps.image.outputs.namespace }}/bracket-${{ matrix.component }}:latest
+
+      - name: Attest OCI image provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/${{ steps.image.outputs.namespace }}/bracket-${{ matrix.component }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
