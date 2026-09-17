@@ -16,7 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        component: [backend, frontend]
+        include:
+          - component: backend
+            description: "Bracket backend for the Ctrl-Alt-GG LAN tournament system: FastAPI application with Alembic migrations."
+          - component: frontend
+            description: "Bracket frontend for the Ctrl-Alt-GG LAN tournament system: React 19 and Vite SPA served by nginx."
     steps:
       - uses: actions/checkout@v7
 
@@ -38,6 +42,10 @@ jobs:
         with:
           context: ./${{ matrix.component }}
           push: true
+          provenance: mode=max
+          annotations: |
+            index:org.opencontainers.image.description=${{ matrix.description }}
+            manifest:org.opencontainers.image.description=${{ matrix.description }}
           tags: |
             ghcr.io/${{ steps.image.outputs.namespace }}/bracket-${{ matrix.component }}:${{ github.ref_name }}
             ghcr.io/${{ steps.image.outputs.namespace }}/bracket-${{ matrix.component }}:latest
