@@ -3,7 +3,7 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
-import { cx, inputLabel, isScored, matchStatus } from '../utils';
+import { cx, inputLabel, isScored, matchStatus, matchWinner, type MatchOutcome } from '../utils';
 import { Link } from 'react-router';
 import { Pill, Surface, SurfaceHeading } from '../ui';
 
@@ -136,6 +136,13 @@ export function OverviewSection({
   );
 }
 
+/** Same emphasis as the match cards: the winner stands out, the loser recedes. */
+function sideClass(winner: MatchOutcome, side: 1 | 2) {
+  if (winner === side) return 'font-semibold text-white';
+  if (winner === 1 || winner === 2) return 'text-zinc-500';
+  return 'text-zinc-200';
+}
+
 export function StageItemVisualization({
   showMatches = true,
   stageItem,
@@ -217,33 +224,36 @@ export function StageItemVisualization({
           {showMatches ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-zinc-300">Matches</p>
-              <div className="grid gap-3">
+              {/* Equal team columns keep "vs" in the middle of every row, and sharing one grid
+                  between all rounds keeps it in a straight line even next to wider scores. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3">
                 {stageItem.rounds.map((round) => (
                   <div
-                    className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3"
+                    className="col-span-3 grid grid-cols-subgrid gap-y-2 rounded-[1.25rem] border border-white/10 bg-white/5 p-3"
                     key={round.id}
                   >
-                    <p className="text-sm font-semibold text-white">{round.name}</p>
-                    <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                      {round.matches.map((match) => (
+                    <p className="col-span-3 text-sm font-semibold text-white">{round.name}</p>
+                    {round.matches.map((match) => {
+                      const winner = matchWinner(match);
+                      return (
                         <div
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2"
+                          className="col-span-3 grid grid-cols-subgrid items-center rounded-xl bg-black/20 px-3 py-2 text-sm"
                           key={match.id}
                         >
-                          <span className="text-zinc-200">
+                          <span className={cx('break-words text-right', sideClass(winner, 1))}>
                             {inputLabel(match.stage_item_input1, stageItemsById)}
                           </span>
-                          <span className="font-semibold tabular-nums text-white">
+                          <span className="text-center font-semibold tabular-nums text-white">
                             {isScored(match)
                               ? `${match.stage_item_input1_score} – ${match.stage_item_input2_score}`
                               : 'vs'}
                           </span>
-                          <span className="text-zinc-200">
+                          <span className={cx('break-words', sideClass(winner, 2))}>
                             {inputLabel(match.stage_item_input2, stageItemsById)}
                           </span>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
