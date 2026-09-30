@@ -56,7 +56,8 @@ export function HomePage({
 
   async function handleCreateTournament(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const startTime = String(formData.get('start_time') ?? '');
 
     if (!startTime) {
@@ -87,7 +88,7 @@ export function HomePage({
       'Tournament created successfully.',
       () => {
         void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-        event.currentTarget.reset();
+        form.reset();
       },
     );
 

@@ -79,7 +79,8 @@ export function ScheduleSection({
               className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]"
               onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
-                const formData = new FormData(event.currentTarget);
+                const form = event.currentTarget;
+                const formData = new FormData(form);
                 await runAction(
                   setFlash,
                   async () => {
@@ -91,7 +92,7 @@ export function ScheduleSection({
                   },
                   'Court created successfully.',
                   () => {
-                    event.currentTarget.reset();
+                    form.reset();
                     onRefresh();
                   },
                 );
@@ -427,7 +428,8 @@ export function RankingsSection({
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
-              const formData = new FormData(event.currentTarget);
+              const form = event.currentTarget;
+              const formData = new FormData(form);
               await runAction(
                 setFlash,
                 async () => {
@@ -444,7 +446,7 @@ export function RankingsSection({
                 },
                 'Ranking created successfully.',
                 () => {
-                  event.currentTarget.reset();
+                  form.reset();
                   onRefresh();
                 },
               );
@@ -951,7 +953,8 @@ export function StagesSection({
                 className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-4"
                 onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
-                  const formData = new FormData(event.currentTarget);
+                  const form = event.currentTarget;
+                  const formData = new FormData(form);
                   await runAction(
                     setFlash,
                     async () => {
@@ -969,7 +972,7 @@ export function StagesSection({
                     },
                     'Stage item created successfully.',
                     () => {
-                      event.currentTarget.reset();
+                      form.reset();
                       onRefresh();
                     },
                   );
@@ -1218,7 +1221,8 @@ export function StagesSection({
                             className="space-y-4"
                             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                               event.preventDefault();
-                              const formData = new FormData(event.currentTarget);
+                              const form = event.currentTarget;
+                              const formData = new FormData(form);
                               await runAction(
                                 setFlash,
                                 async () => {
@@ -1233,7 +1237,7 @@ export function StagesSection({
                                 },
                                 'Round created successfully.',
                                 () => {
-                                  event.currentTarget.reset();
+                                  form.reset();
                                   onRefresh();
                                 },
                               );
@@ -1387,7 +1391,8 @@ export function StagesSection({
                                   className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
                                   onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                                     event.preventDefault();
-                                    const formData = new FormData(event.currentTarget);
+                                    const form = event.currentTarget;
+                                    const formData = new FormData(form);
                                     await runAction(
                                       setFlash,
                                       async () => {
@@ -1422,7 +1427,7 @@ export function StagesSection({
                                       },
                                       'Match created successfully.',
                                       () => {
-                                        event.currentTarget.reset();
+                                        form.reset();
                                         onRefresh();
                                       },
                                     );

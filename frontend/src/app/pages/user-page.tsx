@@ -123,7 +123,8 @@ export function UserPage({
                     className="space-y-4"
                     onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                       event.preventDefault();
-                      const formData = new FormData(event.currentTarget);
+                      const form = event.currentTarget;
+                      const formData = new FormData(form);
                       const password = String(formData.get('password') ?? '');
                       if (password.length < 8) {
                         setFlash({
@@ -143,7 +144,7 @@ export function UserPage({
                           });
                         },
                         'Password updated successfully.',
-                        () => event.currentTarget.reset(),
+                        () => form.reset(),
                       );
                     }}
                   >

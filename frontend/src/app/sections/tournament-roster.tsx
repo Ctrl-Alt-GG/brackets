@@ -23,7 +23,8 @@ export function PlayersSection({
           className="space-y-4"
           onSubmit={async (event: FormEvent<HTMLFormElement>) => {
             event.preventDefault();
-            const formData = new FormData(event.currentTarget);
+            const form = event.currentTarget;
+            const formData = new FormData(form);
             await runAction(
               setFlash,
               async () => {
@@ -38,7 +39,7 @@ export function PlayersSection({
               },
               'Player created successfully.',
               () => {
-                event.currentTarget.reset();
+                form.reset();
                 onRefresh();
               },
             );
@@ -62,7 +63,8 @@ export function PlayersSection({
           className="space-y-4"
           onSubmit={async (event: FormEvent<HTMLFormElement>) => {
             event.preventDefault();
-            const formData = new FormData(event.currentTarget);
+            const form = event.currentTarget;
+            const formData = new FormData(form);
             await runAction(
               setFlash,
               async () => {
@@ -77,7 +79,7 @@ export function PlayersSection({
               },
               'Bulk players created successfully.',
               () => {
-                event.currentTarget.reset();
+                form.reset();
                 onRefresh();
               },
             );
@@ -196,7 +198,8 @@ export function TeamsSection({
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
-              const formData = new FormData(event.currentTarget);
+              const form = event.currentTarget;
+              const formData = new FormData(form);
               const playerIds = bundle.players
                 .map((player) => ({ checked: formData.get(`player_${player.id}`), id: player.id }))
                 .filter((entry) => entry.checked === 'on')
@@ -217,7 +220,7 @@ export function TeamsSection({
                 },
                 'Team created successfully.',
                 () => {
-                  event.currentTarget.reset();
+                  form.reset();
                   onRefresh();
                 },
               );
@@ -257,7 +260,8 @@ export function TeamsSection({
             className="space-y-4"
             onSubmit={async (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
-              const formData = new FormData(event.currentTarget);
+              const form = event.currentTarget;
+              const formData = new FormData(form);
               await runAction(
                 setFlash,
                 async () => {
@@ -272,7 +276,7 @@ export function TeamsSection({
                 },
                 'Bulk teams created successfully.',
                 () => {
-                  event.currentTarget.reset();
+                  form.reset();
                   onRefresh();
                 },
               );
