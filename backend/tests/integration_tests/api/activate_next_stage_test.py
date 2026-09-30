@@ -113,7 +113,6 @@ async def test_activate_next_stage(
         await sql_update_match(
             match1.id,
             MatchBody(**match1.model_copy(update={"stage_item_input2_score": 42}).model_dump()),
-            auth_context.tournament,
         )
 
         response = await send_tournament_request(

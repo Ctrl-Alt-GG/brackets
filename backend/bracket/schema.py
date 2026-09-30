@@ -55,6 +55,7 @@ stages = Table(
         nullable=False,
     ),
     Column("is_active", Boolean, nullable=False, server_default="false"),
+    Column("custom_duration_minutes", Integer, nullable=True),
 )
 
 stage_items = Table(

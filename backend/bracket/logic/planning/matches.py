@@ -19,12 +19,20 @@ def plan_match_timings(
     All matches of a round start together, and the next round starts once the longest match of
     the previous round (including its margin) has finished. The stage items of a stage are played
     in parallel, and a stage starts once every stage item of the previous stage has finished.
+
+    The tournament's match duration is a default that a stage can overwrite for its matches. The
+    custom duration of a match takes precedence over both.
     """
     timings: list[MatchTiming] = []
     stage_start = tournament.start_time
 
     for stage in sorted(stages, key=lambda stage: stage.id):
         stage_end = stage_start
+        stage_duration_minutes = (
+            tournament.duration_minutes
+            if stage.custom_duration_minutes is None
+            else stage.custom_duration_minutes
+        )
 
         for stage_item in stage.stage_items:
             round_start = stage_start
@@ -34,7 +42,7 @@ def plan_match_timings(
 
                 for match in round_.matches:
                     duration_minutes = (
-                        tournament.duration_minutes
+                        stage_duration_minutes
                         if match.custom_duration_minutes is None
                         else match.custom_duration_minutes
                     )
@@ -67,7 +75,7 @@ async def schedule_all_matches(tournament_id: TournamentId) -> None:
     Update the start time of every match whose planned time has changed.
 
     Call this whenever rounds or matches are added or removed, or when the tournament's start
-    time, match duration or margin changes.
+    time or any match duration or margin changes.
     """
     tournament = await sql_get_tournament(tournament_id)
     stages = await get_full_tournament_details(tournament_id)

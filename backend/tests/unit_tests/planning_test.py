@@ -35,13 +35,18 @@ def get_match(match_id: int, custom_duration_minutes: int | None = None) -> Matc
     )
 
 
-def get_stage(stage_id: int, *rounds_per_stage_item: list[RoundWithMatches]) -> StageWithStageItems:
+def get_stage(
+    stage_id: int,
+    *rounds_per_stage_item: list[RoundWithMatches],
+    custom_duration_minutes: int | None = None,
+) -> StageWithStageItems:
     return StageWithStageItems(
         id=StageId(stage_id),
         tournament_id=TournamentId(-1),
         name="",
         created=DUMMY_MOCK_TIME,
         is_active=False,
+        custom_duration_minutes=custom_duration_minutes,
         stage_items=[
             StageItemWithRounds(
                 id=StageItemId(index),
@@ -103,4 +108,41 @@ def test_plan_match_timings() -> None:
         6: (first_round_end, *default_timing),
         # The next stage starts when the slowest stage item of the previous stage has finished.
         7: (stage_end, *default_timing),
+    }
+
+
+def test_plan_match_timings_with_custom_stage_duration() -> None:
+    tournament = Tournament(**DUMMY_TOURNAMENT.model_dump(), id=TournamentId(-1))
+    start = tournament.start_time
+    margin_minutes = tournament.margin_minutes
+    stages = [
+        get_stage(
+            1,
+            [
+                get_round(1, get_match(1), get_match(2, custom_duration_minutes=45)),
+                get_round(2, get_match(3)),
+            ],
+            custom_duration_minutes=30,
+        ),
+        get_stage(
+            2,
+            [get_round(3, get_match(4))],
+        ),
+    ]
+
+    timings = {
+        timing.match_id: (timing.start_time, timing.duration_minutes, timing.margin_minutes)
+        for timing in plan_match_timings(stages, tournament)
+    }
+
+    first_round_end = start + timedelta(minutes=45 + margin_minutes)
+    stage_end = first_round_end + timedelta(minutes=30 + margin_minutes)
+    assert timings == {
+        # The stage overwrites the match duration of the tournament.
+        1: (start, 30, margin_minutes),
+        # The custom duration of a match takes precedence over that of its stage.
+        2: (start, 45, margin_minutes),
+        3: (first_round_end, 30, margin_minutes),
+        # Other stages keep the match duration of the tournament.
+        4: (stage_end, tournament.duration_minutes, margin_minutes),
     }

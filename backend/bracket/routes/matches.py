@@ -24,7 +24,12 @@ from bracket.models.db.user import UserPublic
 from bracket.routes.auth import user_authenticated_for_tournament
 from bracket.routes.models import SingleMatchResponse, SuccessResponse, UpcomingMatchesResponse
 from bracket.routes.util import disallow_archived_tournament, match_dependency
-from bracket.sql.matches import sql_create_match, sql_delete_match, sql_update_match
+from bracket.sql.matches import (
+    sql_create_match,
+    sql_delete_match,
+    sql_get_match,
+    sql_update_match,
+)
 from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.tournaments import sql_get_tournament
@@ -131,7 +136,7 @@ async def create_match(
 
     match = await sql_create_match(body_with_durations)
     await schedule_all_matches(tournament_id)
-    return SingleMatchResponse(data=match)
+    return SingleMatchResponse(data=await sql_get_match(match.id))
 
 
 @router.post("/tournaments/{tournament_id}/schedule_matches", response_model=SuccessResponse)
@@ -154,9 +159,7 @@ async def update_match_by_id(
     match: Match = Depends(match_dependency),
 ) -> SuccessResponse:
     await check_foreign_keys_belong_to_tournament(match_body, tournament_id)
-    tournament = await sql_get_tournament(tournament_id)
-
-    await sql_update_match(match_id, match_body, tournament)
+    await sql_update_match(match_id, match_body)
 
     round_ = await get_round_by_id(tournament_id, match.round_id)
     stage_item = await get_stage_item(tournament_id, round_.stage_item_id)

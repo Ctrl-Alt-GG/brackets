@@ -49,7 +49,6 @@ from bracket.schema import (
 from bracket.sql.matches import sql_update_match
 from bracket.sql.stage_items import get_stage_item, sql_create_stage_item_with_inputs
 from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.tournaments import sql_get_tournament
 from bracket.sql.users import create_user, get_user
 from bracket.utils.alembic import alembic_stamp_head
 from bracket.utils.db import insert_generic
@@ -355,8 +354,6 @@ async def sql_create_dev_db() -> UserId:
     await build_matches_for_stage_item(stage_item_2, tournament_id_1)
     await build_matches_for_stage_item(stage_item_3, tournament_id_1)
 
-    tournament_details = await sql_get_tournament(tournament_id_1)
-
     for stage in await get_full_tournament_details(tournament_id_1):
         for stage_item in stage.stage_items:
             for round_ in stage_item.rounds:
@@ -370,7 +367,6 @@ async def sql_create_dev_db() -> UserId:
                                 "stage_item_input2_score": random.randint(0, 10),
                             }
                         ),
-                        tournament=tournament_details,
                     )
 
     for _stage_item in (stage_item_1, stage_item_2, stage_item_3):

@@ -59,6 +59,7 @@ async def test_stages_endpoint(
                     "tournament_id": auth_context.tournament.id,
                     "created": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
                     "is_active": True,
+                    "custom_duration_minutes": None,
                     "name": "Group Stage",
                     "stage_items": [
                         {
@@ -127,15 +128,20 @@ async def test_delete_stage(
         await assert_row_count_and_clear(stages, 0)
 
 
+@pytest.mark.parametrize(("custom_duration_minutes",), [(25,), (None,)])
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_stage(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    startup_and_shutdown_uvicorn_server: None,
+    auth_context: AuthContext,
+    custom_duration_minutes: int | None,
 ) -> None:
-    body = {"name": "Optimus"}
+    body = {"name": "Optimus", "custom_duration_minutes": custom_duration_minutes}
     async with (
         inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
         inserted_stage(
-            DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
+            DUMMY_STAGE1.model_copy(
+                update={"tournament_id": auth_context.tournament.id, "custom_duration_minutes": 40}
+            )
         ) as stage_inserted,
         inserted_stage_item(
             DUMMY_STAGE_ITEM1.model_copy(
@@ -152,6 +158,7 @@ async def test_update_stage(
         [updated_stage] = await get_full_tournament_details(auth_context.tournament.id)
         assert len(updated_stage.stage_items) == 1
         assert updated_stage.name == body["name"]
+        assert updated_stage.custom_duration_minutes == body["custom_duration_minutes"]
 
         await assert_row_count_and_clear(stage_items, 1)
         await assert_row_count_and_clear(stages, 1)

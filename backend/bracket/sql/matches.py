@@ -3,7 +3,6 @@ from datetime import datetime
 
 from bracket.database import database
 from bracket.models.db.match import Match, MatchBody, MatchCreateBody, MatchTiming
-from bracket.models.db.tournament import Tournament
 from bracket.utils.id_types import (
     MatchId,
     RoundId,
@@ -78,39 +77,18 @@ async def sql_create_match(match: MatchCreateBody) -> Match:
     return Match.model_validate(dict(result._mapping))
 
 
-async def sql_update_match(match_id: MatchId, match: MatchBody, tournament: Tournament) -> None:
+async def sql_update_match(match_id: MatchId, match: MatchBody) -> None:
     query = """
         UPDATE matches
         SET round_id = :round_id,
             stage_item_input1_score = :stage_item_input1_score,
             stage_item_input2_score = :stage_item_input2_score,
             custom_duration_minutes = :custom_duration_minutes,
-            custom_margin_minutes = :custom_margin_minutes,
-            duration_minutes = :duration_minutes,
-            margin_minutes = :margin_minutes
+            custom_margin_minutes = :custom_margin_minutes
         WHERE matches.id = :match_id
         RETURNING *
         """
-
-    duration_minutes = (
-        match.custom_duration_minutes
-        if match.custom_duration_minutes is not None
-        else tournament.duration_minutes
-    )
-    margin_minutes = (
-        match.custom_margin_minutes
-        if match.custom_margin_minutes is not None
-        else tournament.margin_minutes
-    )
-    await database.execute(
-        query=query,
-        values={
-            "match_id": match_id,
-            **match.model_dump(),
-            "duration_minutes": duration_minutes,
-            "margin_minutes": margin_minutes,
-        },
-    )
+    await database.execute(query=query, values={"match_id": match_id, **match.model_dump()})
 
 
 async def sql_set_input_ids_for_match(

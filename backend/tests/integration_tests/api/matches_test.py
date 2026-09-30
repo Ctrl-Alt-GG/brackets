@@ -46,7 +46,9 @@ async def test_create_match(
 ) -> None:
     async with (
         inserted_stage(
-            DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
+            DUMMY_STAGE1.model_copy(
+                update={"tournament_id": auth_context.tournament.id, "custom_duration_minutes": 30}
+            )
         ) as stage_inserted,
         inserted_stage_item(
             DUMMY_STAGE_ITEM1.model_copy(
@@ -78,6 +80,9 @@ async def test_create_match(
             HTTPMethod.POST, "matches", auth_context, json=body
         )
         assert response["data"]["id"], response
+        # The response holds the planned timing, with the match duration of the stage.
+        assert response["data"]["start_time"] is not None
+        assert response["data"]["duration_minutes"] == 30
 
         await assert_row_count_and_clear(matches, 1)
 

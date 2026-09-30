@@ -3,6 +3,7 @@ from starlette import status
 
 from bracket.config import config
 from bracket.database import database
+from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.scheduling.builder import determine_available_inputs
 from bracket.logic.scheduling.handle_stage_activation import (
     get_updates_to_inputs_in_activated_stage,
@@ -104,14 +105,23 @@ async def update_stage(
     values = {"tournament_id": tournament_id, "stage_id": stage_id}
     query = """
         UPDATE stages
-        SET name = :name
+        SET name = :name,
+            custom_duration_minutes = :custom_duration_minutes
         WHERE stages.id = :stage_id
         AND stages.tournament_id = :tournament_id
     """
     await database.execute(
         query=query,
-        values={**values, "name": stage_body.name},
+        values={
+            **values,
+            "name": stage_body.name,
+            "custom_duration_minutes": stage_body.custom_duration_minutes,
+        },
     )
+
+    if stage_body.custom_duration_minutes != stage.custom_duration_minutes:
+        await schedule_all_matches(tournament_id)
+
     return SuccessResponse()
 
 

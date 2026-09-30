@@ -2,7 +2,7 @@ import pytest
 from heliclockter import timedelta
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
-from bracket.models.db.stage_item import StageItemWithInputsCreate
+from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
 from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputCreateBodyTentative,
@@ -129,3 +129,54 @@ async def test_schedule_all_matches(
     # Stage items of the same stage are played in parallel.
     [elimination_round] = stage_items[stage_item_2.id].rounds
     assert [match.start_time for match in elimination_round.matches] == [tournament.start_time]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_schedule_matches_with_custom_stage_duration(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    tournament_id = auth_context.tournament.id
+
+    async with inserted_stage(
+        DUMMY_STAGE2.model_copy(
+            update={"tournament_id": tournament_id, "custom_duration_minutes": 30}
+        )
+    ) as stage_inserted:
+        create_response = await send_tournament_request(
+            HTTPMethod.POST,
+            "stage_items",
+            auth_context,
+            json={
+                "type": StageType.ROUND_ROBIN.value,
+                "team_count": 4,
+                "stage_id": stage_inserted.id,
+            },
+        )
+        [created_stage] = await get_full_tournament_details(tournament_id)
+
+        update_response = await send_tournament_request(
+            HTTPMethod.PUT,
+            f"stages/{stage_inserted.id}",
+            auth_context,
+            json={"name": stage_inserted.name, "custom_duration_minutes": 45},
+        )
+        [updated_stage] = await get_full_tournament_details(tournament_id)
+        tournament = await sql_get_tournament(tournament_id)
+
+        [stage_item] = updated_stage.stage_items
+        await sql_delete_stage_item_with_foreign_keys(stage_item.id)
+
+    assert create_response == SUCCESS_RESPONSE
+    assert update_response == SUCCESS_RESPONSE
+
+    # New matches last as long as their stage says, and changing that reschedules them.
+    for stage, duration_minutes in ((created_stage, 30), (updated_stage, 45)):
+        round_length = timedelta(minutes=duration_minutes + tournament.margin_minutes)
+        [stage_item] = stage.stage_items
+        assert {
+            (match.start_time, match.duration_minutes)
+            for round_ in stage_item.rounds
+            for match in round_.matches
+        } == {
+            (tournament.start_time + index * round_length, duration_minutes) for index in range(3)
+        }

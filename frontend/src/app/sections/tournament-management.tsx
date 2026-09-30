@@ -82,7 +82,7 @@ export function ScheduleSection({
         <p className="text-sm text-zinc-400">
           Match times are planned automatically: all matches of a round start together, and a round
           starts when the previous one has finished. To move the schedule, change the start time,
-          match duration or break in Settings.
+          match duration or break in Settings, or the match duration of a stage in Stages.
         </p>
       ) : null}
       {shownSlots.length === 0 ? (
@@ -709,7 +709,7 @@ export function StagesSection({
             </summary>
             <div className="mt-5 space-y-5">
               <form
-                className="grid gap-4 md:grid-cols-[1fr_auto_auto]"
+                className="grid items-end gap-4 md:grid-cols-[1fr_1fr_auto_auto]"
                 onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
                   const formData = new FormData(event.currentTarget);
@@ -717,7 +717,12 @@ export function StagesSection({
                     setFlash,
                     async () => {
                       await OpenApi.updateStageApiTournamentsTournamentIdStagesStageIdPut({
-                        body: { name: String(formData.get('name') ?? '') },
+                        body: {
+                          custom_duration_minutes: toOptionalNumber(
+                            formData.get('custom_duration_minutes'),
+                          ),
+                          name: String(formData.get('name') ?? ''),
+                        },
                         path: { stage_id: stage.id, tournament_id: bundle.tournament.id },
                         throwOnError: true,
                       });
@@ -727,7 +732,18 @@ export function StagesSection({
                   );
                 }}
               >
-                <Input defaultValue={stage.name} name="name" />
+                <FormField label="Stage name">
+                  <Input defaultValue={stage.name} name="name" />
+                </FormField>
+                <FormField label="Match duration (minutes)">
+                  <Input
+                    defaultValue={stage.custom_duration_minutes ?? ''}
+                    min={1}
+                    name="custom_duration_minutes"
+                    placeholder={`Tournament default (${bundle.tournament.duration_minutes})`}
+                    type="number"
+                  />
+                </FormField>
                 <Button type="submit">Save stage</Button>
                 <Button
                   onClick={async () => {

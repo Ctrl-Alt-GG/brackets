@@ -1123,6 +1123,10 @@ export type StageType = 'ROUND_ROBIN' | 'SINGLE_ELIMINATION' | 'SWISS';
  */
 export type StageUpdateBody = {
   /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
+  /**
    * Name
    */
   name: string;
@@ -1136,6 +1140,10 @@ export type StageWithStageItems = {
    * Created
    */
   created: string;
+  /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
   /**
    * Id
    */
