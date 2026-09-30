@@ -5,6 +5,8 @@ import * as OpenApi from '../../openapi';
 import { runAction } from '../hooks';
 import { DateTimeField } from '../components/date-time-field';
 import { MatchCard } from '../components/match-card';
+import { StageItemRounds, stageItemStatus } from './stage-item-rounds';
+import { StageItemSlots } from './stage-item-slots';
 import { StageItemVisualization } from './tournament-overview';
 import type { FlashMessage, FlattenedMatch, TournamentBundle } from '../types';
 import {
@@ -12,6 +14,7 @@ import {
   formatDateTime,
   inputLabel,
   isScored,
+  matchStatus,
   normalizeDashboardEndpoint,
   toCheckbox,
   toNumber,
@@ -22,7 +25,6 @@ import { Button, FormField, Input, Pill, Select, Surface, SurfaceHeading, Textar
 
 export function ScheduleSection({
   compact,
-  courts,
   isAuthenticated,
   matches,
   onRefresh,
@@ -31,7 +33,6 @@ export function ScheduleSection({
   tournamentId,
 }: {
   compact?: boolean;
-  courts: OpenApi.Court[];
   isAuthenticated: boolean;
   matches: FlattenedMatch[];
   onRefresh: () => void;
@@ -39,270 +40,84 @@ export function ScheduleSection({
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   tournamentId: number;
 }) {
-  const grouped = courts.map((court) => ({
-    court,
-    matches: matches.filter((entry) => entry.match.court_id === court.id),
-  }));
-  const unscheduled = matches.filter((entry) => entry.match.court_id == null);
+  // Matches arrive sorted by start time, so the slots keep that order.
+  const slots = new Map<string, FlattenedMatch[]>();
+  matches
+    .filter(({ match }) => !compact || matchStatus(match) !== 'finished')
+    .forEach((entry) => {
+      const startTime = entry.match.start_time ?? '';
+      slots.set(startTime, [...(slots.get(startTime) ?? []), entry]);
+    });
+  const shownSlots = [...slots.entries()].slice(0, compact ? 2 : undefined);
 
   return (
-    <div className="space-y-6">
-      {!compact ? (
-        <Surface className="space-y-4">
-          <SurfaceHeading
-            actions={
-              isAuthenticated ? (
-                <Button
-                  onClick={async () => {
-                    await runAction(
-                      setFlash,
-                      async () => {
-                        await OpenApi.scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost({
-                          path: { tournament_id: tournamentId },
-                          throwOnError: true,
-                        });
-                      },
-                      'Scheduling completed successfully.',
-                      onRefresh,
-                    );
-                  }}
-                  type="button"
-                >
-                  Schedule all matches
-                </Button>
-              ) : null
-            }
-            title="Court lanes"
-          />
-          {isAuthenticated ? (
-            <form
-              className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]"
-              onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                event.preventDefault();
-                const form = event.currentTarget;
-                const formData = new FormData(form);
+    <Surface className="space-y-6">
+      <SurfaceHeading
+        actions={
+          isAuthenticated && !compact ? (
+            <Button
+              onClick={async () => {
                 await runAction(
                   setFlash,
                   async () => {
-                    await OpenApi.createCourtApiTournamentsTournamentIdCourtsPost({
-                      body: { name: String(formData.get('name') ?? '') },
+                    await OpenApi.scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost({
                       path: { tournament_id: tournamentId },
                       throwOnError: true,
                     });
                   },
-                  'Court created successfully.',
-                  () => {
-                    form.reset();
-                    onRefresh();
-                  },
+                  'Match times recalculated.',
+                  onRefresh,
                 );
               }}
+              tone="secondary"
+              type="button"
             >
-              <Input name="name" placeholder="Add a new court or station" required />
-              <Button tone="secondary" type="submit">
-                Create court
-              </Button>
-            </form>
-          ) : null}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {courts.map((court) => (
-              <details
-                className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                key={court.id}
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                  <div>
-                    <p className="font-display text-2xl font-semibold text-white">{court.name}</p>
-                  </div>
-                  <Pill>#{court.id}</Pill>
-                </summary>
-                {isAuthenticated ? (
-                  <form
-                    className="mt-4 flex flex-col gap-3"
-                    onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                      event.preventDefault();
-                      const formData = new FormData(event.currentTarget);
-                      await runAction(
-                        setFlash,
-                        async () => {
-                          await OpenApi.updateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPut({
-                            body: { name: String(formData.get('name') ?? '') },
-                            path: { court_id: court.id, tournament_id: tournamentId },
-                            throwOnError: true,
-                          });
-                        },
-                        'Court updated successfully.',
-                        onRefresh,
-                      );
-                    }}
-                  >
-                    <Input defaultValue={court.name} name="name" />
-                    <div className="flex gap-3">
-                      <Button tone="secondary" type="submit">
-                        Save
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          if (!window.confirm(`Delete court ${court.name}?`)) return;
-                          await runAction(
-                            setFlash,
-                            async () => {
-                              await OpenApi.deleteCourtApiTournamentsTournamentIdCourtsCourtIdDelete(
-                                {
-                                  path: { court_id: court.id, tournament_id: tournamentId },
-                                  throwOnError: true,
-                                },
-                              );
-                            },
-                            'Court deleted successfully.',
-                            onRefresh,
-                          );
-                        }}
-                        tone="danger"
-                        type="button"
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </form>
-                ) : null}
-              </details>
+              Recalculate times
+            </Button>
+          ) : null
+        }
+        title={compact ? 'Now and next' : 'Schedule'}
+      />
+      {isAuthenticated && !compact ? (
+        <p className="text-sm text-zinc-400">
+          Match times are planned automatically: all matches of a round start together, and a round
+          starts when the previous one has finished. To move the schedule, change the start time,
+          match duration or break in Settings.
+        </p>
+      ) : null}
+      {shownSlots.length === 0 ? (
+        <p className="text-sm text-zinc-400">
+          {compact ? 'All matches are finished.' : 'No matches have been scheduled yet.'}
+        </p>
+      ) : null}
+      {shownSlots.map(([startTime, entries]) => (
+        <section className="space-y-3" key={startTime || 'unscheduled'}>
+          <h3
+            className={cx(
+              'font-display font-semibold text-white',
+              compact ? 'text-3xl' : 'text-xl',
+            )}
+          >
+            {startTime ? formatDateTime(startTime) : 'Not scheduled yet'}
+          </h3>
+          <div
+            className={cx(
+              'grid gap-3',
+              compact ? 'xl:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3',
+            )}
+          >
+            {entries.map((entry) => (
+              <MatchCard
+                entry={entry}
+                key={entry.match.id}
+                size={compact ? 'lg' : 'md'}
+                stageItemsById={stageItemsById}
+              />
             ))}
           </div>
-        </Surface>
-      ) : null}
-      <div className={cx('grid gap-4', compact ? 'xl:grid-cols-2' : 'xl:grid-cols-3')}>
-        {grouped.map(({ court, matches: courtMatches }) => (
-          <Surface className="space-y-4" key={court.id}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2
-                  className={cx(
-                    'font-display font-semibold text-white',
-                    compact ? 'text-3xl' : 'text-2xl',
-                  )}
-                >
-                  {court.name}
-                </h2>
-              </div>
-              <Pill>{`${courtMatches.length} matches`}</Pill>
-            </div>
-            <div className="space-y-3">
-              {courtMatches.length === 0 ? (
-                <p className="text-sm text-zinc-400">No matches on this court yet.</p>
-              ) : null}
-              {courtMatches.map((entry) => {
-                const { match, round, stage, stageItem } = entry;
-
-                if (compact) {
-                  return (
-                    <MatchCard
-                      entry={entry}
-                      key={match.id}
-                      size="lg"
-                      stageItemsById={stageItemsById}
-                    />
-                  );
-                }
-
-                return (
-                  <div
-                    className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                    key={match.id}
-                  >
-                    <p className="text-xs text-zinc-400">
-                      {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
-                    </p>
-                    <h3 className="mt-2 text-lg font-semibold text-white">
-                      {inputLabel(match.stage_item_input1, stageItemsById)}{' '}
-                      <span className="text-brand-300">{match.stage_item_input1_score}</span> -{' '}
-                      <span className="text-brand-300">{match.stage_item_input2_score}</span>{' '}
-                      {inputLabel(match.stage_item_input2, stageItemsById)}
-                    </h3>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      {formatDateTime(match.start_time)} · position{' '}
-                      {match.position_in_schedule ?? 'TBD'}
-                    </p>
-                    {isAuthenticated ? (
-                      <form
-                        className="mt-4 grid gap-3 md:grid-cols-2"
-                        onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                          event.preventDefault();
-                          const formData = new FormData(event.currentTarget);
-                          await runAction(
-                            setFlash,
-                            async () => {
-                              await OpenApi.rescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePost(
-                                {
-                                  body: {
-                                    new_court_id: toNumber(formData.get('new_court_id')),
-                                    new_position: toNumber(formData.get('new_position')),
-                                    old_court_id: match.court_id ?? 0,
-                                    old_position: match.position_in_schedule ?? 0,
-                                  },
-                                  path: { match_id: match.id, tournament_id: tournamentId },
-                                  throwOnError: true,
-                                },
-                              );
-                            },
-                            'Match rescheduled successfully.',
-                            onRefresh,
-                          );
-                        }}
-                      >
-                        <FormField label="Move to court id">
-                          <Input
-                            defaultValue={match.court_id ?? ''}
-                            name="new_court_id"
-                            type="number"
-                          />
-                        </FormField>
-                        <FormField label="New position">
-                          <Input
-                            defaultValue={match.position_in_schedule ?? ''}
-                            name="new_position"
-                            type="number"
-                          />
-                        </FormField>
-                        <div className="md:col-span-2">
-                          <Button tone="secondary" type="submit">
-                            Reschedule
-                          </Button>
-                        </div>
-                      </form>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </Surface>
-        ))}
-        {!compact ? (
-          <Surface className="space-y-4">
-            <SurfaceHeading title="Waiting room" />
-            <div className="space-y-3">
-              {unscheduled.length === 0 ? (
-                <p className="text-sm text-zinc-400">All matches are scheduled.</p>
-              ) : null}
-              {unscheduled.map(({ match, round, stage, stageItem }) => (
-                <div
-                  className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                  key={match.id}
-                >
-                  <p className="text-xs text-zinc-400">
-                    {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold text-white">
-                    {inputLabel(match.stage_item_input1, stageItemsById)} vs{' '}
-                    {inputLabel(match.stage_item_input2, stageItemsById)}
-                  </h3>
-                </div>
-              ))}
-            </div>
-          </Surface>
-        ) : null}
-      </div>
-    </div>
+        </section>
+      ))}
+    </Surface>
   );
 }
 
@@ -613,10 +428,7 @@ export function ResultsSection({
               <span className="text-brand-300">{match.stage_item_input2_score}</span>{' '}
               {inputLabel(match.stage_item_input2, stageItemsById)}
             </h3>
-            <p className="mt-2 text-sm text-zinc-400">
-              {formatDateTime(match.start_time)} · court{' '}
-              {match.court?.name ?? match.court_id ?? 'TBD'}
-            </p>
+            <p className="mt-2 text-sm text-zinc-400">{formatDateTime(match.start_time)}</p>
           </div>
         ))}
       </div>
@@ -651,7 +463,6 @@ export function SettingsSection({
               async () => {
                 await OpenApi.updateTournamentByIdApiTournamentsTournamentIdPut({
                   body: {
-                    auto_assign_courts: toCheckbox(formData.get('auto_assign_courts')),
                     dashboard_endpoint: toOptionalString(formData.get('dashboard_endpoint')),
                     dashboard_public: toCheckbox(formData.get('dashboard_public')),
                     duration_minutes: toNumber(formData.get('duration_minutes')),
@@ -695,14 +506,14 @@ export function SettingsSection({
           <FormField label="Tournament logo">
             <Input accept="image/*" name="logo" type="file" />
           </FormField>
-          <FormField label="Duration minutes">
+          <FormField label="Match duration (minutes)">
             <Input
               defaultValue={tournament.duration_minutes}
               name="duration_minutes"
               type="number"
             />
           </FormField>
-          <FormField label="Margin minutes">
+          <FormField label="Break between rounds (minutes)">
             <Input defaultValue={tournament.margin_minutes} name="margin_minutes" type="number" />
           </FormField>
           <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
@@ -722,15 +533,6 @@ export function SettingsSection({
               type="checkbox"
             />
             <span>Players can join multiple teams</span>
-          </label>
-          <label className="md:col-span-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-            <input
-              className="h-4 w-4 accent-brand-500"
-              defaultChecked={tournament.auto_assign_courts}
-              name="auto_assign_courts"
-              type="checkbox"
-            />
-            <span>Auto-assign courts when scheduling</span>
           </label>
           <div className="md:col-span-2">
             <Button type="submit">Save tournament</Button>
@@ -804,6 +606,7 @@ export function StagesSection({
   setFlash: (message: FlashMessage) => void;
 }) {
   const teamLookup = new Map(bundle.teams.map((team) => [team.id, team] as const));
+  const rankings = [...bundle.rankings].sort((left, right) => left.position - right.position);
   const stageItemsById = new Map<number, OpenApi.StageItemWithRounds>();
   bundle.stages.forEach((stage) =>
     stage.stage_items.forEach((item) => stageItemsById.set(item.id, item)),
@@ -903,7 +706,6 @@ export function StagesSection({
                   {stage.name}
                 </h3>
               </div>
-              <Pill>#{stage.id}</Pill>
             </summary>
             <div className="mt-5 space-y-5">
               <form
@@ -991,9 +793,18 @@ export function StagesSection({
                 <FormField label="Team count">
                   <Input defaultValue={8} min={2} name="team_count" type="number" />
                 </FormField>
-                <FormField label="Ranking id">
-                  <Input name="ranking_id" placeholder="Optional" type="number" />
-                </FormField>
+                {rankings.length > 1 ? (
+                  <FormField label="Ranking">
+                    <Select defaultValue={rankings[0].id} name="ranking_id">
+                      {rankings.map((ranking) => (
+                        <option key={ranking.id} value={ranking.id}>
+                          #{ranking.position}: win {ranking.win_points}, draw {ranking.draw_points},
+                          loss {ranking.loss_points}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                ) : null}
                 <div className="md:col-span-4">
                   <Button type="submit">Create stage item</Button>
                 </div>
@@ -1003,23 +814,20 @@ export function StagesSection({
                   <details
                     className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
                     key={stageItem.id}
-                    open={focusStageItem?.id === stageItem.id}
+                    open
                   >
                     <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Pill tone="accent">{stageItem.type_name}</Pill>
-                          <Pill>{`${stageItem.rounds.length} rounds`}</Pill>
-                        </div>
+                        <Pill tone="accent">{stageItem.type_name}</Pill>
                         <h4 className="mt-3 text-xl font-semibold text-white">
                           {stageItem.name || stageItem.type_name}
                         </h4>
+                        <p className="mt-1 text-sm text-zinc-400">{stageItemStatus(stageItem)}</p>
                       </div>
-                      <Pill>#{stageItem.id}</Pill>
                     </summary>
                     <div className="mt-5 space-y-5">
                       <form
-                        className="grid gap-4 md:grid-cols-[1fr_180px_auto_auto]"
+                        className="grid gap-4 md:grid-cols-[1fr_auto_auto]"
                         onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                           event.preventDefault();
                           const formData = new FormData(event.currentTarget);
@@ -1030,7 +838,7 @@ export function StagesSection({
                                 {
                                   body: {
                                     name: String(formData.get('name') ?? ''),
-                                    ranking_id: toNumber(formData.get('ranking_id')),
+                                    ranking_id: stageItem.ranking_id ?? 0,
                                   },
                                   path: {
                                     stage_item_id: stageItem.id,
@@ -1040,7 +848,7 @@ export function StagesSection({
                                 },
                               );
                             },
-                            'Stage item updated successfully.',
+                            'Name saved.',
                             onRefresh,
                           );
                         }}
@@ -1050,13 +858,7 @@ export function StagesSection({
                           name="name"
                           placeholder="Stage item name"
                         />
-                        <Input
-                          defaultValue={stageItem.ranking_id ?? ''}
-                          name="ranking_id"
-                          placeholder="Ranking id"
-                          type="number"
-                        />
-                        <Button type="submit">Save item</Button>
+                        <Button type="submit">Save name</Button>
                         <Button
                           onClick={async () => {
                             if (
@@ -1088,534 +890,29 @@ export function StagesSection({
                           Delete item
                         </Button>
                       </form>
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <StageItemVisualization
+                      <StageItemSlots
+                        nextStageEntries={bundle.nextStageRankings[String(stageItem.id)]}
+                        options={bundle.availableInputs[String(stage.id)] ?? []}
+                        stageItem={stageItem}
+                        stageItemsById={stageItemsById}
+                        teamLookup={teamLookup}
+                        tournamentId={bundle.tournament.id}
+                      />
+                      <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
+                        <h5 className="font-semibold text-white">Rounds</h5>
+                        <StageItemRounds
                           stageItem={stageItem}
                           stageItemsById={stageItemsById}
-                          teamMap={teamLookup}
                           tournamentId={bundle.tournament.id}
                         />
-                        <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
-                          <div>
-                            <p className="text-sm text-zinc-400">Slot inputs</p>
-                            <h5 className="mt-2 font-semibold text-white">Seeding and winners</h5>
-                          </div>
-                          <div className="space-y-3">
-                            {stageItem.inputs.map((input) => {
-                              const options = bundle.availableInputs[String(input.id)] ?? [];
-                              const currentValue =
-                                input.team_id != null
-                                  ? `team:${input.team_id}`
-                                  : input.winner_from_stage_item_id != null &&
-                                      input.winner_position != null
-                                    ? `winner:${input.winner_from_stage_item_id}:${input.winner_position}`
-                                    : 'empty';
-                              return (
-                                <form
-                                  className="grid gap-3 rounded-[1.25rem] border border-white/10 bg-black/20 p-3 md:grid-cols-[1fr_auto]"
-                                  key={input.id}
-                                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                                    event.preventDefault();
-                                    const formData = new FormData(event.currentTarget);
-                                    const mode = String(formData.get('assignment') ?? 'empty');
-
-                                    let body:
-                                      | OpenApi.StageItemInputUpdateBodyEmpty
-                                      | OpenApi.StageItemInputUpdateBodyFinal
-                                      | OpenApi.StageItemInputUpdateBodyTentative;
-                                    if (mode === 'empty') {
-                                      body = {
-                                        team_id: null,
-                                        winner_from_stage_item_id: null,
-                                        winner_position: null,
-                                      };
-                                    } else if (mode.startsWith('team:')) {
-                                      body = { team_id: Number(mode.split(':')[1]) };
-                                    } else {
-                                      const [, winnerStageItemId, winnerPosition] = mode.split(':');
-                                      body = {
-                                        winner_from_stage_item_id: Number(winnerStageItemId),
-                                        winner_position: Number(winnerPosition),
-                                      };
-                                    }
-
-                                    await runAction(
-                                      setFlash,
-                                      async () => {
-                                        await OpenApi.updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPut(
-                                          {
-                                            body,
-                                            path: {
-                                              stage_item_id: stageItem.id,
-                                              stage_item_input_id: input.id,
-                                              tournament_id: bundle.tournament.id,
-                                            },
-                                            throwOnError: true,
-                                          },
-                                        );
-                                      },
-                                      'Stage item input updated successfully.',
-                                      onRefresh,
-                                    );
-                                  }}
-                                >
-                                  <div>
-                                    <p className="text-sm font-semibold text-white">
-                                      Slot {input.slot}
-                                    </p>
-                                    <p className="mt-1 text-sm text-zinc-400">
-                                      Current: {inputLabel(input, stageItemsById)}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-wrap gap-3 md:justify-end">
-                                    <Select defaultValue={currentValue} name="assignment">
-                                      <option value="empty">Open slot</option>
-                                      {options.map((option, optionIndex) => {
-                                        if ('team_id' in option) {
-                                          const team = teamLookup.get(option.team_id);
-                                          return (
-                                            <option
-                                              key={`team-${option.team_id}-${optionIndex}`}
-                                              value={`team:${option.team_id}`}
-                                            >
-                                              {team?.name ?? `Team #${option.team_id}`}
-                                              {option.already_taken ? ' (taken)' : ''}
-                                            </option>
-                                          );
-                                        }
-                                        const source = stageItemsById.get(
-                                          option.winner_from_stage_item_id,
-                                        );
-                                        return (
-                                          <option
-                                            key={`winner-${option.winner_from_stage_item_id}-${option.winner_position}-${optionIndex}`}
-                                            value={`winner:${option.winner_from_stage_item_id}:${option.winner_position}`}
-                                          >
-                                            Winner of{' '}
-                                            {source?.name ||
-                                              source?.type_name ||
-                                              `item #${option.winner_from_stage_item_id}`}{' '}
-                                            slot {option.winner_position}
-                                            {option.already_taken ? ' (taken)' : ''}
-                                          </option>
-                                        );
-                                      })}
-                                    </Select>
-                                    <Button tone="secondary" type="submit">
-                                      Assign
-                                    </Button>
-                                  </div>
-                                </form>
-                              );
-                            })}
-                          </div>
-                        </Surface>
-                      </div>
-                      <div className="grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
-                        <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
-                          <div>
-                            <p className="text-sm text-zinc-400">Round controls</p>
-                            <h5 className="mt-2 font-semibold text-white">Round flow</h5>
-                          </div>
-                          <form
-                            className="space-y-4"
-                            onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                              event.preventDefault();
-                              const form = event.currentTarget;
-                              const formData = new FormData(form);
-                              await runAction(
-                                setFlash,
-                                async () => {
-                                  await OpenApi.createRoundApiTournamentsTournamentIdRoundsPost({
-                                    body: {
-                                      name: toOptionalString(formData.get('name')),
-                                      stage_item_id: stageItem.id,
-                                    },
-                                    path: { tournament_id: bundle.tournament.id },
-                                    throwOnError: true,
-                                  });
-                                },
-                                'Round created successfully.',
-                                () => {
-                                  form.reset();
-                                  onRefresh();
-                                },
-                              );
-                            }}
-                          >
-                            <FormField label="Create round">
-                              <Input name="name" placeholder="Quarter finals" />
-                            </FormField>
-                            <Button tone="secondary" type="submit">
-                              Create round
-                            </Button>
-                          </form>
-                          <form
-                            className="space-y-4"
-                            onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                              event.preventDefault();
-                              const formData = new FormData(event.currentTarget);
-                              await runAction(
-                                setFlash,
-                                async () => {
-                                  await OpenApi.startNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPost(
-                                    {
-                                      body: {
-                                        adjust_to_time:
-                                          toOptionalString(formData.get('adjust_to_time')) ?? null,
-                                      },
-                                      path: {
-                                        stage_item_id: stageItem.id,
-                                        tournament_id: bundle.tournament.id,
-                                      },
-                                      throwOnError: true,
-                                    },
-                                  );
-                                },
-                                'Started next round successfully.',
-                                onRefresh,
-                              );
-                            }}
-                          >
-                            <FormField label="Adjust to time before advancing">
-                              <DateTimeField name="adjust_to_time" />
-                            </FormField>
-                            <Button tone="ghost" type="submit">
-                              Start next round
-                            </Button>
-                          </form>
-                          {bundle.nextStageRankings[String(stageItem.id)] ? (
-                            <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                              <p className="text-sm text-zinc-400">Next-stage ranking view</p>
-                              <div className="mt-3 space-y-2 text-sm text-zinc-200">
-                                {bundle.nextStageRankings[String(stageItem.id)].map((entry) => (
-                                  <div
-                                    className="flex items-center justify-between"
-                                    key={entry.stage_item_input.id}
-                                  >
-                                    <span>{entry.team.name}</span>
-                                    <span className="text-zinc-400">
-                                      slot {entry.stage_item_input.slot}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </Surface>
-                        <div className="space-y-4">
-                          {stageItem.rounds.map((round) => (
-                            <details
-                              className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
-                              key={round.id}
-                              open
-                            >
-                              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <h5 className="text-lg font-semibold text-white">{round.name}</h5>
-                                  <p className="text-sm text-zinc-400">
-                                    {round.matches.length} matches ·{' '}
-                                    {round.is_draft ? 'draft' : 'official'}
-                                  </p>
-                                </div>
-                                <Pill>{round.is_draft ? 'draft' : 'live'}</Pill>
-                              </summary>
-                              <div className="mt-4 space-y-4">
-                                <form
-                                  className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto_auto]"
-                                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                                    event.preventDefault();
-                                    const formData = new FormData(event.currentTarget);
-                                    await runAction(
-                                      setFlash,
-                                      async () => {
-                                        await OpenApi.updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPut(
-                                          {
-                                            body: {
-                                              is_draft: toCheckbox(formData.get('is_draft')),
-                                              name: String(formData.get('name') ?? ''),
-                                            },
-                                            path: {
-                                              round_id: round.id,
-                                              tournament_id: bundle.tournament.id,
-                                            },
-                                            throwOnError: true,
-                                          },
-                                        );
-                                      },
-                                      'Round updated successfully.',
-                                      onRefresh,
-                                    );
-                                  }}
-                                >
-                                  <Input defaultValue={round.name} name="name" />
-                                  <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-                                    <input
-                                      className="h-4 w-4 accent-brand-500"
-                                      defaultChecked={round.is_draft}
-                                      name="is_draft"
-                                      type="checkbox"
-                                    />
-                                    <span>Draft round</span>
-                                  </label>
-                                  <div className="flex gap-3">
-                                    <Button type="submit">Save round</Button>
-                                    <Button
-                                      onClick={async () => {
-                                        if (!window.confirm(`Delete round ${round.name}?`)) return;
-                                        await runAction(
-                                          setFlash,
-                                          async () => {
-                                            await OpenApi.deleteRoundApiTournamentsTournamentIdRoundsRoundIdDelete(
-                                              {
-                                                path: {
-                                                  round_id: round.id,
-                                                  tournament_id: bundle.tournament.id,
-                                                },
-                                                throwOnError: true,
-                                              },
-                                            );
-                                          },
-                                          'Round deleted successfully.',
-                                          onRefresh,
-                                        );
-                                      }}
-                                      tone="danger"
-                                      type="button"
-                                    >
-                                      Delete round
-                                    </Button>
-                                  </div>
-                                </form>
-                                <form
-                                  className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
-                                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                                    event.preventDefault();
-                                    const form = event.currentTarget;
-                                    const formData = new FormData(form);
-                                    await runAction(
-                                      setFlash,
-                                      async () => {
-                                        await OpenApi.createMatchApiTournamentsTournamentIdMatchesPost(
-                                          {
-                                            body: {
-                                              court_id: toOptionalNumber(formData.get('court_id')),
-                                              round_id: round.id,
-                                              stage_item_input1_id: toOptionalNumber(
-                                                formData.get('stage_item_input1_id'),
-                                              ),
-                                              stage_item_input1_winner_from_match_id:
-                                                toOptionalNumber(
-                                                  formData.get(
-                                                    'stage_item_input1_winner_from_match_id',
-                                                  ),
-                                                ),
-                                              stage_item_input2_id: toOptionalNumber(
-                                                formData.get('stage_item_input2_id'),
-                                              ),
-                                              stage_item_input2_winner_from_match_id:
-                                                toOptionalNumber(
-                                                  formData.get(
-                                                    'stage_item_input2_winner_from_match_id',
-                                                  ),
-                                                ),
-                                            },
-                                            path: { tournament_id: bundle.tournament.id },
-                                            throwOnError: true,
-                                          },
-                                        );
-                                      },
-                                      'Match created successfully.',
-                                      () => {
-                                        form.reset();
-                                        onRefresh();
-                                      },
-                                    );
-                                  }}
-                                >
-                                  <FormField label="Input 1 slot id">
-                                    <Input
-                                      name="stage_item_input1_id"
-                                      placeholder="Optional slot id"
-                                      type="number"
-                                    />
-                                  </FormField>
-                                  <FormField label="Input 2 slot id">
-                                    <Input
-                                      name="stage_item_input2_id"
-                                      placeholder="Optional slot id"
-                                      type="number"
-                                    />
-                                  </FormField>
-                                  <FormField label="Input 1 winner from match id">
-                                    <Input
-                                      name="stage_item_input1_winner_from_match_id"
-                                      placeholder="Optional match id"
-                                      type="number"
-                                    />
-                                  </FormField>
-                                  <FormField label="Input 2 winner from match id">
-                                    <Input
-                                      name="stage_item_input2_winner_from_match_id"
-                                      placeholder="Optional match id"
-                                      type="number"
-                                    />
-                                  </FormField>
-                                  <FormField label="Court id">
-                                    <Input
-                                      name="court_id"
-                                      placeholder="Optional court id"
-                                      type="number"
-                                    />
-                                  </FormField>
-                                  <div className="md:col-span-2">
-                                    <Button tone="secondary" type="submit">
-                                      Create match
-                                    </Button>
-                                  </div>
-                                </form>
-                                <div className="space-y-3">
-                                  {round.matches.map((match) => (
-                                    <details
-                                      className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                                      key={match.id}
-                                    >
-                                      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-                                        <div>
-                                          <h6 className="text-base font-semibold text-white">
-                                            {inputLabel(match.stage_item_input1, stageItemsById)}{' '}
-                                            {match.stage_item_input1_score} -{' '}
-                                            {match.stage_item_input2_score}{' '}
-                                            {inputLabel(match.stage_item_input2, stageItemsById)}
-                                          </h6>
-                                          <p className="text-sm text-zinc-400">
-                                            {formatDateTime(match.start_time)} · court{' '}
-                                            {match.court?.name ?? match.court_id ?? 'TBD'}
-                                          </p>
-                                        </div>
-                                        <Pill>{match.position_in_schedule ?? '—'}</Pill>
-                                      </summary>
-                                      <form
-                                        className="mt-4 grid gap-4 md:grid-cols-3"
-                                        onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                                          event.preventDefault();
-                                          const formData = new FormData(event.currentTarget);
-                                          await runAction(
-                                            setFlash,
-                                            async () => {
-                                              await OpenApi.updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut(
-                                                {
-                                                  body: {
-                                                    court_id: toOptionalNumber(
-                                                      formData.get('court_id'),
-                                                    ),
-                                                    custom_duration_minutes: toOptionalNumber(
-                                                      formData.get('custom_duration_minutes'),
-                                                    ),
-                                                    custom_margin_minutes: toOptionalNumber(
-                                                      formData.get('custom_margin_minutes'),
-                                                    ),
-                                                    round_id: toNumber(formData.get('round_id')),
-                                                    stage_item_input1_score: toNumber(
-                                                      formData.get('stage_item_input1_score'),
-                                                    ),
-                                                    stage_item_input2_score: toNumber(
-                                                      formData.get('stage_item_input2_score'),
-                                                    ),
-                                                  },
-                                                  path: {
-                                                    match_id: match.id,
-                                                    tournament_id: bundle.tournament.id,
-                                                  },
-                                                  throwOnError: true,
-                                                },
-                                              );
-                                            },
-                                            'Match updated successfully.',
-                                            onRefresh,
-                                          );
-                                        }}
-                                      >
-                                        <FormField label="Round id">
-                                          <Input
-                                            defaultValue={match.round_id}
-                                            name="round_id"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <FormField label="Court id">
-                                          <Input
-                                            defaultValue={match.court_id ?? ''}
-                                            name="court_id"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <FormField label="Custom duration minutes">
-                                          <Input
-                                            defaultValue={match.custom_duration_minutes ?? ''}
-                                            name="custom_duration_minutes"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <FormField label="Custom margin minutes">
-                                          <Input
-                                            defaultValue={match.custom_margin_minutes ?? ''}
-                                            name="custom_margin_minutes"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <FormField label="Score 1">
-                                          <Input
-                                            defaultValue={match.stage_item_input1_score}
-                                            name="stage_item_input1_score"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <FormField label="Score 2">
-                                          <Input
-                                            defaultValue={match.stage_item_input2_score}
-                                            name="stage_item_input2_score"
-                                            type="number"
-                                          />
-                                        </FormField>
-                                        <div className="md:col-span-3 flex flex-wrap gap-3">
-                                          <Button type="submit">Save match</Button>
-                                          <Button
-                                            onClick={async () => {
-                                              if (!window.confirm(`Delete match #${match.id}?`))
-                                                return;
-                                              await runAction(
-                                                setFlash,
-                                                async () => {
-                                                  await OpenApi.deleteMatchApiTournamentsTournamentIdMatchesMatchIdDelete(
-                                                    {
-                                                      path: {
-                                                        match_id: match.id,
-                                                        tournament_id: bundle.tournament.id,
-                                                      },
-                                                      throwOnError: true,
-                                                    },
-                                                  );
-                                                },
-                                                'Match deleted successfully.',
-                                                onRefresh,
-                                              );
-                                            }}
-                                            tone="danger"
-                                            type="button"
-                                          >
-                                            Delete match
-                                          </Button>
-                                        </div>
-                                      </form>
-                                    </details>
-                                  ))}
-                                </div>
-                              </div>
-                            </details>
-                          ))}
-                        </div>
-                      </div>
+                      </Surface>
+                      <StageItemVisualization
+                        showMatches={false}
+                        stageItem={stageItem}
+                        stageItemsById={stageItemsById}
+                        teamMap={teamLookup}
+                        tournamentId={bundle.tournament.id}
+                      />
                     </div>
                   </details>
                 ))}

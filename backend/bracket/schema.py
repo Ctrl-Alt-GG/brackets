@@ -26,7 +26,6 @@ tournaments = Table(
     Column("logo_path", String, nullable=True),
     Column("dashboard_endpoint", String, nullable=True, index=True, unique=True),
     Column("players_can_be_in_multiple_teams", Boolean, nullable=False, server_default="f"),
-    Column("auto_assign_courts", Boolean, nullable=False, server_default="f"),
     Column("duration_minutes", Integer, nullable=False, server_default="15"),
     Column("margin_minutes", Integer, nullable=False, server_default="5"),
     Column(
@@ -168,10 +167,8 @@ matches = Table(
         ForeignKey("matches.id", ondelete="SET NULL"),
         nullable=True,
     ),
-    Column("court_id", BigInteger, ForeignKey("courts.id", ondelete="SET NULL"), nullable=True),
     Column("stage_item_input1_score", Integer, nullable=False),
     Column("stage_item_input2_score", Integer, nullable=False),
-    Column("position_in_schedule", Integer, nullable=True),
 )
 
 teams = Table(
@@ -259,21 +256,6 @@ players_x_teams = Table(
     Column("id", BigInteger, primary_key=True, index=True),
     Column("player_id", BigInteger, ForeignKey("players.id", ondelete="CASCADE"), nullable=False),
     Column("team_id", BigInteger, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False),
-)
-
-courts = Table(
-    "courts",
-    metadata,
-    Column("id", BigInteger, primary_key=True, index=True),
-    Column("name", Text, nullable=False),
-    Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
-    Column(
-        "tournament_id",
-        BigInteger,
-        ForeignKey("tournaments.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    ),
 )
 
 rankings = Table(

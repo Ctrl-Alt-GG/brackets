@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
 
-import type { AuthFeatures, FlashMessage, Session } from './types';
+import type { AuthFeatures, Session } from './types';
 import { cx } from './utils';
 
 const BUTTON_BASE_CLASS =
@@ -166,23 +166,6 @@ export function FormField({
       {children}
       {error ? <span className="block text-xs font-medium text-brand-300">{error}</span> : null}
     </label>
-  );
-}
-
-export function FlashBanner({ message }: { message: FlashMessage }) {
-  if (!message) return null;
-
-  return (
-    <div
-      className={cx(
-        'rounded-2xl border px-4 py-3 text-sm font-medium',
-        message.tone === 'success'
-          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-          : 'border-red-400/40 bg-red-500/15 text-red-100',
-      )}
-    >
-      {message.text}
-    </div>
   );
 }
 

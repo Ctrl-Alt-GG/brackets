@@ -37,7 +37,6 @@ def get_match(
         ).model_dump(),
         stage_item_input1=stage_item_input1,
         stage_item_input2=stage_item_input2,
-        court=None,
     )
 
 

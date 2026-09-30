@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, useParams } from 'react-router';
 
 import * as OpenApi from '../../openapi';
-import { fetchTournamentBundle } from '../api';
-import { useResource } from '../hooks';
+import { fetchTournamentBundle, TOURNAMENT_BUNDLE_QUERY_KEY } from '../api';
 import type { FlashMessage, Session, TournamentSection } from '../types';
-import { compareMatchesByTime, cx, flattenMatches, isScored } from '../utils';
+import { compareMatchesByTime, cx, flattenMatches, getErrorMessage, isScored } from '../utils';
 import { Button, ErrorState, LoadingState, PageShell, Surface } from '../ui';
 import { OverviewSection } from '../sections/tournament-overview';
 import { BracketSection } from '../sections/tournament-bracket';
@@ -33,7 +33,7 @@ function TournamentNav({
         ['dashboard', 'Overview'],
         ['dashboard/bracket', 'Bracket'],
         ['dashboard/standings', 'Standings'],
-        ['dashboard/present/courts', 'Courts'],
+        ['dashboard/present/schedule', 'Schedule'],
       ]
     : [
         ['', 'Overview'],
@@ -123,12 +123,14 @@ export function TournamentPage({
     !dashboardMode && ['players', 'teams', 'rankings', 'settings', 'stages'].includes(section);
   const isLockedOut = isManagementSection && !isAuthenticated;
 
-  const workspace = useResource(
-    () =>
+  // Refetching keeps showing the current data, so open panels and forms survive every save.
+  const workspace = useQuery({
+    enabled: Boolean(tournamentKey) && !isLockedOut,
+    queryKey: [...TOURNAMENT_BUNDLE_QUERY_KEY, tournamentKey, dashboardMode, session?.access_token],
+    queryFn: () =>
       fetchTournamentBundle(tournamentKey, dashboardMode, isAuthenticated, session?.access_token),
-    [dashboardMode, session?.access_token, tournamentKey],
-    Boolean(tournamentKey) && !isLockedOut,
-  );
+  });
+  const refreshWorkspace = () => void workspace.refetch();
 
   const teamMap = useMemo(
     () => new Map((workspace.data?.teams ?? []).map((team) => [team.id, team] as const)),
@@ -141,8 +143,12 @@ export function TournamentPage({
     });
     return map;
   }, [workspace.data?.stages]);
+  // Draft rounds are only shown in the stage editor, until they are published.
   const matches = useMemo(
-    () => flattenMatches(workspace.data?.stages ?? []).sort(compareMatchesByTime),
+    () =>
+      flattenMatches(workspace.data?.stages ?? [])
+        .filter(({ round }) => !round.is_draft)
+        .sort(compareMatchesByTime),
     [workspace.data?.stages],
   );
 
@@ -164,17 +170,17 @@ export function TournamentPage({
     );
   }
 
-  if (workspace.loading) {
+  if (workspace.isPending) {
     return <LoadingState title="Loading tournament workspace..." />;
   }
 
-  if (workspace.error || !workspace.data) {
+  if (!workspace.data) {
     return (
       <ErrorState
-        error={workspace.error ?? 'The tournament could not be loaded.'}
+        error={getErrorMessage(workspace.error)}
         title="Unable to load tournament"
         action={
-          <Button onClick={workspace.refresh} type="button">
+          <Button onClick={refreshWorkspace} type="button">
             Retry
           </Button>
         }
@@ -243,18 +249,17 @@ export function TournamentPage({
         <BracketSection bundle={workspace.data} stageItemsById={stageItemsById} teamMap={teamMap} />
       ) : null}
       {section === 'players' ? (
-        <PlayersSection bundle={workspace.data} onRefresh={workspace.refresh} setFlash={setFlash} />
+        <PlayersSection bundle={workspace.data} onRefresh={refreshWorkspace} setFlash={setFlash} />
       ) : null}
       {section === 'teams' ? (
-        <TeamsSection bundle={workspace.data} onRefresh={workspace.refresh} setFlash={setFlash} />
+        <TeamsSection bundle={workspace.data} onRefresh={refreshWorkspace} setFlash={setFlash} />
       ) : null}
-      {section === 'schedule' || section === 'dashboard-courts' ? (
+      {section === 'schedule' || section === 'dashboard-schedule' ? (
         <ScheduleSection
-          compact={section === 'dashboard-courts'}
-          courts={workspace.data.courts}
+          compact={section === 'dashboard-schedule'}
           isAuthenticated={canManage}
           matches={matches}
-          onRefresh={workspace.refresh}
+          onRefresh={refreshWorkspace}
           setFlash={setFlash}
           stageItemsById={stageItemsById}
           tournamentId={tournament.id}
@@ -263,7 +268,7 @@ export function TournamentPage({
       {section === 'rankings' ? (
         <RankingsSection
           bundle={workspace.data}
-          onRefresh={workspace.refresh}
+          onRefresh={refreshWorkspace}
           setFlash={setFlash}
           standings={standings}
         />
@@ -280,7 +285,7 @@ export function TournamentPage({
       {section === 'settings' ? (
         <SettingsSection
           bundle={workspace.data}
-          onRefresh={workspace.refresh}
+          onRefresh={refreshWorkspace}
           setFlash={setFlash}
           tournamentKey={tournamentKey}
         />
@@ -289,7 +294,7 @@ export function TournamentPage({
         <StagesSection
           bundle={workspace.data}
           focusStageItem={stageItemFocus}
-          onRefresh={workspace.refresh}
+          onRefresh={refreshWorkspace}
           setFlash={setFlash}
         />
       ) : null}

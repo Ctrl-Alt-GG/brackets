@@ -13,7 +13,7 @@ MOCK_NOW = datetime_utc(
 
 
 def generate_email() -> str:
-    return f"donald_duck-{uuid4()}"
+    return f"donald_duck-{uuid4()}@example.org"
 
 
 def get_mock_user() -> UserInsertable:

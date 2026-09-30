@@ -38,16 +38,8 @@ export type TournamentSection =
   | 'dashboard'
   | 'dashboard-bracket'
   | 'dashboard-standings'
-  | 'dashboard-courts'
+  | 'dashboard-schedule'
   | 'dashboard-present-standings';
-
-export type UpcomingSuggestion = {
-  stageId: number;
-  stageItemId: number;
-  stageName: string;
-  stageItemName: string;
-  suggestion: OpenApi.SuggestedMatch;
-};
 
 export type TournamentBundle = {
   canManage: boolean;
@@ -56,13 +48,11 @@ export type TournamentBundle = {
   players: OpenApi.Player[];
   teams: OpenApi.FullTeamWithPlayers[];
   rankings: OpenApi.Ranking[];
-  courts: OpenApi.Court[];
   availableInputs: Record<
     string,
     Array<OpenApi.StageItemInputOptionFinal | OpenApi.StageItemInputOptionTentative>
   >;
   nextStageRankings: Record<string, OpenApi.StageItemInputUpdate[]>;
-  upcomingMatches: UpcomingSuggestion[];
 };
 
 export type FlattenedMatch = {

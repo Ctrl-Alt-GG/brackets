@@ -70,7 +70,6 @@ export function HomePage({
       async () => {
         await OpenApi.createTournamentApiTournamentsPost({
           body: {
-            auto_assign_courts: toCheckbox(formData.get('auto_assign_courts')),
             club_id: toNumber(formData.get('club_id')),
             dashboard_endpoint: toOptionalString(formData.get('dashboard_endpoint')),
             dashboard_public: toCheckbox(formData.get('dashboard_public')),
@@ -236,7 +235,7 @@ export function HomePage({
                     <FormField label="Dashboard endpoint">
                       <Input name="dashboard_endpoint" placeholder="summer-cup-2026" />
                     </FormField>
-                    <FormField label="Duration minutes">
+                    <FormField label="Match duration (minutes)">
                       <Input
                         defaultValue={30}
                         min={1}
@@ -245,7 +244,7 @@ export function HomePage({
                         type="number"
                       />
                     </FormField>
-                    <FormField label="Margin minutes">
+                    <FormField label="Break between rounds (minutes)">
                       <Input
                         defaultValue={5}
                         min={0}
@@ -271,14 +270,6 @@ export function HomePage({
                         type="checkbox"
                       />
                       <span>Allow players in multiple teams</span>
-                    </label>
-                    <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                      <input
-                        className="h-4 w-4 accent-brand-500"
-                        name="auto_assign_courts"
-                        type="checkbox"
-                      />
-                      <span>Auto-assign courts during scheduling</span>
                     </label>
                   </div>
                   <Button type="submit">Create tournament</Button>

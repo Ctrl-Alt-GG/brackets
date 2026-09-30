@@ -25,7 +25,6 @@ class TournamentInsertable(BaseModelORM):
     dashboard_endpoint: str | None = None
     logo_path: str | None = None
     players_can_be_in_multiple_teams: bool
-    auto_assign_courts: bool
     status: TournamentStatus = TournamentStatus.OPEN
 
 
@@ -39,7 +38,6 @@ class TournamentUpdateBody(BaseModelORM):
     dashboard_public: bool
     dashboard_endpoint: EmptyStrToNone | str = None
     players_can_be_in_multiple_teams: bool
-    auto_assign_courts: bool
     duration_minutes: int = Field(..., ge=1)
     margin_minutes: int = Field(..., ge=0)
 

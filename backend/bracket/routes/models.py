@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 from bracket.logic.scheduling.handle_stage_activation import StageItemInputUpdate
 from bracket.models.db.club import Club
-from bracket.models.db.court import Court
 from bracket.models.db.match import Match, SuggestedMatch
 from bracket.models.db.player import Player
 from bracket.models.db.ranking import Ranking
@@ -94,14 +93,6 @@ class AuthFeatureFlags(BaseModel):
 
 
 class AuthFeatureFlagsResponse(DataResponse[AuthFeatureFlags]):
-    pass
-
-
-class CourtsResponse(DataResponse[list[Court]]):
-    pass
-
-
-class SingleCourtResponse(DataResponse[Court]):
     pass
 
 

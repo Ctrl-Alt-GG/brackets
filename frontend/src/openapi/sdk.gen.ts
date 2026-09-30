@@ -17,9 +17,6 @@ import type {
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostData,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostErrors,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses,
-  CreateCourtApiTournamentsTournamentIdCourtsPostData,
-  CreateCourtApiTournamentsTournamentIdCourtsPostErrors,
-  CreateCourtApiTournamentsTournamentIdCourtsPostResponses,
   CreateMatchApiTournamentsTournamentIdMatchesPostData,
   CreateMatchApiTournamentsTournamentIdMatchesPostErrors,
   CreateMatchApiTournamentsTournamentIdMatchesPostResponses,
@@ -56,9 +53,6 @@ import type {
   DeleteClubApiClubsClubIdDeleteData,
   DeleteClubApiClubsClubIdDeleteErrors,
   DeleteClubApiClubsClubIdDeleteResponses,
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteData,
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors,
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses,
   DeleteMatchApiTournamentsTournamentIdMatchesMatchIdDeleteData,
   DeleteMatchApiTournamentsTournamentIdMatchesMatchIdDeleteErrors,
   DeleteMatchApiTournamentsTournamentIdMatchesMatchIdDeleteResponses,
@@ -90,9 +84,6 @@ import type {
   GetAvailableInputsApiTournamentsTournamentIdAvailableInputsGetResponses,
   GetClubsApiClubsGetData,
   GetClubsApiClubsGetResponses,
-  GetCourtsApiTournamentsTournamentIdCourtsGetData,
-  GetCourtsApiTournamentsTournamentIdCourtsGetErrors,
-  GetCourtsApiTournamentsTournamentIdCourtsGetResponses,
   GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData,
   GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors,
   GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses,
@@ -141,21 +132,12 @@ import type {
   RegisterUserApiUsersRegisterPostData,
   RegisterUserApiUsersRegisterPostErrors,
   RegisterUserApiUsersRegisterPostResponses,
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostData,
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors,
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostErrors,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostResponses,
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostData,
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors,
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses,
   UpdateClubApiClubsClubIdPutData,
   UpdateClubApiClubsClubIdPutErrors,
   UpdateClubApiClubsClubIdPutResponses,
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutData,
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors,
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses,
   UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutData,
   UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutErrors,
   UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutResponses,
@@ -533,103 +515,6 @@ export const changeStatusApiTournamentsTournamentIdChangeStatusPost = <
   });
 
 /**
- * Get Courts
- */
-export const getCourtsApiTournamentsTournamentIdCourtsGet = <ThrowOnError extends boolean = false>(
-  options: Options<GetCourtsApiTournamentsTournamentIdCourtsGetData, ThrowOnError>,
-): RequestResult<
-  GetCourtsApiTournamentsTournamentIdCourtsGetResponses,
-  GetCourtsApiTournamentsTournamentIdCourtsGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetCourtsApiTournamentsTournamentIdCourtsGetResponses,
-    GetCourtsApiTournamentsTournamentIdCourtsGetErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    url: '/api/tournaments/{tournament_id}/courts',
-    ...options,
-  });
-
-/**
- * Create Court
- */
-export const createCourtApiTournamentsTournamentIdCourtsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<CreateCourtApiTournamentsTournamentIdCourtsPostData, ThrowOnError>,
-): RequestResult<
-  CreateCourtApiTournamentsTournamentIdCourtsPostResponses,
-  CreateCourtApiTournamentsTournamentIdCourtsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateCourtApiTournamentsTournamentIdCourtsPostResponses,
-    CreateCourtApiTournamentsTournamentIdCourtsPostErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/tournaments/{tournament_id}/courts',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-/**
- * Delete Court
- */
-export const deleteCourtApiTournamentsTournamentIdCourtsCourtIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteData, ThrowOnError>,
-): RequestResult<
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses,
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses,
-    DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/tournaments/{tournament_id}/courts/{court_id}',
-    ...options,
-  });
-
-/**
- * Update Court By Id
- */
-export const updateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPut = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutData, ThrowOnError>,
-): RequestResult<
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses,
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses,
-    UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/tournaments/{tournament_id}/courts/{court_id}',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-/**
  * Get Tournament Logo
  */
 export const getTournamentLogoApiTournamentsTournamentIdLogoGet = <
@@ -755,36 +640,6 @@ export const updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut = <
   });
 
 /**
- * Reschedule Match
- */
-export const rescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostData,
-    ThrowOnError
-  >,
-): RequestResult<
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses,
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses,
-    RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/tournaments/{tournament_id}/matches/{match_id}/reschedule',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-/**
  * Get Next Stage Rankings
  *
  * Get the rankings for the stage items in this stage.
@@ -830,7 +685,6 @@ export const getPlayersApiTournamentsTournamentIdPlayersGet = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/tournaments/{tournament_id}/players',
     ...options,
   });
@@ -1049,6 +903,11 @@ export const updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPut = <
 
 /**
  * Create Round
+ *
+ * Create the next round of a Swiss stage item as a draft in which every active team is paired.
+ *
+ * Only organizers see the draft. Its pairings can be changed by adding and deleting matches, and
+ * it is published by updating the round with `is_draft` set to false.
  */
 export const createRoundApiTournamentsTournamentIdRoundsPost = <
   ThrowOnError extends boolean = false,
@@ -1258,36 +1117,6 @@ export const updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemId
         ...options.headers,
       },
     });
-
-/**
- * Start Next Round
- */
-export const startNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostData,
-    ThrowOnError
-  >,
-): RequestResult<
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses,
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses,
-    StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors,
-    ThrowOnError
-  >({
-    responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/start_next_round',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
 
 /**
  * Get Matches To Schedule

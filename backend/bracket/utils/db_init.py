@@ -6,13 +6,13 @@ from pydantic import BaseModel
 
 from bracket.config import Environment, config, environment
 from bracket.database import database, engine
+from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import (
     recalculate_ranking_for_stage_item,
 )
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.club import ClubInsertable
-from bracket.models.db.court import CourtInsertable
 from bracket.models.db.match import Match, MatchBody
 from bracket.models.db.player import PlayerInsertable
 from bracket.models.db.player_x_team import PlayerXTeamInsertable
@@ -33,7 +33,6 @@ from bracket.models.db.user import UserInsertable
 from bracket.models.db.user_x_club import UserXClubInsertable, UserXClubRelation
 from bracket.schema import (
     clubs,
-    courts,
     matches,
     metadata,
     players,
@@ -56,8 +55,6 @@ from bracket.utils.alembic import alembic_stamp_head
 from bracket.utils.db import insert_generic
 from bracket.utils.dummy_records import (
     DUMMY_CLUB,
-    DUMMY_COURT1,
-    DUMMY_COURT2,
     DUMMY_PLAYER1,
     DUMMY_PLAYER2,
     DUMMY_PLAYER3,
@@ -164,7 +161,6 @@ async def sql_create_dev_db() -> UserId:
         RoundInsertable: rounds,
         Match: matches,
         TournamentInsertable: tournaments,
-        CourtInsertable: courts,
         StageItemInsertable: stage_items,
         RankingInsertable: rankings,
     }
@@ -268,9 +264,6 @@ async def sql_create_dev_db() -> UserId:
     await insert_dummy(DUMMY_PLAYER_X_TEAM, {"player_id": player_id_14, "team_id": team_id_7})
     await insert_dummy(DUMMY_PLAYER_X_TEAM, {"player_id": player_id_15, "team_id": team_id_8})
     await insert_dummy(DUMMY_PLAYER_X_TEAM, {"player_id": player_id_16, "team_id": team_id_8})
-
-    await insert_dummy(DUMMY_COURT1, {"tournament_id": tournament_id_1})
-    await insert_dummy(DUMMY_COURT2, {"tournament_id": tournament_id_1})
 
     stage_item_1 = await sql_create_stage_item_with_inputs(
         tournament_id_1,
@@ -384,4 +377,5 @@ async def sql_create_dev_db() -> UserId:
         stage_item_with_rounds = await get_stage_item(tournament_id_1, _stage_item.id)
         await recalculate_ranking_for_stage_item(tournament_id_1, stage_item_with_rounds)
 
+    await schedule_all_matches(tournament_id_1)
     return user_id_1

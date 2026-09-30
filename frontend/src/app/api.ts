@@ -1,6 +1,6 @@
 import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
-import type { AuthFeatures, TournamentBundle, UpcomingSuggestion, Session } from './types';
+import type { AuthFeatures, TournamentBundle, Session } from './types';
 import { getApiBaseUrl, isNumericIdentifier, readSession } from './utils';
 
 function getResponseStatus(error: unknown) {
@@ -11,6 +11,8 @@ function isAuthorizationError(error: unknown) {
   const status = getResponseStatus(error);
   return status === 401 || status === 403;
 }
+
+export const TOURNAMENT_BUNDLE_QUERY_KEY = ['tournament-bundle'];
 
 let unauthorizedHandler: (() => void) | null = null;
 let unauthorizedInterceptorAttached = false;
@@ -164,50 +166,7 @@ export async function fetchTournamentBundle(
   }
   const stages = stageResponse.data;
 
-  const stageItemRequests = stages
-    .map((stage) =>
-      stage.stage_items.map(async (stageItem) => {
-        // The endpoint rejects stage items that have no draft round, so don't
-        // ask for suggestions that cannot exist.
-        if (!stageItem.rounds.some((round) => round.is_draft)) {
-          return [] as UpcomingSuggestion[];
-        }
-
-        try {
-          const response = await unwrap(
-            OpenApi.getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGet(
-              {
-                auth: accessToken,
-                path: {
-                  stage_item_id: stageItem.id,
-                  tournament_id: tournamentId,
-                },
-                query: {
-                  limit: 12,
-                  only_recommended: false,
-                },
-                throwOnError: true,
-              },
-            ),
-          );
-
-          return response.data.map((suggestion) => ({
-            stageId: stage.id,
-            stageItemId: stageItem.id,
-            stageItemName: stageItem.name || stageItem.type_name,
-            stageName: stage.name,
-            suggestion,
-          }));
-        } catch {
-          return [] as UpcomingSuggestion[];
-        }
-      }),
-    )
-    .flat();
-
-  const upcomingMatches = (await Promise.all(stageItemRequests)).flat();
-
-  const [playersResponse, teamsResponse, rankingsResponse, courtsResponse] = await Promise.all([
+  const [playersResponse, teamsResponse, rankingsResponse] = await Promise.all([
     unwrap(
       OpenApi.getPlayersApiTournamentsTournamentIdPlayersGet({
         auth: accessToken,
@@ -226,13 +185,6 @@ export async function fetchTournamentBundle(
     ),
     unwrap(
       OpenApi.getRankingsApiTournamentsTournamentIdRankingsGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        throwOnError: true,
-      }),
-    ),
-    unwrap(
-      OpenApi.getCourtsApiTournamentsTournamentIdCourtsGet({
         auth: accessToken,
         path: { tournament_id: tournamentId },
         throwOnError: true,
@@ -267,13 +219,11 @@ export async function fetchTournamentBundle(
   return {
     canManage,
     availableInputs: availableInputsResponse.data,
-    courts: courtsResponse.data,
     nextStageRankings: nextStageRankingsResponse.data,
     players: playersResponse.data.players,
     rankings: rankingsResponse.data,
     stages,
     teams: teamsResponse.data.teams,
     tournament,
-    upcomingMatches,
   };
 }

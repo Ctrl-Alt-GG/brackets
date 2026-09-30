@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Route, Routes, useLocation } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
+import { Toaster } from 'sonner';
 
 import { configureApiClient, fetchAuthFeatures, setUnauthorizedHandler } from './app/api';
-import { useActionFeedback, useSessionState } from './app/hooks';
+import { showFlash, useSessionState } from './app/hooks';
 import { LoginPage, PasswordResetStatusPage, RegisterPage } from './app/pages/auth-pages';
 import { ClubsPage } from './app/pages/clubs-page';
 import { HomePage } from './app/pages/home-page';
 import { NotFoundPage, TournamentPage } from './app/pages/tournament-page';
 import { UserPage } from './app/pages/user-page';
-import { ErrorBoundary, FlashBanner, TopNav } from './app/ui';
+import { ErrorBoundary, TopNav } from './app/ui';
 
 export function App() {
-  const { message, setMessage } = useActionFeedback();
   const { session, setSession } = useSessionState();
   const queryClient = useQueryClient();
   const authFeatures = useQuery({
@@ -27,9 +27,9 @@ export function App() {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setSession(null);
-      setMessage({ text: 'Your session expired. Please log in again.', tone: 'error' });
+      showFlash({ text: 'Your session expired. Please log in again.', tone: 'error' });
     });
-  }, [setSession, setMessage]);
+  }, [setSession]);
 
   // Only wipe cached data on logout. Clearing on mount would also drop the
   // anonymous queries that are already in flight, leaving them stuck pending.
@@ -41,25 +41,25 @@ export function App() {
 
   return (
     <div className="min-h-screen">
+      <Toaster closeButton position="bottom-right" richColors theme="dark" />
       <TopNav
         authFeatures={authFeatures.data ?? null}
         currentUserName={session?.name ?? null}
         onLogout={() => {
           setSession(null);
-          setMessage({ text: 'Logged out successfully.', tone: 'success' });
+          showFlash({ text: 'Logged out successfully.', tone: 'success' });
         }}
         session={session}
       />
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8 md:px-8 md:py-10">
-        <FlashBanner message={message} />
         <ErrorBoundary key={location.pathname} title="This page failed to render">
           <Routes>
-            <Route element={<HomePage session={session} setFlash={setMessage} />} path="/" />
+            <Route element={<HomePage session={session} setFlash={showFlash} />} path="/" />
             <Route
               element={
                 <LoginPage
                   authFeatures={authFeatures.data ?? null}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                   setSession={setSession}
                 />
               }
@@ -69,15 +69,15 @@ export function App() {
               element={
                 <RegisterPage
                   authFeatures={authFeatures.data ?? null}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                   setSession={setSession}
                 />
               }
               path="/create-account"
             />
             <Route element={<PasswordResetStatusPage />} path="/password-reset" />
-            <Route element={<ClubsPage session={session} setFlash={setMessage} />} path="/events" />
-            <Route element={<UserPage session={session} setFlash={setMessage} />} path="/user" />
+            <Route element={<ClubsPage session={session} setFlash={showFlash} />} path="/events" />
+            <Route element={<UserPage session={session} setFlash={showFlash} />} path="/user" />
 
             <Route
               element={
@@ -85,7 +85,7 @@ export function App() {
                   dashboardMode={false}
                   section="overview"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey"
@@ -96,7 +96,7 @@ export function App() {
                   dashboardMode={false}
                   section="players"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/players"
@@ -107,7 +107,7 @@ export function App() {
                   dashboardMode={false}
                   section="teams"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/teams"
@@ -118,7 +118,7 @@ export function App() {
                   dashboardMode={false}
                   section="schedule"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/schedule"
@@ -129,7 +129,7 @@ export function App() {
                   dashboardMode={false}
                   section="rankings"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/rankings"
@@ -140,7 +140,7 @@ export function App() {
                   dashboardMode={false}
                   section="settings"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/settings"
@@ -151,7 +151,7 @@ export function App() {
                   dashboardMode={false}
                   section="results"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/results"
@@ -162,7 +162,7 @@ export function App() {
                   dashboardMode={false}
                   section="stages"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/stages"
@@ -173,7 +173,7 @@ export function App() {
                   dashboardMode={false}
                   section="stages"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/stages/swiss/:stageItemId"
@@ -185,7 +185,7 @@ export function App() {
                   dashboardMode
                   section="dashboard"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/dashboard"
@@ -196,7 +196,7 @@ export function App() {
                   dashboardMode
                   section="dashboard-bracket"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/dashboard/bracket"
@@ -207,7 +207,7 @@ export function App() {
                   dashboardMode
                   section="dashboard-standings"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/dashboard/standings"
@@ -216,11 +216,15 @@ export function App() {
               element={
                 <TournamentPage
                   dashboardMode
-                  section="dashboard-courts"
+                  section="dashboard-schedule"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
+              path="/tournaments/:tournamentKey/dashboard/present/schedule"
+            />
+            <Route
+              element={<Navigate relative="path" replace to="../schedule" />}
               path="/tournaments/:tournamentKey/dashboard/present/courts"
             />
             <Route
@@ -229,7 +233,7 @@ export function App() {
                   dashboardMode
                   section="dashboard-present-standings"
                   session={session}
-                  setFlash={setMessage}
+                  setFlash={showFlash}
                 />
               }
               path="/tournaments/:tournamentKey/dashboard/present/standings"

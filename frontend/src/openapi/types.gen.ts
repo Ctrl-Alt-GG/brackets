@@ -131,48 +131,6 @@ export type ClubsResponse = {
 };
 
 /**
- * Court
- */
-export type Court = {
-  /**
-   * Created
-   */
-  created: string;
-  /**
-   * Id
-   */
-  id: number;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Tournament Id
-   */
-  tournament_id: number;
-};
-
-/**
- * CourtBody
- */
-export type CourtBody = {
-  /**
-   * Name
-   */
-  name: string;
-};
-
-/**
- * CourtsResponse
- */
-export type CourtsResponse = {
-  /**
-   * Data
-   */
-  data: Array<Court>;
-};
-
-/**
  * FullTeamWithPlayers
  */
 export type FullTeamWithPlayers = {
@@ -241,10 +199,6 @@ export type HttpValidationError = {
  */
 export type Match = {
   /**
-   * Court Id
-   */
-  court_id: number | null;
-  /**
    * Created
    */
   created: string;
@@ -268,10 +222,6 @@ export type Match = {
    * Margin Minutes
    */
   margin_minutes: number;
-  /**
-   * Position In Schedule
-   */
-  position_in_schedule: number | null;
   /**
    * Round Id
    */
@@ -327,10 +277,6 @@ export type Match = {
  */
 export type MatchBody = {
   /**
-   * Court Id
-   */
-  court_id: number | null;
-  /**
    * Custom Duration Minutes
    */
   custom_duration_minutes: number | null;
@@ -357,10 +303,6 @@ export type MatchBody = {
  */
 export type MatchCreateBodyFrontend = {
   /**
-   * Court Id
-   */
-  court_id: number | null;
-  /**
    * Round Id
    */
   round_id: number;
@@ -383,38 +325,11 @@ export type MatchCreateBodyFrontend = {
 };
 
 /**
- * MatchRescheduleBody
- */
-export type MatchRescheduleBody = {
-  /**
-   * New Court Id
-   */
-  new_court_id: number;
-  /**
-   * New Position
-   */
-  new_position: number;
-  /**
-   * Old Court Id
-   */
-  old_court_id: number;
-  /**
-   * Old Position
-   */
-  old_position: number;
-};
-
-/**
  * MatchWithDetails
  *
  * MatchWithDetails has zero or one defined stage item inputs, but not both.
  */
 export type MatchWithDetails = {
-  court: Court | null;
-  /**
-   * Court Id
-   */
-  court_id: number | null;
   /**
    * Created
    */
@@ -439,10 +354,6 @@ export type MatchWithDetails = {
    * Margin Minutes
    */
   margin_minutes: number;
-  /**
-   * Position In Schedule
-   */
-  position_in_schedule: number | null;
   /**
    * Round Id
    */
@@ -497,11 +408,6 @@ export type MatchWithDetails = {
  * MatchWithDetailsDefinitive
  */
 export type MatchWithDetailsDefinitive = {
-  court: Court | null;
-  /**
-   * Court Id
-   */
-  court_id: number | null;
   /**
    * Created
    */
@@ -526,10 +432,6 @@ export type MatchWithDetailsDefinitive = {
    * Margin Minutes
    */
   margin_minutes: number;
-  /**
-   * Position In Schedule
-   */
-  position_in_schedule: number | null;
   /**
    * Round Id
    */
@@ -844,13 +746,6 @@ export type RoundWithMatches = {
 };
 
 /**
- * SingleCourtResponse
- */
-export type SingleCourtResponse = {
-  data: Court;
-};
-
-/**
  * SingleMatchResponse
  */
 export type SingleMatchResponse = {
@@ -879,16 +774,6 @@ export type StageActivateBody = {
    * Direction
    */
   direction: 'next' | 'previous';
-};
-
-/**
- * StageItemActivateNextBody
- */
-export type StageItemActivateNextBody = {
-  /**
-   * Adjust To Time
-   */
-  adjust_to_time: string | null;
 };
 
 /**
@@ -1425,6 +1310,10 @@ export type Token = {
    */
   access_token: string;
   /**
+   * Name
+   */
+  name: string;
+  /**
    * Token Type
    */
   token_type: string;
@@ -1445,10 +1334,6 @@ export type TokenResponse = {
  * Tournament
  */
 export type Tournament = {
-  /**
-   * Auto Assign Courts
-   */
-  auto_assign_courts: boolean;
   /**
    * Club Id
    */
@@ -1500,10 +1385,6 @@ export type Tournament = {
  * TournamentBody
  */
 export type TournamentBody = {
-  /**
-   * Auto Assign Courts
-   */
-  auto_assign_courts: boolean;
   /**
    * Club Id
    */
@@ -1561,10 +1442,6 @@ export type TournamentStatus = 'OPEN' | 'ARCHIVED';
  * TournamentUpdateBody
  */
 export type TournamentUpdateBody = {
-  /**
-   * Auto Assign Courts
-   */
-  auto_assign_courts: boolean;
   /**
    * Dashboard Endpoint
    */
@@ -2130,142 +2007,6 @@ export type ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses = {
 export type ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponse =
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses[keyof ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses];
 
-export type GetCourtsApiTournamentsTournamentIdCourtsGetData = {
-  body?: never;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/courts';
-};
-
-export type GetCourtsApiTournamentsTournamentIdCourtsGetErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GetCourtsApiTournamentsTournamentIdCourtsGetError =
-  GetCourtsApiTournamentsTournamentIdCourtsGetErrors[keyof GetCourtsApiTournamentsTournamentIdCourtsGetErrors];
-
-export type GetCourtsApiTournamentsTournamentIdCourtsGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: CourtsResponse;
-};
-
-export type GetCourtsApiTournamentsTournamentIdCourtsGetResponse =
-  GetCourtsApiTournamentsTournamentIdCourtsGetResponses[keyof GetCourtsApiTournamentsTournamentIdCourtsGetResponses];
-
-export type CreateCourtApiTournamentsTournamentIdCourtsPostData = {
-  body: CourtBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/courts';
-};
-
-export type CreateCourtApiTournamentsTournamentIdCourtsPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type CreateCourtApiTournamentsTournamentIdCourtsPostError =
-  CreateCourtApiTournamentsTournamentIdCourtsPostErrors[keyof CreateCourtApiTournamentsTournamentIdCourtsPostErrors];
-
-export type CreateCourtApiTournamentsTournamentIdCourtsPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SingleCourtResponse;
-};
-
-export type CreateCourtApiTournamentsTournamentIdCourtsPostResponse =
-  CreateCourtApiTournamentsTournamentIdCourtsPostResponses[keyof CreateCourtApiTournamentsTournamentIdCourtsPostResponses];
-
-export type DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteData = {
-  body?: never;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Court Id
-     */
-    court_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/courts/{court_id}';
-};
-
-export type DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteError =
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors[keyof DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteErrors];
-
-export type DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponse =
-  DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses[keyof DeleteCourtApiTournamentsTournamentIdCourtsCourtIdDeleteResponses];
-
-export type UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutData = {
-  body: CourtBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Court Id
-     */
-    court_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/courts/{court_id}';
-};
-
-export type UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutError =
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors[keyof UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutErrors];
-
-export type UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses = {
-  /**
-   * Successful Response
-   */
-  200: SingleCourtResponse;
-};
-
-export type UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponse =
-  UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses[keyof UpdateCourtByIdApiTournamentsTournamentIdCourtsCourtIdPutResponses];
-
 export type GetTournamentLogoApiTournamentsTournamentIdLogoGetData = {
   body?: never;
   path: {
@@ -2430,42 +2171,6 @@ export type UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutResponses 
 
 export type UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutResponse =
   UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutResponses[keyof UpdateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutResponses];
-
-export type RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostData = {
-  body: MatchRescheduleBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Match Id
-     */
-    match_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/matches/{match_id}/reschedule';
-};
-
-export type RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostError =
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors[keyof RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostErrors];
-
-export type RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponse =
-  RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses[keyof RescheduleMatchApiTournamentsTournamentIdMatchesMatchIdReschedulePostResponses];
 
 export type GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData = {
   body?: never;
@@ -3124,57 +2829,6 @@ export type UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdI
 
 export type UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponse =
   UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponses[keyof UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponses];
-
-export type StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostData = {
-  body: StageItemActivateNextBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Stage Item Id
-     */
-    stage_item_id: number;
-  };
-  query?: {
-    /**
-     * Elo Diff Threshold
-     */
-    elo_diff_threshold?: number;
-    /**
-     * Iterations
-     */
-    iterations?: number;
-    /**
-     * Only Recommended
-     */
-    only_recommended?: boolean;
-  };
-  url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/start_next_round';
-};
-
-export type StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors =
-  {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-  };
-
-export type StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostError =
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors[keyof StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostErrors];
-
-export type StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses =
-  {
-    /**
-     * Successful Response
-     */
-    200: SuccessResponse;
-  };
-
-export type StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponse =
-  StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses[keyof StartNextRoundApiTournamentsTournamentIdStageItemsStageItemIdStartNextRoundPostResponses];
 
 export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData =
   {

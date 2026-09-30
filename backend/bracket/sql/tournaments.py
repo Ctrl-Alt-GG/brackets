@@ -93,7 +93,6 @@ async def sql_update_tournament(
             dashboard_public = :dashboard_public,
             dashboard_endpoint = :dashboard_endpoint,
             players_can_be_in_multiple_teams = :players_can_be_in_multiple_teams,
-            auto_assign_courts = :auto_assign_courts,
             duration_minutes = :duration_minutes,
             margin_minutes = :margin_minutes
         WHERE tournaments.id = :tournament_id
@@ -131,7 +130,6 @@ async def sql_create_tournament(tournament: TournamentBody) -> TournamentId:
             dashboard_endpoint,
             logo_path,
             players_can_be_in_multiple_teams,
-            auto_assign_courts,
             duration_minutes,
             margin_minutes
         )
@@ -143,7 +141,6 @@ async def sql_create_tournament(tournament: TournamentBody) -> TournamentId:
             :dashboard_endpoint,
             :logo_path,
             :players_can_be_in_multiple_teams,
-            :auto_assign_courts,
             :duration_minutes,
             :margin_minutes
         )

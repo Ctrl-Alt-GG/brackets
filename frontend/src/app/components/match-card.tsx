@@ -112,10 +112,7 @@ export function MatchCard({
         />
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">
-        {formatDateTime(match.start_time)}
-        {match.court ? ` · ${match.court.name}` : ''}
-      </p>
+      <p className="mt-3 text-xs text-zinc-500">{formatDateTime(match.start_time)}</p>
     </div>
   );
 }

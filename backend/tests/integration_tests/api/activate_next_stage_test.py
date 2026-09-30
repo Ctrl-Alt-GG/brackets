@@ -13,7 +13,6 @@ from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
 from bracket.sql.stage_items import sql_create_stage_item_with_inputs
 from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.dummy_records import (
-    DUMMY_COURT1,
     DUMMY_STAGE1,
     DUMMY_STAGE2,
     DUMMY_STAGE_ITEM1,
@@ -24,7 +23,6 @@ from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
-    inserted_court,
     inserted_stage,
     inserted_team,
 )
@@ -35,9 +33,6 @@ async def test_activate_next_stage(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
@@ -109,11 +104,12 @@ async def test_activate_next_stage(
         await build_matches_for_stage_item(stage_item_1, tournament_id)
         await build_matches_for_stage_item(stage_item_2, tournament_id)
 
-        # Set match score to get a winner (team 2) that goes to the next round
+        # Set match score to get a winner (team 4) that goes to the next round. The first round
+        # of a round robin pairs the first slot with the last one.
         [prev_stage, _] = await get_full_tournament_details(auth_context.tournament.id)
         match1 = prev_stage.stage_items[0].rounds[0].matches[0]
         assert isinstance(match1, MatchWithDetailsDefinitive)
-        assert match1.stage_item_input2.team_id == team_inserted_2.id
+        assert match1.stage_item_input2.team_id == team_inserted_4.id
         await sql_update_match(
             match1.id,
             MatchBody(**match1.model_copy(update={"stage_item_input2_score": 42}).model_dump()),
@@ -134,5 +130,5 @@ async def test_activate_next_stage(
     # assert isinstance(next_stage.stage_items[0].rounds[0].matches[0], MatchWithDetailsDefinitive)
     # assert (
     #     next_stage.stage_items[0].rounds[0].matches[0].stage_item_input1.team_id
-    #     == team_inserted_2.id
+    #     == team_inserted_4.id
     # )

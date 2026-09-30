@@ -15,7 +15,6 @@ class Subscription(BaseModel):
     max_players: int
     max_clubs: int
     max_tournaments: int
-    max_courts: int
     max_stages: int
     max_stage_items: int
     max_rounds: int
@@ -27,7 +26,6 @@ regular_subscription = Subscription(
     max_players=256,
     max_clubs=32,
     max_tournaments=64,
-    max_courts=32,
     max_stages=16,
     max_stage_items=64,
     max_rounds=64,

@@ -4,10 +4,14 @@ from starlette import status
 
 from bracket.config import config
 from bracket.database import database
+from bracket.logic.planning.matches import schedule_all_matches
+from bracket.logic.planning.rounds import get_draft_round
 from bracket.logic.ranking.calculation import (
     recalculate_ranking_for_stage_item,
 )
+from bracket.logic.scheduling.swiss import get_swiss_pairing
 from bracket.logic.subscriptions import check_requirement
+from bracket.models.db.match import MatchCreateBody
 from bracket.models.db.round import (
     Round,
     RoundCreateBody,
@@ -24,10 +28,9 @@ from bracket.routes.util import (
     round_dependency,
     round_with_matches_dependency,
 )
-from bracket.sql.matches import sql_delete_match
+from bracket.sql.matches import sql_create_match, sql_delete_match
 from bracket.sql.rounds import (
     get_next_round_name,
-    set_round_active_or_draft,
     sql_create_round,
     sql_delete_round,
 )
@@ -54,6 +57,7 @@ async def delete_round(
 
     stage_item = await get_stage_item(tournament_id, round_with_matches.stage_item_id)
     await recalculate_ranking_for_stage_item(tournament_id, stage_item)
+    await schedule_all_matches(tournament_id)
     return SuccessResponse()
 
 
@@ -62,8 +66,14 @@ async def create_round(
     tournament_id: TournamentId,
     round_body: RoundCreateBody,
     user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    tournament: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
+    """
+    Create the next round of a Swiss stage item as a draft in which every active team is paired.
+
+    Only organizers see the draft. Its pairings can be changed by adding and deleting matches, and
+    it is published by updating the round with `is_draft` set to false.
+    """
     await check_foreign_keys_belong_to_tournament(round_body, tournament_id)
 
     stages = await get_full_tournament_details(tournament_id)
@@ -80,19 +90,53 @@ async def create_round(
     if not stage_item.type.supports_dynamic_number_of_rounds:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Stage type {stage_item.type} doesn't support manual creation of rounds",
+            detail=(
+                f"Rounds of {stage_item.type_name.lower()} stage items are created automatically"
+            ),
         )
 
-    round_id = await sql_create_round(
-        RoundInsertable(
-            created=datetime_utc.now(),
-            is_draft=False,
-            stage_item_id=round_body.stage_item_id,
-            name=await get_next_round_name(tournament_id, round_body.stage_item_id),
-        ),
-    )
+    if (draft_round := get_draft_round(stage_item)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Publish or discard the draft {draft_round.name} first",
+        )
 
-    await set_round_active_or_draft(round_id, tournament_id, is_draft=True)
+    pairing = get_swiss_pairing(stage_item)
+    if len(pairing.pairs) < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Assign at least two active teams to this stage item first"
+                if len(pairing.unpaired) < 2
+                else "Every team has already played every other team"
+            ),
+        )
+
+    async with database.transaction():
+        round_id = await sql_create_round(
+            RoundInsertable(
+                created=datetime_utc.now(),
+                is_draft=True,
+                stage_item_id=stage_item.id,
+                name=round_body.name or await get_next_round_name(tournament_id, stage_item.id),
+            ),
+        )
+        for input1, input2 in pairing.pairs:
+            await sql_create_match(
+                MatchCreateBody(
+                    round_id=round_id,
+                    stage_item_input1_id=input1.id,
+                    stage_item_input2_id=input2.id,
+                    stage_item_input1_winner_from_match_id=None,
+                    stage_item_input2_winner_from_match_id=None,
+                    duration_minutes=tournament.duration_minutes,
+                    margin_minutes=tournament.margin_minutes,
+                    custom_duration_minutes=None,
+                    custom_margin_minutes=None,
+                )
+            )
+
+    await schedule_all_matches(tournament_id)
     return SuccessResponse()
 
 

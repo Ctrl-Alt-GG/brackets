@@ -1,4 +1,5 @@
 import pytest
+from heliclockter import timedelta
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.stage_item import StageItemWithInputsCreate
@@ -9,8 +10,8 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
 from bracket.sql.stage_items import sql_create_stage_item_with_inputs
 from bracket.sql.stages import get_full_tournament_details
+from bracket.sql.tournaments import sql_get_tournament
 from bracket.utils.dummy_records import (
-    DUMMY_COURT1,
     DUMMY_STAGE2,
     DUMMY_STAGE_ITEM1,
     DUMMY_STAGE_ITEM3,
@@ -23,7 +24,6 @@ from tests.integration_tests.api.shared import (
 )
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
-    inserted_court,
     inserted_stage,
     inserted_team,
 )
@@ -34,9 +34,6 @@ async def test_schedule_all_matches(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ),
         inserted_stage(
             DUMMY_STAGE2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
@@ -111,13 +108,24 @@ async def test_schedule_all_matches(
             auth_context,
         )
         stages = await get_full_tournament_details(tournament_id)
+        tournament = await sql_get_tournament(tournament_id)
 
         await sql_delete_stage_item_with_foreign_keys(stage_item_2.id)
         await sql_delete_stage_item_with_foreign_keys(stage_item_1.id)
 
     assert response == SUCCESS_RESPONSE
 
-    stage_item = stages[0].stage_items[0]
-    assert len(stage_item.rounds) == 3
-    for round_ in stage_item.rounds:
+    round_length = timedelta(minutes=tournament.duration_minutes + tournament.margin_minutes)
+    stage_items = {stage_item.id: stage_item for stage_item in stages[0].stage_items}
+
+    round_robin_rounds = sorted(stage_items[stage_item_1.id].rounds, key=lambda round_: round_.id)
+    assert len(round_robin_rounds) == 3
+    for index, round_ in enumerate(round_robin_rounds):
         assert len(round_.matches) == 2
+        assert {match.start_time for match in round_.matches} == {
+            tournament.start_time + index * round_length
+        }
+
+    # Stage items of the same stage are played in parallel.
+    [elimination_round] = stage_items[stage_item_2.id].rounds
+    assert [match.start_time for match in elimination_round.matches] == [tournament.start_time]

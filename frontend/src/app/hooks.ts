@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
+import { TOURNAMENT_BUNDLE_QUERY_KEY } from './api';
 import type { FlashMessage, Session } from './types';
 import { getErrorMessage, readSession, writeSession } from './utils';
 
@@ -61,16 +64,32 @@ export function useSessionState() {
   return { session, setSession: updateSession };
 }
 
-export function useActionFeedback() {
-  const [message, setMessage] = useState<FlashMessage>(null);
+export function showFlash(message: FlashMessage) {
+  if (!message) return;
+  if (message.tone === 'error') toast.error(message.text);
+  else toast.success(message.text);
+}
 
-  useEffect(() => {
-    if (!message) return;
-    const timeout = window.setTimeout(() => setMessage(null), 5_000);
-    return () => window.clearTimeout(timeout);
-  }, [message]);
+/**
+ * A change to the tournament: errors are reported, and on success the tournament is reloaded
+ * before the success message shows, so `isPending` covers the whole round trip.
+ */
+export function useTournamentMutation<TVariables = void>(
+  mutationFn: (variables: TVariables) => Promise<unknown>,
+  successMessage: string | ((variables: TVariables) => string),
+) {
+  const queryClient = useQueryClient();
 
-  return { message, setMessage };
+  return useMutation({
+    mutationFn,
+    onError: (error) => toast.error(getErrorMessage(error)),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: TOURNAMENT_BUNDLE_QUERY_KEY });
+      toast.success(
+        typeof successMessage === 'function' ? successMessage(variables) : successMessage,
+      );
+    },
+  });
 }
 
 export async function runAction(

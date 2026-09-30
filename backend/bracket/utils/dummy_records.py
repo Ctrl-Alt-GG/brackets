@@ -5,7 +5,6 @@ from heliclockter import datetime_utc
 
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.club import ClubInsertable
-from bracket.models.db.court import CourtInsertable
 from bracket.models.db.match import MatchInsertable
 from bracket.models.db.player import PlayerInsertable
 from bracket.models.db.player_x_team import PlayerXTeamInsertable
@@ -18,7 +17,6 @@ from bracket.models.db.tournament import TournamentInsertable
 from bracket.models.db.user import UserInsertable
 from bracket.utils.id_types import (
     ClubId,
-    CourtId,
     PlayerId,
     RankingId,
     RoundId,
@@ -49,7 +47,6 @@ DUMMY_TOURNAMENT = TournamentInsertable(
     dashboard_endpoint="endpoint-test",
     logo_path=None,
     players_can_be_in_multiple_teams=True,
-    auto_assign_courts=True,
     duration_minutes=10,
     margin_minutes=5,
 )
@@ -124,14 +121,12 @@ DUMMY_MATCH1 = MatchInsertable(
     stage_item_input2_id=StageItemInputId(DB_PLACEHOLDER_ID),
     stage_item_input1_score=11,
     stage_item_input2_score=22,
-    court_id=CourtId(DB_PLACEHOLDER_ID),
     stage_item_input1_winner_from_match_id=None,
     stage_item_input2_winner_from_match_id=None,
     duration_minutes=10,
     margin_minutes=5,
     custom_duration_minutes=None,
     custom_margin_minutes=None,
-    position_in_schedule=1,
     stage_item_input1_conflict=False,
     stage_item_input2_conflict=False,
 )
@@ -232,18 +227,6 @@ DUMMY_PLAYER8 = PlayerInsertable(
 DUMMY_PLAYER_X_TEAM = PlayerXTeamInsertable(
     player_id=PlayerId(DB_PLACEHOLDER_ID),
     team_id=TeamId(DB_PLACEHOLDER_ID),
-)
-
-DUMMY_COURT1 = CourtInsertable(
-    name="Court 1",
-    created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-)
-
-DUMMY_COURT2 = CourtInsertable(
-    name="Court 2",
-    created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_RANKING1 = RankingInsertable(

@@ -7,7 +7,7 @@ from starlette.responses import FileResponse
 
 from bracket.config import config
 from bracket.database import database
-from bracket.logic.planning.matches import update_start_times_of_matches
+from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.subscriptions import check_requirement
 from bracket.logic.tournaments import get_tournament_logo_path, sql_delete_tournament_completely
 from bracket.models.db.ranking import RankingCreateBody
@@ -105,7 +105,7 @@ async def update_tournament_by_id(
     with check_unique_constraint_violation({UniqueIndex.ix_tournaments_dashboard_endpoint}):
         await sql_update_tournament(tournament_id, tournament_body)
 
-    await update_start_times_of_matches(tournament_id)
+    await schedule_all_matches(tournament_id)
     return SuccessResponse()
 
 

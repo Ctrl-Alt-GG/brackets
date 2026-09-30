@@ -111,20 +111,35 @@ export function normalizeDashboardEndpoint(value: unknown) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
+type StageItemInput =
+  | OpenApi.StageItemInputTentative
+  | OpenApi.StageItemInputFinal
+  | OpenApi.StageItemInputEmpty;
+
+export function hasTeam(input: StageItemInput | null): input is OpenApi.StageItemInputFinal {
+  return input != null && 'team' in input && input.team != null;
+}
+
+export function isEmptySlot(input: StageItemInput) {
+  return input.team_id == null && input.winner_from_stage_item_id == null;
+}
+
+export function activeTeamInputs(stageItem: OpenApi.StageItemWithRounds) {
+  return stageItem.inputs.filter(
+    (input): input is OpenApi.StageItemInputFinal => hasTeam(input) && input.team.active,
+  );
+}
+
 export function inputLabel(
-  input:
-    | OpenApi.StageItemInputTentative
-    | OpenApi.StageItemInputFinal
-    | OpenApi.StageItemInputEmpty
-    | null,
+  input: StageItemInput | null,
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>,
 ) {
   if (!input) return 'TBD';
-  if ('team' in input && input.team) return input.team.name;
+  if (hasTeam(input)) return input.team.name;
   if (input.winner_from_stage_item_id != null) {
     const stageItem = stageItemsById.get(input.winner_from_stage_item_id);
     const sourceName = stageItem?.name || stageItem?.type_name;
-    return sourceName ? `Winner of ${sourceName}` : 'TBD';
+    return sourceName ? `${sourceName} #${input.winner_position}` : 'TBD';
   }
 
   return 'TBD';
@@ -178,10 +193,8 @@ export function compareMatchesByTime(left: FlattenedMatch, right: FlattenedMatch
     ? new Date(right.match.start_time).getTime()
     : Number.MAX_SAFE_INTEGER;
   if (leftTime !== rightTime) return leftTime - rightTime;
-
-  const leftPosition = left.match.position_in_schedule ?? Number.MAX_SAFE_INTEGER;
-  const rightPosition = right.match.position_in_schedule ?? Number.MAX_SAFE_INTEGER;
-  return leftPosition - rightPosition;
+  if (left.round.id !== right.round.id) return left.round.id - right.round.id;
+  return left.match.id - right.match.id;
 }
 
 export function flattenMatches(stages: OpenApi.StageWithStageItems[]) {

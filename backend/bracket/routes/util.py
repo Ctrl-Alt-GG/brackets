@@ -7,7 +7,7 @@ from bracket.models.db.round import Round
 from bracket.models.db.team import FullTeamWithPlayers, Team
 from bracket.models.db.tournament import Tournament, TournamentStatus
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.schema import matches, rounds, teams
+from bracket.schema import matches, rounds, stage_items, stages, teams
 from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
@@ -21,7 +21,13 @@ async def round_dependency(tournament_id: TournamentId, round_id: RoundId) -> Ro
     round_ = await fetch_one_parsed(
         database,
         Round,
-        rounds.select().where(rounds.c.id == round_id and matches.c.tournament_id == tournament_id),
+        rounds.select()
+        .select_from(
+            rounds.join(stage_items, stage_items.c.id == rounds.c.stage_item_id).join(
+                stages, stages.c.id == stage_items.c.stage_id
+            )
+        )
+        .where((rounds.c.id == round_id) & (stages.c.tournament_id == tournament_id)),
     )
 
     if round_ is None:
@@ -63,9 +69,13 @@ async def match_dependency(tournament_id: TournamentId, match_id: MatchId) -> Ma
     match = await fetch_one_parsed(
         database,
         Match,
-        matches.select().where(
-            matches.c.id == match_id and matches.c.tournament_id == tournament_id
-        ),
+        matches.select()
+        .select_from(
+            matches.join(rounds, rounds.c.id == matches.c.round_id)
+            .join(stage_items, stage_items.c.id == rounds.c.stage_item_id)
+            .join(stages, stages.c.id == stage_items.c.stage_id)
+        )
+        .where((matches.c.id == match_id) & (stages.c.tournament_id == tournament_id)),
     )
 
     if match is None:

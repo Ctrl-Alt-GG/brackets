@@ -11,7 +11,6 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.schema import matches
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import (
-    DUMMY_COURT1,
     DUMMY_MATCH1,
     DUMMY_PLAYER1,
     DUMMY_PLAYER2,
@@ -22,13 +21,14 @@ from bracket.utils.dummy_records import (
     DUMMY_STAGE_ITEM1,
     DUMMY_TEAM1,
     DUMMY_TEAM2,
+    DUMMY_TEAM3,
+    DUMMY_TOURNAMENT,
 )
 from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
     assert_row_count_and_clear,
-    inserted_court,
     inserted_match,
     inserted_player_in_team,
     inserted_round,
@@ -36,6 +36,7 @@ from tests.integration_tests.sql import (
     inserted_stage_item,
     inserted_stage_item_input,
     inserted_team,
+    inserted_tournament,
 )
 
 
@@ -64,9 +65,6 @@ async def test_create_match(
         inserted_team(
             DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as team1_inserted,
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as court1_inserted,
         inserted_team(
             DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as team2_inserted,
@@ -75,7 +73,6 @@ async def test_create_match(
             "team1_id": team1_inserted.id,
             "team2_id": team2_inserted.id,
             "round_id": round_inserted.id,
-            "court_id": court1_inserted.id,
         }
         response = await send_tournament_request(
             HTTPMethod.POST, "matches", auth_context, json=body
@@ -129,16 +126,12 @@ async def test_delete_match(
                 stage_item_id=stage_item_inserted.id,
             )
         ) as stage_item_input2_inserted,
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as court1_inserted,
         inserted_match(
             DUMMY_MATCH1.model_copy(
                 update={
                     "round_id": round_inserted.id,
                     "stage_item_input1_id": stage_item_input1_inserted.id,
                     "stage_item_input2_id": stage_item_input2_inserted.id,
-                    "court_id": court1_inserted.id,
                 }
             )
         ) as match_inserted,
@@ -190,16 +183,12 @@ async def test_update_match(
                 stage_item_id=stage_item_inserted.id,
             )
         ) as stage_item_input2_inserted,
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as court1_inserted,
         inserted_match(
             DUMMY_MATCH1.model_copy(
                 update={
                     "round_id": round_inserted.id,
                     "stage_item_input1_id": stage_item_input1_inserted.id,
                     "stage_item_input2_id": stage_item_input2_inserted.id,
-                    "court_id": court1_inserted.id,
                 }
             )
         ) as match_inserted,
@@ -208,7 +197,6 @@ async def test_update_match(
             "stage_item_input1_score": 42,
             "stage_item_input2_score": 24,
             "round_id": round_inserted.id,
-            "court_id": None,
         }
         assert (
             await send_tournament_request(
@@ -227,7 +215,6 @@ async def test_update_match(
         )
         assert updated_match.stage_item_input1_score == body["stage_item_input1_score"]
         assert updated_match.stage_item_input2_score == body["stage_item_input2_score"]
-        assert updated_match.court_id == body["court_id"]
 
         await assert_row_count_and_clear(matches, 1)
 
@@ -270,16 +257,12 @@ async def test_update_endpoint_custom_duration_margin(
                 stage_item_id=stage_item_inserted.id,
             )
         ) as stage_item_input2_inserted,
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as court1_inserted,
         inserted_match(
             DUMMY_MATCH1.model_copy(
                 update={
                     "round_id": round_inserted.id,
                     "stage_item_input1_id": stage_item_input1_inserted.id,
                     "stage_item_input2_id": stage_item_input2_inserted.id,
-                    "court_id": court1_inserted.id,
                     "custom_duration_minutes": 20,
                     "custom_margin_minutes": 10,
                 }
@@ -334,9 +317,6 @@ async def test_upcoming_matches_endpoint(
                 }
             )
         ) as stage_item_inserted,
-        inserted_court(
-            DUMMY_COURT1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ),
         inserted_round(
             DUMMY_ROUND1.model_copy(
                 update={
@@ -467,3 +447,108 @@ async def test_upcoming_matches_endpoint(
                 }
             ]
         }
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_create_match_for_team_already_playing_in_round(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    tournament_id = auth_context.tournament.id
+    async with (
+        inserted_stage(DUMMY_STAGE1.model_copy(update={"tournament_id": tournament_id})) as stage,
+        inserted_stage_item(
+            DUMMY_STAGE_ITEM1.model_copy(
+                update={
+                    "stage_id": stage.id,
+                    "ranking_id": auth_context.ranking.id,
+                    "type": StageType.SWISS,
+                }
+            )
+        ) as stage_item,
+        inserted_round(
+            DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item.id, "is_draft": True})
+        ) as round_,
+        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": tournament_id})) as team1,
+        inserted_team(DUMMY_TEAM2.model_copy(update={"tournament_id": tournament_id})) as team2,
+        inserted_team(DUMMY_TEAM3.model_copy(update={"tournament_id": tournament_id})) as team3,
+        inserted_stage_item_input(
+            StageItemInputInsertable(
+                slot=1, team_id=team1.id, tournament_id=tournament_id, stage_item_id=stage_item.id
+            )
+        ) as input1,
+        inserted_stage_item_input(
+            StageItemInputInsertable(
+                slot=2, team_id=team2.id, tournament_id=tournament_id, stage_item_id=stage_item.id
+            )
+        ) as input2,
+        inserted_stage_item_input(
+            StageItemInputInsertable(
+                slot=3, team_id=team3.id, tournament_id=tournament_id, stage_item_id=stage_item.id
+            )
+        ) as input3,
+        inserted_match(
+            DUMMY_MATCH1.model_copy(
+                update={
+                    "round_id": round_.id,
+                    "stage_item_input1_id": input1.id,
+                    "stage_item_input2_id": input2.id,
+                }
+            )
+        ),
+    ):
+        response = await send_tournament_request(
+            HTTPMethod.POST,
+            "matches",
+            auth_context,
+            json={
+                "round_id": round_.id,
+                "stage_item_input1_id": input3.id,
+                "stage_item_input2_id": input1.id,
+            },
+        )
+        assert response == {"detail": "One of these teams already has a match in this round"}
+
+        await assert_row_count_and_clear(matches, 1)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_update_match_of_other_tournament(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    async with (
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
+            )
+        ) as other_tournament,
+        inserted_stage(
+            DUMMY_STAGE1.model_copy(update={"tournament_id": other_tournament.id})
+        ) as stage,
+        inserted_stage_item(
+            DUMMY_STAGE_ITEM1.model_copy(
+                update={"stage_id": stage.id, "ranking_id": auth_context.ranking.id}
+            )
+        ) as stage_item,
+        inserted_round(DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item.id})) as round_,
+        inserted_match(
+            DUMMY_MATCH1.model_copy(
+                update={
+                    "round_id": round_.id,
+                    "stage_item_input1_id": None,
+                    "stage_item_input2_id": None,
+                }
+            )
+        ) as match,
+    ):
+        response = await send_tournament_request(
+            HTTPMethod.PUT,
+            f"matches/{match.id}",
+            auth_context,
+            json={"round_id": round_.id, "stage_item_input1_score": 99},
+        )
+        assert response == {"detail": f"Could not find match with id {match.id}"}
+
+        unchanged_match = await fetch_one_parsed_certain(
+            database, Match, query=matches.select().where(matches.c.id == match.id)
+        )
+        assert unchanged_match.stage_item_input1_score == DUMMY_MATCH1.stage_item_input1_score

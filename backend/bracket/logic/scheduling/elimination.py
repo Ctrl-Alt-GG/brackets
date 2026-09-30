@@ -21,7 +21,6 @@ def determine_matches_first_round(
         suggestions.append(
             MatchCreateBody(
                 round_id=round_.id,
-                court_id=None,
                 stage_item_input1_id=first_input.id,
                 stage_item_input1_winner_from_match_id=None,
                 stage_item_input2_id=second_input.id,
@@ -50,7 +49,6 @@ def determine_matches_subsequent_round(
         suggestions.append(
             MatchCreateBody(
                 round_id=round_.id,
-                court_id=None,
                 stage_item_input1_id=None,
                 stage_item_input2_id=None,
                 stage_item_input1_winner_from_match_id=first_match.id,

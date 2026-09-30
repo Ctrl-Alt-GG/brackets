@@ -18,7 +18,6 @@ from bracket.models.metrics import RequestDefinition, get_request_metrics
 from bracket.routes import (
     auth,
     clubs,
-    courts,
     internals,
     matches,
     players,
@@ -62,7 +61,6 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 routers = {
     "Auth": auth.router,
     "Clubs": clubs.router,
-    "Courts": courts.router,
     "Internals": internals.router,
     "Matches": matches.router,
     "Players": players.router,

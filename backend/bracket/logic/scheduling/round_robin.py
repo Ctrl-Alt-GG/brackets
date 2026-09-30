@@ -55,7 +55,6 @@ async def build_round_robin_stage_item(
                     stage_item_input1_winner_from_match_id=None,
                     stage_item_input2_id=stage_item_2.id,
                     stage_item_input2_winner_from_match_id=None,
-                    court_id=None,
                     duration_minutes=tournament.duration_minutes,
                     margin_minutes=tournament.margin_minutes,
                     custom_duration_minutes=None,

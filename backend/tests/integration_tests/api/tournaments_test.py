@@ -38,7 +38,6 @@ async def test_tournaments_endpoint(
                 "dashboard_public": True,
                 "dashboard_endpoint": "endpoint-test",
                 "players_can_be_in_multiple_teams": True,
-                "auto_assign_courts": True,
                 "duration_minutes": 10,
                 "margin_minutes": 5,
                 "status": "OPEN",
@@ -64,7 +63,6 @@ async def test_tournament_endpoint(
             "dashboard_public": True,
             "dashboard_endpoint": "endpoint-test",
             "players_can_be_in_multiple_teams": True,
-            "auto_assign_courts": True,
             "duration_minutes": 10,
             "margin_minutes": 5,
             "status": "OPEN",
@@ -84,7 +82,6 @@ async def test_create_tournament(
         "dashboard_public": True,
         "dashboard_endpoint": dashboard_endpoint,
         "players_can_be_in_multiple_teams": True,
-        "auto_assign_courts": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -109,7 +106,6 @@ async def test_create_tournament_duplicate_dashboard_endpoint(
         "dashboard_public": True,
         "dashboard_endpoint": "endpoint-test",
         "players_can_be_in_multiple_teams": True,
-        "auto_assign_courts": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -127,7 +123,6 @@ async def test_update_tournament(
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
         "dashboard_public": False,
         "players_can_be_in_multiple_teams": True,
-        "auto_assign_courts": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -253,7 +248,6 @@ async def test_non_public_tournament_endpoints_blocked_for_unauthenticated_users
         tournament_id = private_tournament.id
         for endpoint in (
             f"tournaments/{tournament_id}",
-            f"tournaments/{tournament_id}/courts",
             f"tournaments/{tournament_id}/teams",
             f"tournaments/{tournament_id}/rankings",
             f"tournaments/{tournament_id}/stages?no_draft_rounds=true",

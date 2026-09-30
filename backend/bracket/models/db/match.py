@@ -3,10 +3,9 @@ from decimal import Decimal
 from heliclockter import datetime_utc, timedelta
 from pydantic import BaseModel
 
-from bracket.models.db.court import Court
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInput
-from bracket.utils.id_types import CourtId, MatchId, RoundId, StageItemInputId
+from bracket.utils.id_types import MatchId, RoundId, StageItemInputId
 from bracket.utils.types import assert_some
 
 
@@ -17,11 +16,9 @@ class MatchBaseInsertable(BaseModelORM):
     margin_minutes: int
     custom_duration_minutes: int | None = None
     custom_margin_minutes: int | None = None
-    position_in_schedule: int | None = None
     round_id: RoundId
     stage_item_input1_score: int
     stage_item_input2_score: int
-    court_id: CourtId | None = None
     stage_item_input1_conflict: bool
     stage_item_input2_conflict: bool
 
@@ -57,8 +54,6 @@ class MatchWithDetails(Match):
     MatchWithDetails has zero or one defined stage item inputs, but not both.
     """
 
-    court: Court | None = None
-
 
 def get_match_hash(
     stage_item_input1_id: StageItemInputId | None, stage_item_input2_id: StageItemInputId | None
@@ -69,7 +64,6 @@ def get_match_hash(
 class MatchWithDetailsDefinitive(Match):
     stage_item_input1: StageItemInput  # pyrefly: ignore [bad-override]
     stage_item_input2: StageItemInput  # pyrefly: ignore [bad-override]
-    court: Court | None = None
 
     @property
     def stage_item_inputs(self) -> list[StageItemInput]:
@@ -90,14 +84,12 @@ class MatchBody(BaseModelORM):
     round_id: RoundId
     stage_item_input1_score: int = 0
     stage_item_input2_score: int = 0
-    court_id: CourtId | None = None
     custom_duration_minutes: int | None = None
     custom_margin_minutes: int | None = None
 
 
 class MatchCreateBodyFrontend(BaseModelORM):
     round_id: RoundId
-    court_id: CourtId | None = None
     stage_item_input1_id: StageItemInputId | None = None
     stage_item_input2_id: StageItemInputId | None = None
     stage_item_input1_winner_from_match_id: MatchId | None = None
@@ -111,11 +103,11 @@ class MatchCreateBody(MatchCreateBodyFrontend):
     custom_margin_minutes: int | None = None
 
 
-class MatchRescheduleBody(BaseModelORM):
-    old_court_id: CourtId
-    old_position: int
-    new_court_id: CourtId
-    new_position: int
+class MatchTiming(BaseModel):
+    match_id: MatchId
+    start_time: datetime_utc
+    duration_minutes: int
+    margin_minutes: int
 
 
 class MatchFilter(BaseModel):

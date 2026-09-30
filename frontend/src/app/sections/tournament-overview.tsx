@@ -3,7 +3,7 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
-import { inputLabel, isScored, matchStatus } from '../utils';
+import { cx, inputLabel, isScored, matchStatus } from '../utils';
 import { Link } from 'react-router';
 import { Pill, Surface, SurfaceHeading } from '../ui';
 
@@ -109,31 +109,6 @@ export function OverviewSection({
             )}
           </Surface>
 
-          {isAuthenticated && bundle.upcomingMatches.length > 0 ? (
-            <Surface className="space-y-4">
-              <SectionHeading title="Suggested pairings" />
-              <div className="space-y-3">
-                {bundle.upcomingMatches.slice(0, 8).map((entry, index) => (
-                  <div
-                    className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
-                    key={`${entry.stageItemId}-${index}`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs text-zinc-500">{entry.stageItemName}</p>
-                      {entry.suggestion.is_recommended ? (
-                        <Pill tone="success">recommended</Pill>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-white">
-                      {inputLabel(entry.suggestion.stage_item_input1, stageItemsById)} vs{' '}
-                      {inputLabel(entry.suggestion.stage_item_input2, stageItemsById)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Surface>
-          ) : null}
-
           {isAuthenticated ? (
             <Surface className="space-y-3">
               <SectionHeading title="Manage this tournament" />
@@ -162,11 +137,13 @@ export function OverviewSection({
 }
 
 export function StageItemVisualization({
+  showMatches = true,
   stageItem,
   stageItemsById,
   teamMap,
   tournamentId,
 }: {
+  showMatches?: boolean;
   stageItem: OpenApi.StageItemWithRounds;
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
@@ -209,7 +186,7 @@ export function StageItemVisualization({
           )}
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className={cx('mt-4 grid gap-4', showMatches && 'lg:grid-cols-[0.9fr_1.1fr]')}>
           <div className="space-y-3">
             <p className="text-sm font-medium text-zinc-300">Table</p>
             <div className="space-y-2">
@@ -237,39 +214,41 @@ export function StageItemVisualization({
               })}
             </div>
           </div>
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-zinc-300">Matches</p>
-            <div className="grid gap-3">
-              {stageItem.rounds.map((round) => (
-                <div
-                  className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3"
-                  key={round.id}
-                >
-                  <p className="text-sm font-semibold text-white">{round.name}</p>
-                  <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                    {round.matches.map((match) => (
-                      <div
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2"
-                        key={match.id}
-                      >
-                        <span className="text-zinc-200">
-                          {inputLabel(match.stage_item_input1, stageItemsById)}
-                        </span>
-                        <span className="font-semibold tabular-nums text-white">
-                          {isScored(match)
-                            ? `${match.stage_item_input1_score} – ${match.stage_item_input2_score}`
-                            : 'vs'}
-                        </span>
-                        <span className="text-zinc-200">
-                          {inputLabel(match.stage_item_input2, stageItemsById)}
-                        </span>
-                      </div>
-                    ))}
+          {showMatches ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-zinc-300">Matches</p>
+              <div className="grid gap-3">
+                {stageItem.rounds.map((round) => (
+                  <div
+                    className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3"
+                    key={round.id}
+                  >
+                    <p className="text-sm font-semibold text-white">{round.name}</p>
+                    <div className="mt-3 space-y-2 text-sm text-zinc-300">
+                      {round.matches.map((match) => (
+                        <div
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2"
+                          key={match.id}
+                        >
+                          <span className="text-zinc-200">
+                            {inputLabel(match.stage_item_input1, stageItemsById)}
+                          </span>
+                          <span className="font-semibold tabular-nums text-white">
+                            {isScored(match)
+                              ? `${match.stage_item_input1_score} – ${match.stage_item_input2_score}`
+                              : 'vs'}
+                          </span>
+                          <span className="text-zinc-200">
+                            {inputLabel(match.stage_item_input2, stageItemsById)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       )}
     </div>
