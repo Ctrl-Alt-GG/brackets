@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from bracket.config import config
-from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
+from bracket.logic.ranking.calculation import (
+    get_team_rankings_lookup_for_tournament,
+    recalculate_ranking_for_stage_item,
+)
 from bracket.logic.ranking.elimination import (
     update_inputs_in_complete_elimination_stage_item,
 )
@@ -17,6 +20,8 @@ from bracket.routes.auth import (
 )
 from bracket.routes.models import (
     RankingsResponse,
+    StageItemInputStanding,
+    StandingsResponse,
     SuccessResponse,
 )
 from bracket.routes.util import disallow_archived_tournament
@@ -28,6 +33,7 @@ from bracket.sql.rankings import (
 )
 from bracket.sql.stage_item_inputs import get_stage_item_input_ids_by_ranking_id
 from bracket.sql.stage_items import get_stage_item
+from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.id_types import RankingId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -39,6 +45,27 @@ async def get_rankings(
     _: UserPublic = Depends(user_authenticated_or_public_dashboard),
 ) -> RankingsResponse:
     return RankingsResponse(data=await get_all_rankings_in_tournament(tournament_id))
+
+
+@router.get("/tournaments/{tournament_id}/standings")
+async def get_standings(
+    tournament_id: TournamentId,
+    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> StandingsResponse:
+    """
+    Get the teams of every stage item, best first. Teams advance to the next stage in this order.
+    """
+    stages = await get_full_tournament_details(tournament_id, no_draft_rounds=True)
+    team_rankings = await get_team_rankings_lookup_for_tournament(tournament_id, stages)
+    return StandingsResponse(
+        data={
+            stage_item_id: [
+                StageItemInputStanding(stage_item_input_id=input_id, **statistics.model_dump())
+                for input_id, statistics in team_ranking
+            ]
+            for stage_item_id, team_ranking in team_rankings.items()
+        }
+    )
 
 
 @router.put("/tournaments/{tournament_id}/rankings/{ranking_id}")

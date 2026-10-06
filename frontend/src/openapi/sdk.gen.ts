@@ -104,6 +104,9 @@ import type {
   GetStagesApiTournamentsTournamentIdStagesGetData,
   GetStagesApiTournamentsTournamentIdStagesGetErrors,
   GetStagesApiTournamentsTournamentIdStagesGetResponses,
+  GetStandingsApiTournamentsTournamentIdStandingsGetData,
+  GetStandingsApiTournamentsTournamentIdStandingsGetErrors,
+  GetStandingsApiTournamentsTournamentIdStandingsGetResponses,
   GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetData,
   GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetErrors,
   GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetResponses,
@@ -1261,6 +1264,30 @@ export const updateStageApiTournamentsTournamentIdStagesStageIdPut = <
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Get Standings
+ *
+ * Get the teams of every stage item, best first. Teams advance to the next stage in this order.
+ */
+export const getStandingsApiTournamentsTournamentIdStandingsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetStandingsApiTournamentsTournamentIdStandingsGetData, ThrowOnError>,
+): RequestResult<
+  GetStandingsApiTournamentsTournamentIdStandingsGetResponses,
+  GetStandingsApiTournamentsTournamentIdStandingsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetStandingsApiTournamentsTournamentIdStandingsGetResponses,
+    GetStandingsApiTournamentsTournamentIdStandingsGetErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    url: '/api/tournaments/{tournament_id}/standings',
+    ...options,
   });
 
 /**

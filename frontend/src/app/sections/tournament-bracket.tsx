@@ -57,6 +57,7 @@ export function BracketSection({
       <StageItemVisualization
         stageItem={selected.stageItem}
         stageItemsById={stageItemsById}
+        standings={bundle.standings}
         teamMap={teamMap}
         tournamentId={bundle.tournament.id}
       />

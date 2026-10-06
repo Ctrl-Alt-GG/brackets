@@ -12,10 +12,15 @@ import type { FlashMessage, FlattenedMatch, TournamentBundle } from '../types';
 import {
   cx,
   formatDateTime,
+  formatPoints,
+  formatScoreDifference,
   inputLabel,
   isScored,
   matchStatus,
   normalizeDashboardEndpoint,
+  pointsLabel,
+  pointsPhrase,
+  stageItemStandings,
   toCheckbox,
   toNumber,
   toOptionalNumber,
@@ -124,81 +129,116 @@ export function ScheduleSection({
 export function StandingsSection({
   compact,
   rankings,
+  stages,
   standings,
+  teamMap,
 }: {
   compact?: boolean;
   rankings: OpenApi.Ranking[];
-  standings: OpenApi.FullTeamWithPlayers[];
+  stages: OpenApi.StageWithStageItems[];
+  standings: TournamentBundle['standings'];
+  teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
 }) {
-  const rankedStandings = standings.map((team, index) => ({
-    rank: index + 1,
-    team,
-  }));
+  // Results are kept per stage item, and teams only compete for a place within their own group.
+  const tables = stages.flatMap((stage) =>
+    stage.stage_items
+      .map((stageItem) => ({ entries: stageItemStandings(stageItem, standings), stage, stageItem }))
+      .filter(({ entries }) => entries.length > 0),
+  );
+  const hasSwiss = tables.some(({ stageItem }) => stageItem.type === 'SWISS');
 
   return (
     <div className="space-y-6">
-      <Surface className="space-y-4">
-        <SurfaceHeading actions={<Pill>{`${standings.length} teams`}</Pill>} title="Standings" />
-        {compact ? (
-          <div className="grid gap-3">
-            {rankedStandings.length === 0 ? (
-              <p className="text-sm text-zinc-400">No teams have been added yet.</p>
-            ) : null}
-            {rankedStandings.map(({ rank, team }) => (
-              <div
-                className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4"
-                key={team.id}
-              >
-                <div className="min-w-12 text-center">
-                  <p className="font-display text-3xl font-semibold text-white">{rank}</p>
-                </div>
-                <p className="font-display text-2xl font-semibold text-white">{team.name}</p>
-                <p className="text-right text-lg text-zinc-300">
-                  <span className="font-semibold text-emerald-300">{team.wins}</span> won ·{' '}
-                  {team.draws} drawn · {team.losses} lost
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm text-zinc-200">
-              <thead>
-                <tr className="border-b border-white/10 text-xs uppercase tracking-[0.3em] text-zinc-400">
-                  <th className="px-3 py-3">#</th>
-                  <th className="px-3 py-3">Team</th>
-                  <th className="px-3 py-3">Players</th>
-                  <th className="px-3 py-3">Played</th>
-                  <th className="px-3 py-3">Won</th>
-                  <th className="px-3 py-3">Drawn</th>
-                  <th className="px-3 py-3">Lost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {standings.length === 0 ? (
-                  <tr>
-                    <td className="px-3 py-6 text-sm text-zinc-400" colSpan={7}>
-                      No teams have been added yet.
-                    </td>
-                  </tr>
-                ) : null}
-                {rankedStandings.map(({ rank, team }) => (
-                  <tr className="border-b border-white/5" key={team.id}>
-                    <td className="px-3 py-4 text-zinc-500">{rank}</td>
-                    <td className="px-3 py-4 font-semibold text-white">{team.name}</td>
-                    <td className="px-3 py-4 text-zinc-400">
-                      {team.players.map((player) => player.name).join(', ') || '—'}
-                    </td>
-                    <td className="px-3 py-4">{team.wins + team.draws + team.losses}</td>
-                    <td className="px-3 py-4">{team.wins}</td>
-                    <td className="px-3 py-4">{team.draws}</td>
-                    <td className="px-3 py-4">{team.losses}</td>
-                  </tr>
+      <Surface className="space-y-6">
+        <SurfaceHeading actions={<Pill>{`${teamMap.size} teams`}</Pill>} title="Standings" />
+        {tables.length === 0 ? (
+          <p className="text-sm text-zinc-400">No standings yet: no team has joined a group.</p>
+        ) : null}
+        {tables.map(({ entries, stage, stageItem }) => (
+          <section className="space-y-3" key={stageItem.id}>
+            <div>
+              <h3 className="text-lg font-semibold text-white">
+                {stageItem.name || stageItem.type_name}
+              </h3>
+              <p className="text-sm text-zinc-400">
+                {stage.name} · {stageItem.type_name}
+              </p>
+            </div>
+            {compact ? (
+              <div className="grid gap-3">
+                {entries.map(({ input, standing }, index) => (
+                  <div
+                    className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4"
+                    key={input.id}
+                  >
+                    <div className="min-w-12 text-center">
+                      <p className="font-display text-3xl font-semibold text-white">{index + 1}</p>
+                    </div>
+                    <p className="font-display text-2xl font-semibold text-white">
+                      {input.team.name}
+                    </p>
+                    <p className="text-right text-lg text-zinc-300">
+                      <span className="font-semibold text-emerald-300">{standing.wins}</span> won ·{' '}
+                      {standing.draws} drawn · {standing.losses} lost ·{' '}
+                      <span className="font-semibold text-white">
+                        {pointsPhrase(stageItem, standing.points)}
+                      </span>
+                    </p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm text-zinc-200">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs uppercase tracking-[0.3em] text-zinc-400">
+                      <th className="px-3 py-3">#</th>
+                      <th className="px-3 py-3">Team</th>
+                      <th className="px-3 py-3">Players</th>
+                      <th className="px-3 py-3">Played</th>
+                      <th className="px-3 py-3">Won</th>
+                      <th className="px-3 py-3">Drawn</th>
+                      <th className="px-3 py-3">Lost</th>
+                      <th className="px-3 py-3" title="Score difference">
+                        +/−
+                      </th>
+                      <th className="px-3 py-3">{pointsLabel(stageItem)}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map(({ input, standing }, index) => (
+                      <tr className="border-b border-white/5" key={input.id}>
+                        <td className="px-3 py-4 text-zinc-500">{index + 1}</td>
+                        <td className="px-3 py-4 font-semibold text-white">{input.team.name}</td>
+                        <td className="px-3 py-4 text-zinc-400">
+                          {teamMap
+                            .get(input.team_id)
+                            ?.players.map((player) => player.name)
+                            .join(', ') || '—'}
+                        </td>
+                        <td className="px-3 py-4">
+                          {standing.wins + standing.draws + standing.losses}
+                        </td>
+                        <td className="px-3 py-4">{standing.wins}</td>
+                        <td className="px-3 py-4">{standing.draws}</td>
+                        <td className="px-3 py-4">{standing.losses}</td>
+                        <td
+                          className="px-3 py-4"
+                          title={`${standing.score_for} scored, ${standing.score_against} conceded`}
+                        >
+                          {formatScoreDifference(standing)}
+                        </td>
+                        <td className="px-3 py-4 font-semibold text-white">
+                          {formatPoints(standing.points)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ))}
       </Surface>
       {!compact ? (
         <Surface className="space-y-4">
@@ -216,6 +256,14 @@ export function StandingsSection({
               </div>
             ))}
           </div>
+          <p className="text-sm text-zinc-400">
+            Teams with the same points are ranked by score difference, then by their total score,
+            then by the number of wins, and after that by their seeding. Teams go through to the
+            next stage in this order.
+            {hasSwiss
+              ? ' In Swiss groups, teams are ranked by a rating that starts at 1200 and changes with every result.'
+              : null}
+          </p>
         </Surface>
       ) : null}
     </div>
@@ -226,16 +274,21 @@ export function RankingsSection({
   bundle,
   onRefresh,
   setFlash,
-  standings,
+  teamMap,
 }: {
   bundle: TournamentBundle;
   onRefresh: () => void;
   setFlash: (message: FlashMessage) => void;
-  standings: OpenApi.FullTeamWithPlayers[];
+  teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
 }) {
   return (
     <div className="space-y-6">
-      <StandingsSection rankings={bundle.rankings} standings={standings} />
+      <StandingsSection
+        rankings={bundle.rankings}
+        stages={bundle.stages}
+        standings={bundle.standings}
+        teamMap={teamMap}
+      />
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Surface className="space-y-4">
           <SurfaceHeading title="Ranking rule" />
@@ -926,6 +979,7 @@ export function StagesSection({
                         showMatches={false}
                         stageItem={stageItem}
                         stageItemsById={stageItemsById}
+                        standings={bundle.standings}
                         teamMap={teamLookup}
                         tournamentId={bundle.tournament.id}
                       />

@@ -60,15 +60,21 @@ async def sql_get_tournaments(
 async def sql_get_public_tournaments(
     filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "OPEN",
 ) -> list[Tournament]:
+    # Same rule as `user_authenticated_or_public_dashboard`: open tournaments are visible to
+    # everyone, archived ones only when their dashboard is public.
     query = """
         SELECT *
         FROM tournaments
+        WHERE (status = 'OPEN' OR dashboard_public IS TRUE)
         """
     params: dict[str, Any] = {}
 
     if filter_ != "ALL":
-        query += " WHERE status = :status"
+        query += " AND status = :status"
         params["status"] = filter_
+
+    # Running tournaments first, then the most recent ones.
+    query += " ORDER BY status = 'ARCHIVED', start_time DESC"
 
     result = await database.fetch_all(query=query, values=params)
     return [Tournament.model_validate(x) for x in result]
@@ -106,17 +112,14 @@ async def sql_update_tournament(
 async def sql_update_tournament_status(
     tournament_id: TournamentId, body: TournamentChangeStatusBody
 ) -> None:
+    # The public dashboard setting is left alone, so a public tournament stays public once
+    # archived and its results remain available.
     query = """
         UPDATE tournaments
-        SET
-            status = :state,
-            dashboard_public = :dashboard_public
+        SET status = :state
         WHERE tournaments.id = :tournament_id
         """
-
-    # Make dashboard non-public when archiving.
-    # When tournament is archived, setting dashboard_public to False shouldn't have an effect.
-    params = {"tournament_id": tournament_id, "state": body.status.value, "dashboard_public": False}
+    params = {"tournament_id": tournament_id, "state": body.status.value}
     await database.execute(query=query, values=params)
 
 

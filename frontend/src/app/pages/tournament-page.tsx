@@ -208,12 +208,6 @@ export function TournamentPage({
     );
   }
 
-  const standings = [...workspace.data.teams].sort((left, right) => {
-    if (left.wins !== right.wins) return right.wins - left.wins;
-    if (left.draws !== right.draws) return right.draws - left.draws;
-    if (left.losses !== right.losses) return left.losses - right.losses;
-    return left.name.localeCompare(right.name);
-  });
   const stageItemFocus = stageItemId ? (stageItemsById.get(stageItemId) ?? null) : null;
 
   return (
@@ -270,14 +264,25 @@ export function TournamentPage({
           bundle={workspace.data}
           onRefresh={refreshWorkspace}
           setFlash={setFlash}
-          standings={standings}
+          teamMap={teamMap}
         />
       ) : null}
       {section === 'dashboard-standings' ? (
-        <StandingsSection rankings={workspace.data.rankings} standings={standings} />
+        <StandingsSection
+          rankings={workspace.data.rankings}
+          stages={workspace.data.stages}
+          standings={workspace.data.standings}
+          teamMap={teamMap}
+        />
       ) : null}
       {section === 'dashboard-present-standings' ? (
-        <StandingsSection compact rankings={workspace.data.rankings} standings={standings} />
+        <StandingsSection
+          compact
+          rankings={workspace.data.rankings}
+          stages={workspace.data.stages}
+          standings={workspace.data.standings}
+          teamMap={teamMap}
+        />
       ) : null}
       {section === 'results' ? (
         <ResultsSection matches={matches} stageItemsById={stageItemsById} />

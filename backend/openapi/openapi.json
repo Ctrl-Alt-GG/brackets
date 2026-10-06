@@ -1720,6 +1720,56 @@
         "title": "StageItemInputOptionsResponse",
         "type": "object"
       },
+      "StageItemInputStanding": {
+        "properties": {
+          "draws": {
+            "default": 0,
+            "title": "Draws",
+            "type": "integer"
+          },
+          "losses": {
+            "default": 0,
+            "title": "Losses",
+            "type": "integer"
+          },
+          "points": {
+            "default": "0.00",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Points",
+            "type": "string"
+          },
+          "score_against": {
+            "default": 0,
+            "title": "Score Against",
+            "type": "integer"
+          },
+          "score_for": {
+            "default": 0,
+            "title": "Score For",
+            "type": "integer"
+          },
+          "stage_item_input_id": {
+            "title": "Stage Item Input Id",
+            "type": "integer"
+          },
+          "wins": {
+            "default": 0,
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wins",
+          "draws",
+          "losses",
+          "points",
+          "score_for",
+          "score_against",
+          "stage_item_input_id"
+        ],
+        "title": "StageItemInputStanding",
+        "type": "object"
+      },
       "StageItemInputTentative": {
         "properties": {
           "draws": {
@@ -2091,6 +2141,25 @@
           "data"
         ],
         "title": "StagesWithStageItemsResponse",
+        "type": "object"
+      },
+      "StandingsResponse": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StageItemInputStanding"
+              },
+              "type": "array"
+            },
+            "title": "Data",
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "StandingsResponse",
         "type": "object"
       },
       "SuccessResponse": {
@@ -5156,6 +5225,49 @@
         "summary": "Update Stage",
         "tags": [
           "Stages"
+        ]
+      }
+    },
+    "/tournaments/{tournament_id}/standings": {
+      "get": {
+        "description": "Get the teams of every stage item, best first. Teams advance to the next stage in this order.",
+        "operationId": "get_standings_tournaments__tournament_id__standings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Standings",
+        "tags": [
+          "Rankings"
         ]
       }
     },

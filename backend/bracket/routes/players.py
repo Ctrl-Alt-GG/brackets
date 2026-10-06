@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 
 from bracket.config import config
 from bracket.database import database
+from bracket.logic.ranking.players import get_player_statistics
+from bracket.logic.ranking.statistics import PlayerStatistics
 from bracket.logic.subscriptions import check_requirement
 from bracket.models.db.player import Player, PlayerBody, PlayerMultiBody
 from bracket.models.db.tournament import Tournament
@@ -39,11 +41,36 @@ async def get_players(
     pagination: PaginationPlayers = Depends(),
     _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
 ) -> PlayersResponse:
+    # The statistics follow from the match results, so they are worked out on every request
+    # instead of being read from the players table.
+    statistics = await get_player_statistics(tournament_id)
+
+    def with_statistics(player: Player) -> Player:
+        return player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
+
+    if pagination.sort_by in PlayerStatistics.model_fields:
+        result = [
+            with_statistics(player)
+            for player in await get_all_players_in_tournament(
+                tournament_id, not_in_team=not_in_team
+            )
+        ]
+        result.sort(
+            key=lambda player: getattr(player, pagination.sort_by),
+            reverse=pagination.sort_direction == "desc",
+        )
+        result = result[pagination.offset : pagination.offset + pagination.limit]
+    else:
+        result = [
+            with_statistics(player)
+            for player in await get_all_players_in_tournament(
+                tournament_id, not_in_team=not_in_team, pagination=pagination
+            )
+        ]
+
     return PlayersResponse(
         data=PaginatedPlayers(
-            players=await get_all_players_in_tournament(
-                tournament_id, not_in_team=not_in_team, pagination=pagination
-            ),
+            players=result,
             count=await get_player_count(tournament_id, not_in_team=not_in_team),
         )
     )

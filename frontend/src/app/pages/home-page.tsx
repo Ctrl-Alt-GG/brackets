@@ -38,8 +38,10 @@ export function HomePage({
   session: Session;
   setFlash: (message: FlashMessage) => void;
 }) {
-  const [filter, setFilter] = useState<'ALL' | 'ARCHIVED' | 'OPEN'>(session ? 'ALL' : 'OPEN');
-  const visibleFilter = session ? filter : 'OPEN';
+  const [filter, setFilter] = useState<'ALL' | 'ARCHIVED' | 'OPEN'>('ALL');
+  // Visitors see every public tournament: the running ones, and finished ones with a public
+  // dashboard.
+  const visibleFilter = session ? filter : 'ALL';
   const queryClient = useQueryClient();
   const tournaments = useQuery({
     queryKey: ['tournaments', visibleFilter, session?.access_token],

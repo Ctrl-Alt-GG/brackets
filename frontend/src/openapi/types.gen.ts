@@ -945,6 +945,40 @@ export type StageItemInputOptionsResponse = {
 };
 
 /**
+ * StageItemInputStanding
+ */
+export type StageItemInputStanding = {
+  /**
+   * Draws
+   */
+  draws: number;
+  /**
+   * Losses
+   */
+  losses: number;
+  /**
+   * Points
+   */
+  points: string;
+  /**
+   * Score Against
+   */
+  score_against: number;
+  /**
+   * Score For
+   */
+  score_for: number;
+  /**
+   * Stage Item Input Id
+   */
+  stage_item_input_id: number;
+  /**
+   * Wins
+   */
+  wins: number;
+};
+
+/**
  * StageItemInputTentative
  */
 export type StageItemInputTentative = {
@@ -1174,6 +1208,18 @@ export type StagesWithStageItemsResponse = {
    * Data
    */
   data: Array<StageWithStageItems>;
+};
+
+/**
+ * StandingsResponse
+ */
+export type StandingsResponse = {
+  /**
+   * Data
+   */
+  data: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
 };
 
 /**
@@ -3066,6 +3112,38 @@ export type UpdateStageApiTournamentsTournamentIdStagesStageIdPutResponses = {
 
 export type UpdateStageApiTournamentsTournamentIdStagesStageIdPutResponse =
   UpdateStageApiTournamentsTournamentIdStagesStageIdPutResponses[keyof UpdateStageApiTournamentsTournamentIdStagesStageIdPutResponses];
+
+export type GetStandingsApiTournamentsTournamentIdStandingsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/standings';
+};
+
+export type GetStandingsApiTournamentsTournamentIdStandingsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetStandingsApiTournamentsTournamentIdStandingsGetError =
+  GetStandingsApiTournamentsTournamentIdStandingsGetErrors[keyof GetStandingsApiTournamentsTournamentIdStandingsGetErrors];
+
+export type GetStandingsApiTournamentsTournamentIdStandingsGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: StandingsResponse;
+};
+
+export type GetStandingsApiTournamentsTournamentIdStandingsGetResponse =
+  GetStandingsApiTournamentsTournamentIdStandingsGetResponses[keyof GetStandingsApiTournamentsTournamentIdStandingsGetResponses];
 
 export type GetTeamsApiTournamentsTournamentIdTeamsGetData = {
   body?: never;

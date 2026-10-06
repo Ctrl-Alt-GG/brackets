@@ -48,6 +48,8 @@ export type TournamentBundle = {
   players: OpenApi.Player[];
   teams: OpenApi.FullTeamWithPlayers[];
   rankings: OpenApi.Ranking[];
+  /** The ranked inputs of every stage item by stage item id, best first. */
+  standings: Record<string, OpenApi.StageItemInputStanding[]>;
   availableInputs: Record<
     string,
     Array<OpenApi.StageItemInputOptionFinal | OpenApi.StageItemInputOptionTentative>

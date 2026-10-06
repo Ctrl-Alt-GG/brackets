@@ -143,30 +143,42 @@ async def test_update_tournament(
 async def test_archive_and_unarchive_tournament(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    query = tournaments.select().where(tournaments.c.id == auth_context.tournament.id)
-    body = {"status": "ARCHIVED"}
-    assert (
-        await send_tournament_request(HTTPMethod.POST, "change-status", auth_context, json=body)
-        == SUCCESS_RESPONSE
-    )
-    updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
-    assert updated_tournament.status is TournamentStatus.ARCHIVED
-    assert updated_tournament.dashboard_public is False
+    # A tournament of its own, because other tests change the shared one's dashboard setting.
+    async with inserted_tournament(
+        DUMMY_TOURNAMENT.model_copy(
+            update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
+        )
+    ) as tournament_inserted:
+        tournament_context = auth_context.model_copy(update={"tournament": tournament_inserted})
+        query = tournaments.select().where(tournaments.c.id == tournament_inserted.id)
+        body = {"status": "ARCHIVED"}
+        assert (
+            await send_tournament_request(
+                HTTPMethod.POST, "change-status", tournament_context, json=body
+            )
+            == SUCCESS_RESPONSE
+        )
+        updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
+        assert updated_tournament.status is TournamentStatus.ARCHIVED
+        # A public tournament stays public once archived.
+        assert updated_tournament.dashboard_public is True
 
-    # Archiving twice is not allowed
-    assert await send_tournament_request(
-        HTTPMethod.POST, "change-status", auth_context, json=body
-    ) == {"detail": "Tournament already has the requested status"}
+        # Archiving twice is not allowed
+        assert await send_tournament_request(
+            HTTPMethod.POST, "change-status", tournament_context, json=body
+        ) == {"detail": "Tournament already has the requested status"}
 
-    # Unarchive the tournament
-    body = {"status": "OPEN"}
-    assert (
-        await send_tournament_request(HTTPMethod.POST, "change-status", auth_context, json=body)
-        == SUCCESS_RESPONSE
-    )
-    updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
-    assert updated_tournament.status is TournamentStatus.OPEN
-    assert updated_tournament.dashboard_public is False
+        # Unarchive the tournament
+        body = {"status": "OPEN"}
+        assert (
+            await send_tournament_request(
+                HTTPMethod.POST, "change-status", tournament_context, json=body
+            )
+            == SUCCESS_RESPONSE
+        )
+        updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
+        assert updated_tournament.status is TournamentStatus.OPEN
+        assert updated_tournament.dashboard_public is True
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -233,7 +245,8 @@ async def test_non_public_tournament_endpoints_blocked_for_unauthenticated_users
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     """
-    Unauthenticated requests to a tournament with dashboard_public=False must be rejected.
+    Unauthenticated requests to an archived tournament with dashboard_public=False must be
+    rejected. Open tournaments are visible to everyone.
     This tests the fix for GHSA-9mjc-6fp2-hm9v.
     """
     async with inserted_tournament(
@@ -242,6 +255,7 @@ async def test_non_public_tournament_endpoints_blocked_for_unauthenticated_users
                 "club_id": auth_context.club.id,
                 "dashboard_public": False,
                 "dashboard_endpoint": "non-public-endpoint",
+                "status": TournamentStatus.ARCHIVED,
             }
         )
     ) as private_tournament:
@@ -257,3 +271,50 @@ async def test_non_public_tournament_endpoints_blocked_for_unauthenticated_users
                 f"Expected 401 for unauthenticated access to non-public endpoint {endpoint!r}, "
                 f"got: {response}"
             )
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_archived_public_tournament_stays_public(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    async with (
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={
+                    "club_id": auth_context.club.id,
+                    "dashboard_endpoint": "archived-public-endpoint",
+                    "status": TournamentStatus.ARCHIVED,
+                }
+            )
+        ) as public_tournament,
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={
+                    "club_id": auth_context.club.id,
+                    "dashboard_public": False,
+                    "dashboard_endpoint": None,
+                    "status": TournamentStatus.ARCHIVED,
+                }
+            )
+        ) as private_tournament,
+    ):
+        for filter_, expected in (("ALL", True), ("ARCHIVED", True), ("OPEN", False)):
+            response = await send_request(HTTPMethod.GET, f"tournaments?filter_={filter_}")
+            listed_ids = {tournament["id"] for tournament in response["data"]}
+            assert (public_tournament.id in listed_ids) is expected, f"filter_={filter_}"
+            assert private_tournament.id not in listed_ids, f"filter_={filter_}"
+
+        response = await send_request(
+            HTTPMethod.GET, "tournaments?endpoint_name=archived-public-endpoint"
+        )
+        assert [tournament["id"] for tournament in response["data"]] == [public_tournament.id]
+
+        tournament_id = public_tournament.id
+        for endpoint in (
+            f"tournaments/{tournament_id}",
+            f"tournaments/{tournament_id}/teams",
+            f"tournaments/{tournament_id}/rankings",
+            f"tournaments/{tournament_id}/stages?no_draft_rounds=true",
+        ):
+            response = await send_request(HTTPMethod.GET, endpoint)
+            assert "data" in response, f"Expected {endpoint!r} to be public, got: {response}"

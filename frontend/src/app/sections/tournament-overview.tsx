@@ -3,7 +3,16 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
-import { cx, inputLabel, isScored, matchStatus, matchWinner, type MatchOutcome } from '../utils';
+import {
+  cx,
+  inputLabel,
+  isScored,
+  matchStatus,
+  matchWinner,
+  pointsPhrase,
+  stageItemStandings,
+  type MatchOutcome,
+} from '../utils';
 import { Link } from 'react-router';
 import { Pill, Surface, SurfaceHeading } from '../ui';
 
@@ -147,23 +156,18 @@ export function StageItemVisualization({
   showMatches = true,
   stageItem,
   stageItemsById,
+  standings,
   teamMap,
   tournamentId,
 }: {
   showMatches?: boolean;
   stageItem: OpenApi.StageItemWithRounds;
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+  standings: TournamentBundle['standings'];
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
   tournamentId: number;
 }) {
-  const standings = [...stageItem.inputs]
-    .filter((input) => input.team_id != null)
-    .sort((left, right) => {
-      if (left.wins !== right.wins) return right.wins - left.wins;
-      if (left.draws !== right.draws) return right.draws - left.draws;
-      if (left.losses !== right.losses) return left.losses - right.losses;
-      return left.slot - right.slot;
-    });
+  const entries = stageItemStandings(stageItem, standings);
   const bracketData =
     stageItem.type === 'SINGLE_ELIMINATION'
       ? toBracketViewerData(stageItem, stageItemsById, tournamentId)
@@ -197,11 +201,11 @@ export function StageItemVisualization({
           <div className="space-y-3">
             <p className="text-sm font-medium text-zinc-300">Table</p>
             <div className="space-y-2">
-              {standings.length === 0 ? (
+              {entries.length === 0 ? (
                 <p className="text-sm text-zinc-400">No teams have been added yet.</p>
               ) : null}
-              {standings.map((input, index) => {
-                const team = input.team_id != null ? teamMap.get(input.team_id) : null;
+              {entries.map(({ input, standing }, index) => {
+                const team = teamMap.get(input.team_id);
                 return (
                   <div
                     className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -214,7 +218,8 @@ export function StageItemVisualization({
                       </span>
                     </span>
                     <span className="text-zinc-400">
-                      {input.wins} won · {input.draws} drawn · {input.losses} lost
+                      {standing.wins} won · {standing.draws} drawn · {standing.losses} lost ·{' '}
+                      {pointsPhrase(stageItem, standing.points)}
                     </span>
                   </div>
                 );

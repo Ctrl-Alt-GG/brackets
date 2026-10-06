@@ -130,6 +130,44 @@ export function activeTeamInputs(stageItem: OpenApi.StageItemWithRounds) {
   );
 }
 
+/**
+ * The teams of a stage item with their results, best first. The backend ranks them, in the same
+ * order in which teams advance to the next stage.
+ */
+export function stageItemStandings(
+  stageItem: OpenApi.StageItemWithRounds,
+  standings: Record<string, OpenApi.StageItemInputStanding[]>,
+) {
+  const inputs = new Map(stageItem.inputs.filter(hasTeam).map((input) => [input.id, input]));
+  return (standings[String(stageItem.id)] ?? []).flatMap((standing) => {
+    const input = inputs.get(standing.stage_item_input_id);
+    return input ? [{ input, standing }] : [];
+  });
+}
+
+/** Swiss stage items rank teams by an ELO rating instead of points. */
+export function pointsLabel(stageItem: OpenApi.StageItemWithRounds) {
+  return stageItem.type === 'SWISS' ? 'Rating' : 'Points';
+}
+
+export function formatPoints(points: string) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, useGrouping: false }).format(
+    Number(points),
+  );
+}
+
+export function formatScoreDifference(standing: OpenApi.StageItemInputStanding) {
+  return new Intl.NumberFormat(undefined, { signDisplay: 'exceptZero' }).format(
+    standing.score_for - standing.score_against,
+  );
+}
+
+/** For running text, such as "2.5 points" or "rating 1216". */
+export function pointsPhrase(stageItem: OpenApi.StageItemWithRounds, points: string) {
+  if (stageItem.type === 'SWISS') return `rating ${formatPoints(points)}`;
+  return `${formatPoints(points)} ${Number(points) === 1 ? 'point' : 'points'}`;
+}
+
 export function inputLabel(
   input: StageItemInput | null,
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>,

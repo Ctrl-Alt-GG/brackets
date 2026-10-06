@@ -166,7 +166,7 @@ export async function fetchTournamentBundle(
   }
   const stages = stageResponse.data;
 
-  const [playersResponse, teamsResponse, rankingsResponse] = await Promise.all([
+  const [playersResponse, teamsResponse, rankingsResponse, standingsResponse] = await Promise.all([
     unwrap(
       OpenApi.getPlayersApiTournamentsTournamentIdPlayersGet({
         auth: accessToken,
@@ -185,6 +185,13 @@ export async function fetchTournamentBundle(
     ),
     unwrap(
       OpenApi.getRankingsApiTournamentsTournamentIdRankingsGet({
+        auth: accessToken,
+        path: { tournament_id: tournamentId },
+        throwOnError: true,
+      }),
+    ),
+    unwrap(
+      OpenApi.getStandingsApiTournamentsTournamentIdStandingsGet({
         auth: accessToken,
         path: { tournament_id: tournamentId },
         throwOnError: true,
@@ -223,6 +230,7 @@ export async function fetchTournamentBundle(
     players: playersResponse.data.players,
     rankings: rankingsResponse.data,
     stages,
+    standings: standingsResponse.data,
     teams: teamsResponse.data.teams,
     tournament,
   };

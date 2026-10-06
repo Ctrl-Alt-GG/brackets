@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from starlette import status
 
 from bracket.logic.ranking.calculation import (
-    determine_team_ranking_for_stage_item,
+    StageItemXTeamRanking,
+    get_team_rankings_lookup_for_tournament,
 )
-from bracket.logic.ranking.statistics import TeamStatistics
 from bracket.models.db.stage_item_inputs import (
     StageItemInputEmpty,
     StageItemInputFinal,
@@ -16,7 +16,6 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.models.db.team import Team
 from bracket.models.db.util import StageWithStageItems
 from bracket.sql.matches import clear_scores_for_matches_in_stage_item
-from bracket.sql.rankings import get_ranking_for_stage_item
 from bracket.sql.stage_item_inputs import (
     get_stage_item_input_by_id,
     sql_set_team_id_for_stage_item_input,
@@ -28,9 +27,6 @@ from bracket.utils.id_types import (
     StageItemInputId,
     TournamentId,
 )
-from bracket.utils.types import assert_some
-
-StageItemXTeamRanking = dict[StageItemId, list[tuple[StageItemInputId, TeamStatistics]]]
 
 
 class StageItemInputUpdate(BaseModel):
@@ -83,21 +79,6 @@ async def get_team_update_for_input(
     return StageItemInputUpdate(
         stage_item_input=stage_item_input, team=target_stage_item_input.team
     )
-
-
-async def get_team_rankings_lookup_for_tournament(
-    tournament_id: TournamentId, stages: list[StageWithStageItems]
-) -> StageItemXTeamRanking:
-    stage_items = {
-        stage_item.id: stage_item for stage in stages for stage_item in stage.stage_items
-    }
-    return {
-        stage_item_id: determine_team_ranking_for_stage_item(
-            stage_item,
-            assert_some(await get_ranking_for_stage_item(tournament_id, stage_item.id)),
-        )
-        for stage_item_id, stage_item in stage_items.items()
-    }
 
 
 async def get_updates_to_inputs_in_activated_stage(

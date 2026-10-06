@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+from bracket.logic.ranking.statistics import TeamStatistics
 from bracket.logic.scheduling.handle_stage_activation import StageItemInputUpdate
 from bracket.models.db.club import Club
 from bracket.models.db.match import Match, SuggestedMatch
@@ -14,7 +15,7 @@ from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
 from bracket.models.db.util import StageWithStageItems
 from bracket.routes.auth import Token
-from bracket.utils.id_types import StageId, StageItemId
+from bracket.utils.id_types import StageId, StageItemId, StageItemInputId
 
 
 class SuccessResponse(BaseModel):
@@ -97,6 +98,14 @@ class AuthFeatureFlagsResponse(DataResponse[AuthFeatureFlags]):
 
 
 class RankingsResponse(DataResponse[list[Ranking]]):
+    pass
+
+
+class StageItemInputStanding(TeamStatistics):
+    stage_item_input_id: StageItemInputId
+
+
+class StandingsResponse(DataResponse[dict[StageItemId, list[StageItemInputStanding]]]):
     pass
 
 

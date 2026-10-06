@@ -74,7 +74,7 @@ async def get_tournaments(
 ) -> TournamentsResponse:
     match user, endpoint_name:
         case None, None:
-            return TournamentsResponse(data=await sql_get_public_tournaments(filter_="OPEN"))
+            return TournamentsResponse(data=await sql_get_public_tournaments(filter_))
 
         case _, str() as endpoint_name:
             tournament = await sql_get_tournament_by_endpoint_name(endpoint_name)
