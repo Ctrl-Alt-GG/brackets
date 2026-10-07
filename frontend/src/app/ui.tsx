@@ -56,6 +56,15 @@ export function SurfaceHeading({ actions, title }: { actions?: ReactNode; title:
   );
 }
 
+/** A small heading for a group of content inside a Surface, set apart from the text below it. */
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="text-xs font-semibold tracking-wider text-base-content/60 uppercase">
+      {children}
+    </h3>
+  );
+}
+
 /** A labelled form control with its validation message. */
 export function Field({
   children,
