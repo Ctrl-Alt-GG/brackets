@@ -1,12 +1,8 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
 
-import type { AuthFeatures, Session } from './types';
+import type { Session } from './types';
 import { cx } from './utils';
-
-const BUTTON_BASE_CLASS =
-  'inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60';
-const BUTTON_GHOST_CLASS = 'border border-white/10 bg-transparent text-zinc-200 hover:bg-white/10';
 
 export function PageShell({
   children,
@@ -19,161 +15,97 @@ export function PageShell({
 }) {
   return (
     <section className="space-y-6">
-      <header className="flex flex-col gap-4 rounded-[1.75rem] border border-white/10 bg-white/5 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur md:flex-row md:items-end md:justify-between">
-        <div className="space-y-2">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-white md:text-4xl">
+      <header className="card border border-base-300 bg-base-200/60 backdrop-blur">
+        <div className="card-body flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
             {title}
           </h1>
+          {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
       </header>
       {children}
     </section>
   );
 }
 
-export function Surface({ children, className }: { children: ReactNode; className?: string }) {
+export function Surface({
+  children,
+  className,
+  id,
+}: {
+  children: ReactNode;
+  className?: string;
+  id?: string;
+}) {
   return (
-    <div
-      className={cx(
-        'rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)] backdrop-blur',
-        className,
-      )}
+    <section
+      className={cx('card border border-base-300 bg-base-200/60 backdrop-blur', className)}
+      id={id}
     >
-      {children}
-    </div>
+      <div className="card-body gap-4">{children}</div>
+    </section>
   );
 }
 
 export function SurfaceHeading({ actions, title }: { actions?: ReactNode; title: string }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="font-display text-2xl font-semibold text-white">{title}</h2>
+      <h2 className="card-title font-display text-2xl">{title}</h2>
       {actions}
     </div>
   );
 }
 
-export function Pill({
-  children,
-  tone = 'default',
-}: {
-  children: ReactNode;
-  tone?: 'accent' | 'default' | 'danger' | 'success';
-}) {
-  const toneClass =
-    tone === 'accent'
-      ? 'border-accent-400/40 bg-accent-500/15 text-accent-200'
-      : tone === 'danger'
-        ? 'border-red-400/40 bg-red-500/15 text-red-200'
-        : tone === 'success'
-          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200'
-          : 'border-white/10 bg-white/5 text-zinc-200';
-
-  return (
-    <span
-      className={cx(
-        'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em]',
-        toneClass,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={cx(
-        'w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-brand-300 focus:bg-black/30',
-        className,
-      )}
-    />
-  );
-}
-
-export function Textarea({
-  className,
-  ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={cx(
-        'min-h-28 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-brand-300 focus:bg-black/30',
-        className,
-      )}
-    />
-  );
-}
-
-export function Select({
-  className,
-  children,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      className={cx(
-        'w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-brand-300 focus:bg-black/30',
-        className,
-      )}
-    >
-      {children}
-    </select>
-  );
-}
-
-export function Button({
+/** A labelled form control with its validation message. */
+export function Field({
   children,
   className,
-  tone = 'primary',
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: 'ghost' | 'primary' | 'secondary' | 'danger';
-}) {
-  const toneClass =
-    tone === 'secondary'
-      ? 'bg-white/10 text-white hover:bg-white/20'
-      : tone === 'ghost'
-        ? BUTTON_GHOST_CLASS
-        : tone === 'danger'
-          ? 'bg-red-600 text-white hover:bg-red-500'
-          : 'bg-brand-600 text-white hover:bg-brand-500';
-
-  return (
-    <button {...props} className={cx(BUTTON_BASE_CLASS, toneClass, className)}>
-      {children}
-    </button>
-  );
-}
-
-export function FormField({
-  children,
   error,
   label,
 }: {
   children: ReactNode;
-  error?: string | null;
+  className?: string;
+  error?: string;
   label: string;
 }) {
   return (
-    <label className="block space-y-2 text-sm text-zinc-300">
-      <span className="font-medium text-zinc-100">{label}</span>
+    <label className={cx('fieldset', className)}>
+      <span className="fieldset-legend">{label}</span>
       {children}
-      {error ? <span className="block text-xs font-medium text-brand-300">{error}</span> : null}
+      {error ? <span className="label text-error">{error}</span> : null}
+    </label>
+  );
+}
+
+export function CheckboxField({
+  className,
+  description,
+  label,
+  ...props
+}: Omit<ComponentProps<'input'>, 'type'> & { description?: string; label: string }) {
+  return (
+    <label
+      className={cx(
+        'flex cursor-pointer items-start gap-3 rounded-box border border-base-300 bg-base-100/40 px-4 py-3 text-sm',
+        className,
+      )}
+    >
+      <input {...props} className="checkbox checkbox-primary checkbox-sm mt-0.5" type="checkbox" />
+      <span className="space-y-1">
+        <span className="block">{label}</span>
+        {description ? (
+          <span className="block text-xs text-base-content/70">{description}</span>
+        ) : null}
+      </span>
     </label>
   );
 }
 
 export function LoadingState({ title }: { title: string }) {
   return (
-    <Surface className="flex min-h-52 items-center justify-center text-zinc-300">
-      <div className="space-y-3 text-center">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand-200/30 border-t-brand-300" />
+    <Surface className="min-h-52 justify-center">
+      <div className="flex flex-col items-center gap-3 text-base-content/80" role="status">
+        <span className="loading loading-spinner loading-lg text-primary" />
         <p>{title}</p>
       </div>
     </Surface>
@@ -190,11 +122,11 @@ export function ErrorState({
   title: string;
 }) {
   return (
-    <Surface className="space-y-4 border-red-400/30 bg-red-500/10 text-red-100">
-      <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="text-sm text-red-100/90">{error}</p>
+    <div className="alert alert-error alert-soft flex-col items-start" role="alert">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="text-sm">{error}</p>
       {action}
-    </Surface>
+    </div>
   );
 }
 
@@ -208,134 +140,84 @@ export function EmptyState({
   title: string;
 }) {
   return (
-    <Surface className="space-y-3 text-center">
-      <h3 className="font-display text-2xl font-semibold text-white">{title}</h3>
-      <p className="mx-auto max-w-xl text-sm text-zinc-300">{text}</p>
-      {action}
+    <Surface className="text-center">
+      <h3 className="font-display text-2xl font-semibold">{title}</h3>
+      <p className="mx-auto max-w-xl text-sm text-base-content/80">{text}</p>
+      {action ? <div className="flex justify-center">{action}</div> : null}
     </Surface>
   );
 }
 
 export function TopNav({
-  authFeatures,
   currentUserName,
   onLogout,
   session,
 }: {
-  authFeatures: AuthFeatures | null;
   currentUserName?: string | null;
   onLogout: () => void;
   session: Session;
 }) {
-  const showPrimaryNav = Boolean(session);
-
   return (
-    <header className="border-b border-white/10 bg-black/20 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
-        <div className="space-y-1">
-          <Link to="/" className="inline-flex items-center gap-3 text-white">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="h-8 w-auto sm:h-9"
-              src="/ctrl-alt-gg-mark.svg"
-            />
-            <span className="block font-display text-lg font-semibold text-zinc-200/90">
-              Ctrl-Alt-GG Bracket
-            </span>
-          </Link>
-        </div>
+    <header className="border-b border-base-300 bg-base-100/40 backdrop-blur">
+      <nav
+        aria-label="Main"
+        className="navbar mx-auto max-w-7xl flex-wrap gap-x-4 gap-y-3 px-5 md:px-8"
+      >
+        <Link className="flex items-center gap-3" to="/">
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-auto sm:h-9"
+            src="/ctrl-alt-gg-mark.svg"
+          />
+          <span className="font-display text-base font-semibold text-base-content/90 sm:text-lg">
+            Ctrl-Alt-GG Bracket
+          </span>
+        </Link>
 
-        {showPrimaryNav ? (
-          <nav className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
-            <NavLink
-              className={({ isActive }) =>
-                cx(
-                  'rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white',
-                  isActive && 'bg-white/10 text-white',
-                )
-              }
-              end
-              to="/"
-            >
-              Tournaments
-            </NavLink>
-            <NavLink
-              className={({ isActive }) =>
-                cx(
-                  'rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white',
-                  isActive && 'bg-white/10 text-white',
-                )
-              }
-              to="/events"
-            >
-              Events
-            </NavLink>
-          </nav>
+        {session ? (
+          <div className="order-last flex w-full gap-5 text-sm font-semibold md:order-none md:w-auto">
+            {[
+              ['/', 'Tournaments'],
+              ['/events', 'Events'],
+            ].map(([to, label]) => (
+              <NavLink
+                className={({ isActive }) =>
+                  cx(
+                    'border-b-2 py-1 transition',
+                    isActive
+                      ? 'border-primary text-base-content'
+                      : 'border-transparent text-base-content/70 hover:text-base-content',
+                  )
+                }
+                end
+                key={to}
+                to={to}
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
           {session ? (
             <>
-              <Link className={cx(BUTTON_BASE_CLASS, BUTTON_GHOST_CLASS)} to="/user">
-                {currentUserName ?? 'Signed in'}
+              <Link className="btn btn-ghost btn-sm" to="/user">
+                {currentUserName ?? 'Account'}
               </Link>
-              <Button tone="ghost" onClick={onLogout}>
+              <button className="btn btn-ghost btn-sm" onClick={onLogout} type="button">
                 Log out
-              </Button>
+              </button>
             </>
           ) : (
-            <>
-              <Link
-                to="/login"
-                className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-100 transition hover:bg-white/10"
-              >
-                Log in
-              </Link>
-              {authFeatures?.userRegistrationEnabled ? (
-                <Link
-                  to="/create-account"
-                  className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500"
-                >
-                  Create account
-                </Link>
-              ) : null}
-            </>
+            // Players never need an account, so visitors only get a quiet way in for organizers.
+            <Link className="link link-hover text-sm font-semibold" to="/login">
+              Organizer login
+            </Link>
           )}
         </div>
-      </div>
+      </nav>
     </header>
   );
-}
-
-export class ErrorBoundary extends Component<
-  { children: ReactNode; title?: string },
-  { error: Error | null }
-> {
-  state: { error: Error | null } = { error: null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[bracket] render error', error, info.componentStack);
-  }
-
-  render() {
-    const { error } = this.state;
-    if (!error) return this.props.children;
-
-    return (
-      <ErrorState
-        action={
-          <Button onClick={() => window.location.reload()} tone="secondary">
-            Reload the page
-          </Button>
-        }
-        error={error.message || 'An unexpected error occurred.'}
-        title={this.props.title ?? 'Something went wrong'}
-      />
-    );
-  }
 }

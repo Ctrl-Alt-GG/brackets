@@ -1,11 +1,12 @@
-import pytest
+from http import HTTPMethod
 
-from bracket.database import database
+import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.player import Player
 from bracket.schema import players
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import assert_row_count_and_clear, inserted_player, inserted_team
@@ -85,7 +86,7 @@ async def test_delete_player(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_player(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Some new name", "active": True}
     async with inserted_team(
@@ -98,7 +99,7 @@ async def test_update_player(
                 HTTPMethod.PUT, f"players/{player_inserted.id}", auth_context, json=body
             )
             updated_player = await fetch_one_parsed_certain(
-                database, Player, query=players.select().where(players.c.id == player_inserted.id)
+                conn, Player, query=players.select().where(players.c.id == player_inserted.id)
             )
             assert updated_player.name == body["name"]
             assert response["data"]["name"] == body["name"]

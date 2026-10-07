@@ -1,7 +1,8 @@
 import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
-import type { AuthFeatures, TournamentBundle, Session } from './types';
-import { getApiBaseUrl, isNumericIdentifier, readSession } from './utils';
+import { readSession } from './hooks';
+import type { Session, TournamentBundle } from './types';
+import { getApiBaseUrl, isNumericIdentifier } from './utils';
 
 function getResponseStatus(error: unknown) {
   return (error as { response?: { status?: number } })?.response?.status;
@@ -45,193 +46,113 @@ export function configureApiClient(session: Session) {
   }
 }
 
-export async function unwrap<T>(promise: Promise<{ data: T }>) {
-  const response = await promise;
-  return response.data;
-}
-
-export async function fetchAuthFeatures(): Promise<AuthFeatures> {
-  const response = await fetch(`${getApiBaseUrl()}/api/auth/features`, {
-    headers: { Accept: 'application/json' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Unable to load auth features (${response.status}).`);
-  }
-
-  const payload = (await response.json()) as {
-    data: {
-      password_reset_enabled: boolean;
-      user_registration_enabled: boolean;
-    };
-  };
-
-  return {
-    passwordResetEnabled: payload.data.password_reset_enabled,
-    userRegistrationEnabled: payload.data.user_registration_enabled,
-  };
-}
-
-export async function fetchTournaments(
-  filter?: 'ALL' | 'OPEN' | 'ARCHIVED',
-  endpointName?: string,
-  accessToken?: string,
-) {
-  const response = await unwrap(
-    OpenApi.getTournamentsApiTournamentsGet({
-      auth: accessToken,
-      query: {
-        endpoint_name: endpointName,
-        filter_: filter,
-      },
-      throwOnError: true,
-    }),
-  );
-
-  return response.data;
-}
-
-export async function fetchCurrentUserName(accessToken?: string) {
-  const response = await unwrap(
-    OpenApi.getUserApiUsersMeGet({
-      auth: accessToken,
-      throwOnError: true,
-    }),
-  );
-  return response.data.name;
-}
-
-export async function fetchTournament(
-  tournamentKey: string,
-  dashboardMode: boolean,
-  accessToken?: string,
-) {
+export async function fetchTournament(tournamentKey: string, dashboardMode: boolean) {
   if (!isNumericIdentifier(tournamentKey)) {
     if (!dashboardMode) {
       throw new Error('Tournament management routes require a numeric tournament id.');
     }
 
-    const tournaments = await fetchTournaments(undefined, tournamentKey, accessToken);
-    const tournament = tournaments[0];
+    const { data } = await OpenApi.getTournamentsApiTournamentsGet({
+      query: { endpoint_name: tournamentKey },
+      throwOnError: true,
+    });
+    const tournament = data.data[0];
     if (!tournament) {
-      throw new Error(`No tournament matches the dashboard endpoint "${tournamentKey}".`);
+      throw new Error(`No tournament has the Details link "${tournamentKey}".`);
     }
     return tournament;
   }
 
-  const response = await unwrap(
-    OpenApi.getTournamentApiTournamentsTournamentIdGet({
-      auth: accessToken,
-      path: { tournament_id: Number(tournamentKey) },
-      throwOnError: true,
-    }),
-  );
-  return response.data;
+  const { data } = await OpenApi.getTournamentApiTournamentsTournamentIdGet({
+    path: { tournament_id: Number(tournamentKey) },
+    throwOnError: true,
+  });
+  return data.data;
 }
 
+function withoutDraftRounds(stages: OpenApi.StageWithStageItems[]) {
+  return stages.map((stage) => ({
+    ...stage,
+    stage_items: stage.stage_items.map((stageItem) => ({
+      ...stageItem,
+      rounds: stageItem.rounds.filter((round) => !round.is_draft),
+    })),
+  }));
+}
+
+/** Everything a tournament page shows, loaded together so all sections agree with each other. */
 export async function fetchTournamentBundle(
   tournamentKey: string,
   dashboardMode: boolean,
   isAuthenticated: boolean,
-  accessToken?: string,
 ): Promise<TournamentBundle> {
-  const tournament = await fetchTournament(tournamentKey, dashboardMode, accessToken);
-  const tournamentId = tournament.id;
+  const tournament = await fetchTournament(tournamentKey, dashboardMode);
+  const path = { tournament_id: tournament.id };
   let canManage = isAuthenticated;
-  let stageResponse: { data: OpenApi.StageWithStageItems[] };
+  let stages: OpenApi.StageWithStageItems[];
 
+  // Only organizers of the tournament may see draft rounds, so asking for them tells whether the
+  // signed-in user can manage it.
   try {
-    stageResponse = await unwrap(
-      OpenApi.getStagesApiTournamentsTournamentIdStagesGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        query: { no_draft_rounds: dashboardMode || !isAuthenticated },
-        throwOnError: true,
-      }),
-    );
+    const { data } = await OpenApi.getStagesApiTournamentsTournamentIdStagesGet({
+      path,
+      query: { no_draft_rounds: !isAuthenticated },
+      throwOnError: true,
+    });
+    stages = data.data;
   } catch (error) {
-    if (!isAuthenticated || dashboardMode || !isAuthorizationError(error)) {
+    if (!isAuthenticated || !isAuthorizationError(error)) {
       throw error;
     }
 
     canManage = false;
-    stageResponse = await unwrap(
-      OpenApi.getStagesApiTournamentsTournamentIdStagesGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        query: { no_draft_rounds: true },
-        throwOnError: true,
-      }),
-    );
+    const { data } = await OpenApi.getStagesApiTournamentsTournamentIdStagesGet({
+      path,
+      query: { no_draft_rounds: true },
+      throwOnError: true,
+    });
+    stages = data.data;
   }
-  const stages = stageResponse.data;
 
-  const [playersResponse, teamsResponse, rankingsResponse, standingsResponse] = await Promise.all([
-    unwrap(
-      OpenApi.getPlayersApiTournamentsTournamentIdPlayersGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
-        throwOnError: true,
-      }),
-    ),
-    unwrap(
-      OpenApi.getTeamsApiTournamentsTournamentIdTeamsGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
-        throwOnError: true,
-      }),
-    ),
-    unwrap(
-      OpenApi.getRankingsApiTournamentsTournamentIdRankingsGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        throwOnError: true,
-      }),
-    ),
-    unwrap(
-      OpenApi.getStandingsApiTournamentsTournamentIdStandingsGet({
-        auth: accessToken,
-        path: { tournament_id: tournamentId },
-        throwOnError: true,
-      }),
-    ),
+  const [players, teams, rankings, standings] = await Promise.all([
+    OpenApi.getPlayersApiTournamentsTournamentIdPlayersGet({
+      path,
+      query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
+      throwOnError: true,
+    }),
+    OpenApi.getTeamsApiTournamentsTournamentIdTeamsGet({
+      path,
+      query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
+      throwOnError: true,
+    }),
+    OpenApi.getRankingsApiTournamentsTournamentIdRankingsGet({ path, throwOnError: true }),
+    OpenApi.getStandingsApiTournamentsTournamentIdStandingsGet({ path, throwOnError: true }),
   ]);
 
-  const managementData = canManage
-    ? await Promise.all([
-        unwrap(
+  const managementData =
+    canManage && !dashboardMode
+      ? await Promise.all([
           OpenApi.getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet({
-            auth: accessToken,
-            path: { tournament_id: tournamentId },
+            path,
             throwOnError: true,
           }),
-        ),
-        unwrap(
           OpenApi.getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet({
-            auth: accessToken,
-            path: { tournament_id: tournamentId },
+            path,
             throwOnError: true,
           }),
-        ),
-      ])
-    : null;
-
-  const [availableInputsResponse, nextStageRankingsResponse] = managementData ?? [
-    { data: {} },
-    { data: {} },
-  ];
+        ])
+      : null;
 
   return {
+    availableInputs: managementData?.[0].data.data ?? {},
     canManage,
-    availableInputs: availableInputsResponse.data,
-    nextStageRankings: nextStageRankingsResponse.data,
-    players: playersResponse.data.players,
-    rankings: rankingsResponse.data,
-    stages,
-    standings: standingsResponse.data,
-    teams: teamsResponse.data.teams,
+    nextStageRankings: managementData?.[1].data.data ?? {},
+    players: players.data.data.players,
+    rankings: rankings.data.data,
+    // The Details pages show organizers exactly what everyone else sees.
+    stages: dashboardMode ? withoutDraftRounds(stages) : stages,
+    standings: standings.data.data,
+    teams: teams.data.data.teams,
     tournament,
   };
 }

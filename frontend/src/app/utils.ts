@@ -1,11 +1,11 @@
 import type { AxiosError } from 'axios';
 import { clsx, type ClassValue } from 'clsx';
+import { format, isThisYear, isToday, isValid, parseISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
+import { z } from 'zod';
 
 import * as OpenApi from '../openapi';
-import type { FlattenedMatch, Session } from './types';
-
-const SESSION_STORAGE_KEY = 'login';
+import type { FlattenedMatch } from './types';
 
 export function cx(...values: ClassValue[]) {
   return twMerge(clsx(values));
@@ -13,52 +13,6 @@ export function cx(...values: ClassValue[]) {
 
 export function isNumericIdentifier(value: string) {
   return /^\d+$/.test(value);
-}
-
-export function toNumber(value: FormDataEntryValue | null, fallback = 0) {
-  if (typeof value !== 'string') return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-export function toOptionalNumber(value: FormDataEntryValue | null) {
-  if (typeof value !== 'string' || value.trim() === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-export function toOptionalString(value: FormDataEntryValue | null) {
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
-}
-
-export function toCheckbox(value: FormDataEntryValue | null) {
-  return value === 'on';
-}
-
-export function readSession(): Session {
-  if (typeof window === 'undefined') return null;
-
-  const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as OpenApi.Token;
-    if (!parsed?.access_token) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export function writeSession(nextSession: Session) {
-  if (typeof window === 'undefined') return;
-
-  if (nextSession) {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
-    return;
-  }
-
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 export function getApiBaseUrl() {
@@ -95,21 +49,68 @@ export function getErrorMessage(error: unknown) {
 }
 
 export function formatDateTime(value: string | null) {
-  if (!value) return 'Unscheduled';
+  if (!value) return 'Not scheduled yet';
 
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
+  const date = parseISO(value);
+  if (!isValid(date)) return value;
+  return format(date, isThisYear(date) ? 'MMM d, p' : 'PP, p');
 }
+
+/** Like `formatDateTime`, but an event mostly runs on one day, so today's matches show the time. */
+export function formatMatchTime(value: string | null) {
+  const date = value ? parseISO(value) : null;
+  if (!date || !isValid(date) || !isToday(date)) return formatDateTime(value);
+  return `Today, ${format(date, 'p')}`;
+}
+
+/** The value of a `datetime-local` input for an ISO timestamp, in the viewer's time zone. */
+export function toDateTimeLocal(value: string) {
+  return format(parseISO(value), "yyyy-MM-dd'T'HH:mm");
+}
+
+/** A `datetime-local` value, sent as the UTC timestamp the API expects. */
+export const zLocalDateTime = z
+  .string()
+  .min(1, 'Pick a date and time')
+  .transform((value) => new Date(value).toISOString());
 
 export function normalizeDashboardEndpoint(value: unknown) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
+
+/**
+ * The tournament's Details page. Its custom link only resolves while the page is enabled, and the
+ * tournament id always does.
+ */
+export function publicTournamentPath(tournament: OpenApi.Tournament) {
+  const endpoint = tournament.dashboard_public
+    ? normalizeDashboardEndpoint(tournament.dashboard_endpoint)
+    : null;
+  return `/tournaments/${endpoint ?? tournament.id}/dashboard`;
+}
+
+export type TournamentPhase = 'finished' | 'running' | 'upcoming';
+
+export function tournamentPhase(tournament: OpenApi.Tournament, now = Date.now()): TournamentPhase {
+  if (tournament.status !== 'OPEN') return 'finished';
+  return new Date(tournament.start_time).getTime() > now ? 'upcoming' : 'running';
+}
+
+export const TOURNAMENT_PHASE_LABELS: Record<TournamentPhase, string> = {
+  finished: 'Finished',
+  running: 'Running',
+  upcoming: 'Upcoming',
+};
+
+export function tournamentDateLabel(tournament: OpenApi.Tournament) {
+  const date = formatDateTime(tournament.start_time);
+  return tournamentPhase(tournament) === 'upcoming' ? `Starts ${date}` : `Started ${date}`;
+}
+
+// Mirrors the backend: open tournaments are always public, archived ones only with this setting,
+// and the custom link only resolves with it.
+export const DETAILS_PAGE_DESCRIPTION =
+  'Tournaments are public until they are archived. With this on, the Details link works and the tournament stays public after it is archived.';
 
 type StageItemInput =
   | OpenApi.StageItemInputTentative
@@ -118,6 +119,29 @@ type StageItemInput =
 
 export function hasTeam(input: StageItemInput | null): input is OpenApi.StageItemInputFinal {
   return input != null && 'team' in input && input.team != null;
+}
+
+/** The team behind an input, once it is known. */
+export function inputTeamId(input: StageItemInput | null) {
+  return hasTeam(input) ? input.team_id : null;
+}
+
+export function involvesTeam(
+  match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
+  teamId: number,
+) {
+  return (
+    inputTeamId(match.stage_item_input1) === teamId ||
+    inputTeamId(match.stage_item_input2) === teamId
+  );
+}
+
+export function isBracket(stageItem: OpenApi.StageItemWithRounds) {
+  return stageItem.type === 'SINGLE_ELIMINATION';
+}
+
+export function sortTeamsByName<T extends { name: string }>(teams: T[]) {
+  return teams.toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
 export function isEmptySlot(input: StageItemInput) {
@@ -222,6 +246,34 @@ export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
   scheduled: 'Scheduled',
   waiting: 'Waiting for teams',
 };
+
+/**
+ * Only activating another stage changes `is_active`, so the last stage stays active after its
+ * final match and after the tournament is archived.
+ */
+export function isStageHappeningNow(
+  stage: OpenApi.StageWithStageItems,
+  tournament: OpenApi.Tournament,
+) {
+  if (tournament.status !== 'OPEN' || !stage.is_active) return false;
+  return stage.stage_items.some(
+    (stageItem) =>
+      // Swiss rounds are drawn one at a time, so a Swiss stage can always get another round.
+      stageItem.type === 'SWISS' ||
+      stageItem.rounds.some(
+        (round) => !round.is_draft && round.matches.some((match) => !isScored(match)),
+      ),
+  );
+}
+
+/** From matches sorted by time: the one being played, otherwise the earliest without a result. */
+export function nextMatch(entries: FlattenedMatch[]) {
+  return (
+    entries.find(({ match }) => matchStatus(match) === 'live') ??
+    entries.find(({ match }) => !isScored(match)) ??
+    null
+  );
+}
 
 export function compareMatchesByTime(left: FlattenedMatch, right: FlattenedMatch) {
   const leftTime = left.match.start_time

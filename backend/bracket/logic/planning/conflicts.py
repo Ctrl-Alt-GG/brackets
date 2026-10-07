@@ -1,6 +1,8 @@
 from collections import defaultdict
 
-from bracket.database import database
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.match import Match, MatchWithDetailsDefinitive
 from bracket.models.db.util import StageWithStageItems
 from bracket.utils.id_types import MatchId
@@ -78,19 +80,22 @@ def get_conflicting_matches(
 
 
 async def set_conflicts(
+    conn: AsyncConnection,
     conflicts_to_set: dict[MatchId, list[bool]],
     conflicts_to_clear: set[MatchId],
 ) -> None:
     for match_id, conflict in conflicts_to_set.items():
-        await database.execute(
-            """
-            UPDATE matches
-            SET
-                stage_item_input1_conflict = :conflict1_id,
-                stage_item_input2_conflict = :conflict2_id
-            WHERE id = :match_id
-            """,
-            values={
+        await conn.execute(
+            text(
+                """
+                UPDATE matches
+                SET
+                    stage_item_input1_conflict = :conflict1_id,
+                    stage_item_input2_conflict = :conflict2_id
+                WHERE id = :match_id
+                """
+            ),
+            {
                 "match_id": match_id,
                 "conflict1_id": conflict[0],
                 "conflict2_id": conflict[1],
@@ -98,18 +103,20 @@ async def set_conflicts(
         )
 
     for match_id in conflicts_to_clear:
-        await database.execute(
-            """
-            UPDATE matches
-            SET
-                stage_item_input1_conflict = false,
-                stage_item_input2_conflict = false
-            WHERE id = :match_id
-            """,
-            values={"match_id": match_id},
+        await conn.execute(
+            text(
+                """
+                UPDATE matches
+                SET
+                    stage_item_input1_conflict = false,
+                    stage_item_input2_conflict = false
+                WHERE id = :match_id
+                """
+            ),
+            {"match_id": match_id},
         )
 
 
-async def handle_conflicts(stages: list[StageWithStageItems]) -> None:
+async def handle_conflicts(conn: AsyncConnection, stages: list[StageWithStageItems]) -> None:
     conflicts_to_set, conflicts_to_clear = get_conflicting_matches(stages)
-    await set_conflicts(conflicts_to_set, conflicts_to_clear)
+    await set_conflicts(conn, conflicts_to_set, conflicts_to_clear)

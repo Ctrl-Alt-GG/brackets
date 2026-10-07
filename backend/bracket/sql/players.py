@@ -1,8 +1,9 @@
 from decimal import Decimal
 
 from heliclockter import datetime_utc
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
 from bracket.logic.ranking.statistics import START_ELO
 from bracket.models.db.player import Player, PlayerBody, PlayerToInsert
 from bracket.schema import players
@@ -12,6 +13,7 @@ from bracket.utils.types import dict_without_none
 
 
 async def get_all_players_in_tournament(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -34,9 +36,9 @@ async def get_all_players_in_tournament(
         {offset_filter}
         """
 
-    result = await database.fetch_all(
-        query=query,
-        values=dict_without_none(
+    result = await conn.execute(
+        text(query),
+        dict_without_none(
             {
                 "tournament_id": tournament_id,
                 "offset": pagination.offset if pagination is not None else None,
@@ -45,23 +47,26 @@ async def get_all_players_in_tournament(
         ),
     )
 
-    return [Player.model_validate(x) for x in result]
+    return [Player.model_validate(x._mapping) for x in result]
 
 
-async def get_player_by_id(player_id: PlayerId, tournament_id: TournamentId) -> Player | None:
+async def get_player_by_id(
+    conn: AsyncConnection, player_id: PlayerId, tournament_id: TournamentId
+) -> Player | None:
     query = """
         SELECT *
         FROM players
         WHERE id = :player_id
         AND tournament_id = :tournament_id
     """
-    result = await database.fetch_one(
-        query=query, values={"player_id": player_id, "tournament_id": tournament_id}
-    )
-    return Player.model_validate(result) if result is not None else None
+    result = (
+        await conn.execute(text(query), {"player_id": player_id, "tournament_id": tournament_id})
+    ).first()
+    return Player.model_validate(result._mapping) if result is not None else None
 
 
 async def get_player_count(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -73,25 +78,29 @@ async def get_player_count(
         WHERE players.tournament_id = :tournament_id
         {not_in_team_filter}
         """
-    return int(await database.fetch_val(query=query, values={"tournament_id": tournament_id}))
+    return int(await conn.scalar(text(query), {"tournament_id": tournament_id}) or 0)
 
 
-async def sql_delete_player(tournament_id: TournamentId, player_id: PlayerId) -> None:
+async def sql_delete_player(
+    conn: AsyncConnection, tournament_id: TournamentId, player_id: PlayerId
+) -> None:
     query = "DELETE FROM players WHERE id = :player_id AND tournament_id = :tournament_id"
-    await database.fetch_one(
-        query=query, values={"player_id": player_id, "tournament_id": tournament_id}
-    )
+    await conn.execute(text(query), {"player_id": player_id, "tournament_id": tournament_id})
 
 
-async def sql_delete_players_of_tournament(tournament_id: TournamentId) -> None:
+async def sql_delete_players_of_tournament(
+    conn: AsyncConnection, tournament_id: TournamentId
+) -> None:
     query = "DELETE FROM players WHERE tournament_id = :tournament_id"
-    await database.fetch_one(query=query, values={"tournament_id": tournament_id})
+    await conn.execute(text(query), {"tournament_id": tournament_id})
 
 
-async def insert_player(player_body: PlayerBody, tournament_id: TournamentId) -> None:
-    await database.execute(
-        query=players.insert(),
-        values=PlayerToInsert(
+async def insert_player(
+    conn: AsyncConnection, player_body: PlayerBody, tournament_id: TournamentId
+) -> None:
+    await conn.execute(
+        players.insert(),
+        PlayerToInsert(
             **player_body.model_dump(),
             created=datetime_utc.now(),
             tournament_id=tournament_id,

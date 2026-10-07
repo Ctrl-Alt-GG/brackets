@@ -2,6 +2,7 @@ import asyncio
 import socket
 from collections.abc import AsyncIterator, Sequence
 from contextlib import closing
+from http import HTTPMethod
 from typing import Final
 
 import aiohttp
@@ -10,7 +11,6 @@ from fastapi import FastAPI
 
 from bracket.app import app
 from bracket.routes.models import SuccessResponse
-from bracket.utils.http import HTTPMethod
 from bracket.utils.types import JsonDict
 from tests.integration_tests.models import AuthContext
 
@@ -83,15 +83,6 @@ async def send_request(
         ) as resp:
             response: JsonDict = await resp.json()
             return response
-
-
-async def send_request_raw(method: HTTPMethod, endpoint: str) -> str:
-    async with aiohttp.ClientSession() as session:
-        async with session.request(
-            method=str(method.value),
-            url=get_root_uvicorn_url() + endpoint,
-        ) as resp:
-            return await resp.text()
 
 
 async def send_auth_request(

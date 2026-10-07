@@ -1,7 +1,8 @@
 from collections.abc import Sequence
-from datetime import datetime
 
-from bracket.database import database
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.match import Match, MatchBody, MatchCreateBody, MatchTiming
 from bracket.utils.id_types import (
     MatchId,
@@ -12,15 +13,17 @@ from bracket.utils.id_types import (
 )
 
 
-async def sql_delete_match(match_id: MatchId) -> None:
+async def sql_delete_match(conn: AsyncConnection, match_id: MatchId) -> None:
     query = """
         DELETE FROM matches
         WHERE matches.id = :match_id
         """
-    await database.execute(query=query, values={"match_id": match_id})
+    await conn.execute(text(query), {"match_id": match_id})
 
 
-async def sql_delete_matches_for_stage_item_id(stage_item_id: StageItemId) -> None:
+async def sql_delete_matches_for_stage_item_id(
+    conn: AsyncConnection, stage_item_id: StageItemId
+) -> None:
     query = """
         DELETE FROM matches
         WHERE matches.id IN (
@@ -30,10 +33,10 @@ async def sql_delete_matches_for_stage_item_id(stage_item_id: StageItemId) -> No
             WHERE rounds.stage_item_id = :stage_item_id
         )
         """
-    await database.execute(query=query, values={"stage_item_id": stage_item_id})
+    await conn.execute(text(query), {"stage_item_id": stage_item_id})
 
 
-async def sql_create_match(match: MatchCreateBody) -> Match:
+async def sql_create_match(conn: AsyncConnection, match: MatchCreateBody) -> Match:
     query = """
         INSERT INTO matches (
             round_id,
@@ -69,15 +72,15 @@ async def sql_create_match(match: MatchCreateBody) -> Match:
         )
         RETURNING *
     """
-    result = await database.fetch_one(query=query, values=match.model_dump())
+    result = (await conn.execute(text(query), match.model_dump(exclude_none=False))).first()
 
     if result is None:
         raise ValueError("Could not create stage")
 
-    return Match.model_validate(dict(result._mapping))
+    return Match.model_validate(result._mapping)
 
 
-async def sql_update_match(match_id: MatchId, match: MatchBody) -> None:
+async def sql_update_match(conn: AsyncConnection, match_id: MatchId, match: MatchBody) -> None:
     query = """
         UPDATE matches
         SET round_id = :round_id,
@@ -86,13 +89,15 @@ async def sql_update_match(match_id: MatchId, match: MatchBody) -> None:
             custom_duration_minutes = :custom_duration_minutes,
             custom_margin_minutes = :custom_margin_minutes
         WHERE matches.id = :match_id
-        RETURNING *
         """
-    await database.execute(query=query, values={"match_id": match_id, **match.model_dump()})
+    await conn.execute(text(query), {"match_id": match_id, **match.model_dump(exclude_none=False)})
 
 
 async def sql_set_input_ids_for_match(
-    round_id: RoundId, match_id: MatchId, input_ids: list[StageItemInputId | None]
+    conn: AsyncConnection,
+    round_id: RoundId,
+    match_id: MatchId,
+    input_ids: list[StageItemInputId | None],
 ) -> None:
     query = """
         UPDATE matches
@@ -101,9 +106,9 @@ async def sql_set_input_ids_for_match(
         WHERE round_id = :round_id
         AND matches.id = :match_id
         """
-    await database.execute(
-        query=query,
-        values={
+    await conn.execute(
+        text(query),
+        {
             "round_id": round_id,
             "match_id": match_id,
             "input1_id": input_ids[0],
@@ -112,7 +117,7 @@ async def sql_set_input_ids_for_match(
     )
 
 
-async def sql_update_match_timings(timings: Sequence[MatchTiming]) -> None:
+async def sql_update_match_timings(conn: AsyncConnection, timings: Sequence[MatchTiming]) -> None:
     if len(timings) < 1:
         return
 
@@ -123,12 +128,12 @@ async def sql_update_match_timings(timings: Sequence[MatchTiming]) -> None:
             margin_minutes = :margin_minutes
         WHERE matches.id = :match_id
         """
-    await database.execute_many(
-        query=query,
-        values=[
+    await conn.execute(
+        text(query),
+        [
             {
                 "match_id": timing.match_id,
-                "start_time": datetime.fromisoformat(timing.start_time.isoformat()),
+                "start_time": timing.start_time,
                 "duration_minutes": timing.duration_minutes,
                 "margin_minutes": timing.margin_minutes,
             }
@@ -137,22 +142,22 @@ async def sql_update_match_timings(timings: Sequence[MatchTiming]) -> None:
     )
 
 
-async def sql_get_match(match_id: MatchId) -> Match:
+async def sql_get_match(conn: AsyncConnection, match_id: MatchId) -> Match:
     query = """
         SELECT *
         FROM matches
         WHERE matches.id = :match_id
         """
-    result = await database.fetch_one(query=query, values={"match_id": match_id})
+    result = (await conn.execute(text(query), {"match_id": match_id})).first()
 
     if result is None:
         raise ValueError("Could not create stage")
 
-    return Match.model_validate(dict(result._mapping))
+    return Match.model_validate(result._mapping)
 
 
 async def clear_scores_for_matches_in_stage_item(
-    tournament_id: TournamentId, stage_item_id: StageItemId
+    conn: AsyncConnection, tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> None:
     query = """
         UPDATE matches
@@ -165,10 +170,6 @@ async def clear_scores_for_matches_in_stage_item(
             AND stages.tournament_id = :tournament_id
             AND stage_items.id = :stage_item_id
         """
-    await database.execute(
-        query=query,
-        values={
-            "stage_item_id": stage_item_id,
-            "tournament_id": tournament_id,
-        },
+    await conn.execute(
+        text(query), {"stage_item_id": stage_item_id, "tournament_id": tournament_id}
     )

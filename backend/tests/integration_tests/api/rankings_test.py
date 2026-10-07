@@ -1,9 +1,10 @@
 from decimal import Decimal
+from http import HTTPMethod
 from unittest.mock import ANY
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
 from bracket.models.db.ranking import Ranking
 from bracket.schema import rankings
 from bracket.sql.rankings import (
@@ -12,7 +13,6 @@ from bracket.sql.rankings import (
 )
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_ranking, inserted_team
@@ -43,15 +43,15 @@ async def test_rankings_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_ranking(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     response = await send_tournament_request(HTTPMethod.POST, "rankings", auth_context, json={})
     assert response.get("success") is True, response
 
     tournament_id = auth_context.tournament.id
-    for ranking in await get_all_rankings_in_tournament(tournament_id):
+    for ranking in await get_all_rankings_in_tournament(conn, tournament_id):
         if ranking.position != 0:
-            await sql_delete_ranking(tournament_id, ranking.id)
+            await sql_delete_ranking(conn, tournament_id, ranking.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -74,7 +74,7 @@ async def test_delete_ranking(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_ranking(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "win_points": "7.5",
@@ -93,7 +93,7 @@ async def test_update_ranking(
                 HTTPMethod.PUT, f"rankings/{ranking_inserted.id}", auth_context, json=body
             )
             updated_ranking = await fetch_one_parsed_certain(
-                database,
+                conn,
                 Ranking,
                 query=rankings.select().where(rankings.c.id == ranking_inserted.id),
             )

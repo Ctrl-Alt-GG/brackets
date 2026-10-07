@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.logic.ranking.players import get_player_statistics
 from bracket.logic.ranking.statistics import PlayerStatistics
 from bracket.logic.subscriptions import check_requirement
@@ -36,6 +36,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/players", response_model=PlayersResponse)
 async def get_players(
+    conn: DbConnection,
     tournament_id: TournamentId,
     not_in_team: bool = False,
     pagination: PaginationPlayers = Depends(),
@@ -43,7 +44,7 @@ async def get_players(
 ) -> PlayersResponse:
     # The statistics follow from the match results, so they are worked out on every request
     # instead of being read from the players table.
-    statistics = await get_player_statistics(tournament_id)
+    statistics = await get_player_statistics(conn, tournament_id)
 
     def with_statistics(player: Player) -> Player:
         return player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
@@ -52,7 +53,7 @@ async def get_players(
         result = [
             with_statistics(player)
             for player in await get_all_players_in_tournament(
-                tournament_id, not_in_team=not_in_team
+                conn, tournament_id, not_in_team=not_in_team
             )
         ]
         result.sort(
@@ -64,36 +65,36 @@ async def get_players(
         result = [
             with_statistics(player)
             for player in await get_all_players_in_tournament(
-                tournament_id, not_in_team=not_in_team, pagination=pagination
+                conn, tournament_id, not_in_team=not_in_team, pagination=pagination
             )
         ]
 
     return PlayersResponse(
         data=PaginatedPlayers(
             players=result,
-            count=await get_player_count(tournament_id, not_in_team=not_in_team),
+            count=await get_player_count(conn, tournament_id, not_in_team=not_in_team),
         )
     )
 
 
 @router.put("/tournaments/{tournament_id}/players/{player_id}", response_model=SinglePlayerResponse)
 async def update_player_by_id(
+    conn: DbConnection,
     tournament_id: TournamentId,
     player_id: PlayerId,
     player_body: PlayerBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SinglePlayerResponse:
-    await database.execute(
-        query=players.update().where(
-            (players.c.id == player_id) & (players.c.tournament_id == tournament_id)
-        ),
-        values=player_body.model_dump(),
+    await conn.execute(
+        players.update()
+        .where((players.c.id == player_id) & (players.c.tournament_id == tournament_id))
+        .values(**player_body.model_dump())
     )
     return SinglePlayerResponse(
         data=assert_some(
             await fetch_one_parsed(
-                database,
+                conn,
                 Player,
                 players.select().where(
                     (players.c.id == player_id) & (players.c.tournament_id == tournament_id)
@@ -105,40 +106,45 @@ async def update_player_by_id(
 
 @router.delete("/tournaments/{tournament_id}/players/{player_id}", response_model=SuccessResponse)
 async def delete_player(
+    conn: DbConnection,
     tournament_id: TournamentId,
     player_id: PlayerId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    await sql_delete_player(tournament_id, player_id)
+    await sql_delete_player(conn, tournament_id, player_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/players", response_model=SuccessResponse)
 async def create_single_player(
+    conn: DbConnection,
     player_body: PlayerBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    existing_players = await get_all_players_in_tournament(tournament_id)
+    existing_players = await get_all_players_in_tournament(conn, tournament_id)
     check_requirement(existing_players, user, "max_players")
-    await insert_player(player_body, tournament_id)
+    await insert_player(conn, player_body, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/players_multi", response_model=SuccessResponse)
 async def create_multiple_players(
+    conn: DbConnection,
     player_body: PlayerMultiBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
     player_names = [player.strip() for player in player_body.names.split("\n") if len(player) > 0]
-    existing_players = await get_all_players_in_tournament(tournament_id)
+    existing_players = await get_all_players_in_tournament(conn, tournament_id)
     check_requirement(existing_players, user, "max_players", additions=len(player_names))
 
     for player_name in player_names:
-        await insert_player(PlayerBody(name=player_name, active=player_body.active), tournament_id)
+        await insert_player(
+            conn, PlayerBody(name=player_name, active=player_body.active), tournament_id
+        )
 
     return SuccessResponse()

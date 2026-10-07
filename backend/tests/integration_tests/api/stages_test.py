@@ -1,4 +1,7 @@
+from http import HTTPMethod
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.schema import rounds, stage_items, stages
 from bracket.sql.stages import get_full_tournament_details
@@ -10,7 +13,6 @@ from bracket.utils.dummy_records import (
     DUMMY_STAGE_ITEM1,
     DUMMY_TEAM1,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_request,
@@ -131,6 +133,7 @@ async def test_delete_stage(
 @pytest.mark.parametrize(("custom_duration_minutes",), [(25,), (None,)])
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_stage(
+    conn: AsyncConnection,
     startup_and_shutdown_uvicorn_server: None,
     auth_context: AuthContext,
     custom_duration_minutes: int | None,
@@ -155,7 +158,7 @@ async def test_update_stage(
             )
             == SUCCESS_RESPONSE
         )
-        [updated_stage] = await get_full_tournament_details(auth_context.tournament.id)
+        [updated_stage] = await get_full_tournament_details(conn, auth_context.tournament.id)
         assert len(updated_stage.stage_items) == 1
         assert updated_stage.name == body["name"]
         assert updated_stage.custom_duration_minutes == body["custom_duration_minutes"]

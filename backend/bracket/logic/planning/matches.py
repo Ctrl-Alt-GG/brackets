@@ -1,4 +1,5 @@
 from heliclockter import timedelta
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.models.db.match import MatchTiming
@@ -70,15 +71,15 @@ def plan_match_timings(
     return timings
 
 
-async def schedule_all_matches(tournament_id: TournamentId) -> None:
+async def schedule_all_matches(conn: AsyncConnection, tournament_id: TournamentId) -> None:
     """
     Update the start time of every match whose planned time has changed.
 
     Call this whenever rounds or matches are added or removed, or when the tournament's start
     time or any match duration or margin changes.
     """
-    tournament = await sql_get_tournament(tournament_id)
-    stages = await get_full_tournament_details(tournament_id)
+    tournament = await sql_get_tournament(conn, tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
     matches = {
         match.id: match
         for stage in stages
@@ -100,5 +101,5 @@ async def schedule_all_matches(tournament_id: TournamentId) -> None:
     if len(changed_timings) < 1:
         return
 
-    await sql_update_match_timings(changed_timings)
-    await handle_conflicts(await get_full_tournament_details(tournament_id))
+    await sql_update_match_timings(conn, changed_timings)
+    await handle_conflicts(conn, await get_full_tournament_details(conn, tournament_id))

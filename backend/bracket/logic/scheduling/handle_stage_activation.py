@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from fastapi import HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 
 from bracket.logic.ranking.calculation import (
@@ -55,6 +56,7 @@ def determine_team_id(
 
 
 async def get_team_update_for_input(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     stage_item_input: StageItemInputTentative,
     stage_item_x_team_rankings: StageItemXTeamRanking,
@@ -65,7 +67,7 @@ async def get_team_update_for_input(
         stage_item_x_team_rankings,
     )
     target_stage_item_input = await get_stage_item_input_by_id(
-        tournament_id, target_stage_item_input_id
+        conn, tournament_id, target_stage_item_input_id
     )
     if isinstance(target_stage_item_input, StageItemInputEmpty):
         raise HTTPException(
@@ -82,14 +84,14 @@ async def get_team_update_for_input(
 
 
 async def get_updates_to_inputs_in_activated_stage(
-    tournament_id: TournamentId, stage_id: StageId
+    conn: AsyncConnection, tournament_id: TournamentId, stage_id: StageId
 ) -> dict[StageItemId, list[StageItemInputUpdate]]:
     """
     Gets the team_id updates for stage item inputs of the newly activated stage.
     """
-    stages = await get_full_tournament_details(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
     team_rankings_per_stage_item = await get_team_rankings_lookup_for_tournament(
-        tournament_id, stages
+        conn, tournament_id, stages
     )
     activated_stage = next((stage for stage in stages if stage.id == stage_id), None)
     assert activated_stage
@@ -101,34 +103,40 @@ async def get_updates_to_inputs_in_activated_stage(
             if isinstance(stage_item_input, StageItemInputTentative):
                 result[stage_item.id].append(
                     await get_team_update_for_input(
-                        tournament_id, stage_item_input, team_rankings_per_stage_item
+                        conn, tournament_id, stage_item_input, team_rankings_per_stage_item
                     )
                 )
 
     return dict(result)
 
 
-async def update_matches_in_activated_stage(tournament_id: TournamentId, stage_id: StageId) -> None:
+async def update_matches_in_activated_stage(
+    conn: AsyncConnection, tournament_id: TournamentId, stage_id: StageId
+) -> None:
     """
     Sets the team_id for stage item inputs of the newly activated stage.
     """
-    updates_per_stage_item = await get_updates_to_inputs_in_activated_stage(tournament_id, stage_id)
+    updates_per_stage_item = await get_updates_to_inputs_in_activated_stage(
+        conn, tournament_id, stage_id
+    )
     for stage_item_updates in updates_per_stage_item.values():
         for update in stage_item_updates:
             await sql_set_team_id_for_stage_item_input(
-                tournament_id, update.stage_item_input.id, update.team.id
+                conn, tournament_id, update.stage_item_input.id, update.team.id
             )
 
 
 async def update_matches_in_deactivated_stage(
-    tournament_id: TournamentId, deactivated_stage: StageWithStageItems
+    conn: AsyncConnection, tournament_id: TournamentId, deactivated_stage: StageWithStageItems
 ) -> None:
     """
     Unsets the team_id for stage item inputs of the newly deactivated stage.
     """
     for stage_item in deactivated_stage.stage_items:
-        await clear_scores_for_matches_in_stage_item(tournament_id, stage_item.id)
+        await clear_scores_for_matches_in_stage_item(conn, tournament_id, stage_item.id)
 
         for stage_item_input in stage_item.inputs:
             if stage_item_input.winner_from_stage_item_id is not None:
-                await sql_set_team_id_for_stage_item_input(tournament_id, stage_item_input.id, None)
+                await sql_set_team_id_for_stage_item_input(
+                    conn, tournament_id, stage_item_input.id, None
+                )

@@ -90,8 +90,6 @@ import type {
   GetMeApiUsersUserIdGetData,
   GetMeApiUsersUserIdGetErrors,
   GetMeApiUsersUserIdGetResponses,
-  GetMetricsApiMetricsGetData,
-  GetMetricsApiMetricsGetResponses,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetErrors,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponses,
@@ -295,18 +293,6 @@ export const updateClubApiClubsClubIdPut = <ThrowOnError extends boolean = false
       'Content-Type': 'application/json',
       ...options.headers,
     },
-  });
-
-/**
- * Get Metrics
- */
-export const getMetricsApiMetricsGet = <ThrowOnError extends boolean = false>(
-  options?: Options<GetMetricsApiMetricsGetData, ThrowOnError>,
-): RequestResult<GetMetricsApiMetricsGetResponses, unknown, ThrowOnError> =>
-  (options?.client ?? client).get<GetMetricsApiMetricsGetResponses, unknown, ThrowOnError>({
-    responseType: 'text',
-    url: '/api/metrics',
-    ...options,
   });
 
 /**

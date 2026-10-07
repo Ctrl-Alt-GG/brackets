@@ -3045,27 +3045,6 @@
         ]
       }
     },
-    "/metrics": {
-      "get": {
-        "operationId": "get_metrics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Metrics",
-        "tags": [
-          "Internals"
-        ]
-      }
-    },
     "/ping": {
       "get": {
         "operationId": "ping_ping_get",

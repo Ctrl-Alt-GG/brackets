@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
+from http import HTTPMethod
 from unittest.mock import Mock, patch
 
 import jwt
@@ -8,7 +9,6 @@ import pytest
 from bracket.config import config
 from bracket.models.db.account import UserAccountType
 from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
-from bracket.utils.http import HTTPMethod
 from bracket.utils.types import JsonDict
 from tests.integration_tests.api.shared import send_auth_request, send_request
 from tests.integration_tests.mocks import MOCK_NOW, get_mock_token, get_mock_user

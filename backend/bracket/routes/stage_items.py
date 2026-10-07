@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from bracket.config import config
+from bracket.database import DbConnection
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.ranking.elimination import (
@@ -43,6 +44,7 @@ router = APIRouter(prefix=config.api_prefix)
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def delete_stage_item(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -51,26 +53,27 @@ async def delete_stage_item(
     with check_foreign_key_violation(
         {ForeignKey.matches_stage_item_input1_id_fkey, ForeignKey.matches_stage_item_input2_id_fkey}
     ):
-        await sql_delete_stage_item_with_foreign_keys(stage_item_id)
-    await schedule_all_matches(tournament_id)
+        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_id)
+    await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stage_items", response_model=SuccessResponse)
 async def create_stage_item(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_body: StageItemCreateBody,
     user: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> SuccessResponse:
-    await check_foreign_keys_belong_to_tournament(stage_body, tournament_id)
+    await check_foreign_keys_belong_to_tournament(conn, stage_body, tournament_id)
 
-    stages = await get_full_tournament_details(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
     existing_stage_items = [stage_item for stage in stages for stage_item in stage.stage_items]
     check_requirement(existing_stage_items, user, "max_stage_items")
 
-    stage_item = await sql_create_stage_item_with_empty_inputs(tournament_id, stage_body)
-    await build_matches_for_stage_item(stage_item, tournament_id)
-    await schedule_all_matches(tournament_id)
+    stage_item = await sql_create_stage_item_with_empty_inputs(conn, tournament_id, stage_body)
+    await build_matches_for_stage_item(conn, stage_item, tournament_id)
+    await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 
 
@@ -78,6 +81,7 @@ async def create_stage_item(
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def update_stage_item(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_body: StageItemUpdateBody,
@@ -85,8 +89,8 @@ async def update_stage_item(
     __: Tournament = Depends(disallow_archived_tournament),
     stage_item: StageItemWithRounds = Depends(stage_item_dependency),
 ) -> SuccessResponse:
-    await sql_update_stage_item_name(stage_item.id, stage_item_body.name)
-    await recalculate_ranking_for_stage_item(tournament_id, stage_item)
+    await sql_update_stage_item_name(conn, stage_item.id, stage_item_body.name)
+    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
     if stage_item.type == StageType.SINGLE_ELIMINATION:
-        await update_inputs_in_complete_elimination_stage_item(stage_item)
+        await update_inputs_in_complete_elimination_stage_item(conn, stage_item)
     return SuccessResponse()

@@ -1,6 +1,8 @@
 from contextlib import AsyncExitStack
+from http import HTTPMethod
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.match import MatchWithDetailsDefinitive
@@ -12,7 +14,6 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
 from bracket.sql.stage_items import get_stage_item, sql_create_stage_item_with_inputs
 from bracket.utils.dummy_records import DUMMY_PLAYER1, DUMMY_STAGE1, DUMMY_TEAM1
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_request,
@@ -24,7 +25,7 @@ from tests.integration_tests.sql import inserted_player_in_team, inserted_stage,
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_standings_and_player_statistics(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     tournament_id = auth_context.tournament.id
     async with AsyncExitStack() as stack:
@@ -53,6 +54,7 @@ async def test_standings_and_player_statistics(
             for index, team in enumerate(teams, start=1)
         ]
         stage_item = await sql_create_stage_item_with_inputs(
+            conn,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage.id,
@@ -66,15 +68,15 @@ async def test_standings_and_player_statistics(
                 ],
             ),
         )
-        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, stage_item.id)
-        await build_matches_for_stage_item(stage_item, tournament_id)
+        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, conn, stage_item.id)
+        await build_matches_for_stage_item(conn, stage_item, tournament_id)
 
         # Team 1 beats team 2 2-1, team 2 beats team 3 3-0, and team 1 vs team 3 isn't played.
         scores = {
             frozenset((teams[0].id, teams[1].id)): {teams[0].id: 2, teams[1].id: 1},
             frozenset((teams[1].id, teams[2].id)): {teams[1].id: 3, teams[2].id: 0},
         }
-        for round_ in (await get_stage_item(tournament_id, stage_item.id)).rounds:
+        for round_ in (await get_stage_item(conn, tournament_id, stage_item.id)).rounds:
             for match in round_.matches:
                 assert isinstance(match, MatchWithDetailsDefinitive)
                 input1, input2 = match.stage_item_input1, match.stage_item_input2
@@ -98,7 +100,7 @@ async def test_standings_and_player_statistics(
 
         input_ids = {
             input_.team_id: input_.id
-            for input_ in (await get_stage_item(tournament_id, stage_item.id)).inputs
+            for input_ in (await get_stage_item(conn, tournament_id, stage_item.id)).inputs
         }
         standings = await send_request(HTTPMethod.GET, f"tournaments/{tournament_id}/standings")
         player_response = await send_tournament_request(

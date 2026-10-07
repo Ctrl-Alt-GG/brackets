@@ -1,16 +1,17 @@
+from http import HTTPMethod
+
 import aiofiles
 import aiofiles.os
 import aiohttp
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
 from bracket.logic.tournaments import sql_delete_tournament_completely
 from bracket.models.db.tournament import Tournament, TournamentStatus
 from bracket.schema import tournaments
 from bracket.sql.tournaments import sql_delete_tournament, sql_get_tournament_by_endpoint_name
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
-from bracket.utils.http import HTTPMethod
 from bracket.utils.types import assert_some
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
@@ -72,7 +73,7 @@ async def test_tournament_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_tournament(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     dashboard_endpoint = "some-new-endpoint"
     body = {
@@ -91,8 +92,8 @@ async def test_create_tournament(
     )
 
     # Cleanup
-    tournament = assert_some(await sql_get_tournament_by_endpoint_name(dashboard_endpoint))
-    await sql_delete_tournament_completely(tournament.id)
+    tournament = assert_some(await sql_get_tournament_by_endpoint_name(conn, dashboard_endpoint))
+    await sql_delete_tournament_completely(conn, tournament.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -110,13 +111,13 @@ async def test_create_tournament_duplicate_dashboard_endpoint(
         "margin_minutes": 3,
     }
     assert await send_auth_request(HTTPMethod.POST, "tournaments", auth_context, json=body) == {
-        "detail": "This dashboard link is already taken"
+        "detail": "This Details link is already taken"
     }
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_tournament(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "name": "Some new name",
@@ -131,7 +132,7 @@ async def test_update_tournament(
         == SUCCESS_RESPONSE
     )
     updated_tournament = await fetch_one_parsed_certain(
-        database,
+        conn,
         Tournament,
         query=tournaments.select().where(tournaments.c.id == auth_context.tournament.id),
     )
@@ -141,7 +142,7 @@ async def test_update_tournament(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_archive_and_unarchive_tournament(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     # A tournament of its own, because other tests change the shared one's dashboard setting.
     async with inserted_tournament(
@@ -158,7 +159,7 @@ async def test_archive_and_unarchive_tournament(
             )
             == SUCCESS_RESPONSE
         )
-        updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
+        updated_tournament = await fetch_one_parsed_certain(conn, Tournament, query)
         assert updated_tournament.status is TournamentStatus.ARCHIVED
         # A public tournament stays public once archived.
         assert updated_tournament.dashboard_public is True
@@ -176,14 +177,14 @@ async def test_archive_and_unarchive_tournament(
             )
             == SUCCESS_RESPONSE
         )
-        updated_tournament = await fetch_one_parsed_certain(database, Tournament, query)
+        updated_tournament = await fetch_one_parsed_certain(conn, Tournament, query)
         assert updated_tournament.status is TournamentStatus.OPEN
         assert updated_tournament.dashboard_public is True
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_delete_tournament(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with inserted_tournament(
         DUMMY_TOURNAMENT.model_copy(
@@ -199,7 +200,7 @@ async def test_delete_tournament(
             == SUCCESS_RESPONSE
         )
 
-    await sql_delete_tournament(tournament_inserted.id)
+    await sql_delete_tournament(conn, tournament_inserted.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")

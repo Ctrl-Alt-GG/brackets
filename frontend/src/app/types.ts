@@ -19,26 +19,25 @@ declare global {
   }
 }
 
-export type Session = (OpenApi.Token & { name?: string }) | null;
-export type FlashTone = 'success' | 'error';
-export type FlashMessage = { tone: FlashTone; text: string } | null;
-export type AuthFeatures = {
-  passwordResetEnabled: boolean;
-  userRegistrationEnabled: boolean;
-};
+export type Session = OpenApi.Token | null;
+
 export type TournamentSection =
+  // The workspace, where organizers run the tournament.
   | 'overview'
   | 'players'
   | 'teams'
   | 'schedule'
   | 'rankings'
   | 'settings'
-  | 'results'
   | 'stages'
+  // The Details pages, which everyone can follow.
   | 'dashboard'
-  | 'dashboard-bracket'
-  | 'dashboard-standings'
   | 'dashboard-schedule'
+  | 'dashboard-standings'
+  | 'dashboard-bracket'
+  | 'dashboard-teams'
+  | 'dashboard-team'
+  | 'dashboard-present-schedule'
   | 'dashboard-present-standings';
 
 export type TournamentBundle = {

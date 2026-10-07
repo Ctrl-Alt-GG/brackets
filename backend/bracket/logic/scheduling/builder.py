@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from heliclockter import datetime_utc
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.scheduling.elimination import (
@@ -26,7 +27,7 @@ from bracket.utils.id_types import StageId, StageItemId, TournamentId
 
 
 async def create_rounds_for_new_stage_item(
-    tournament_id: TournamentId, stage_item: StageItem
+    conn: AsyncConnection, tournament_id: TournamentId, stage_item: StageItem
 ) -> None:
     rounds_count: int
     match stage_item.type:
@@ -41,24 +42,27 @@ async def create_rounds_for_new_stage_item(
 
     for _ in range(rounds_count):
         await sql_create_round(
+            conn,
             RoundInsertable(
                 created=datetime_utc.now(),
                 is_draft=False,
                 stage_item_id=stage_item.id,
-                name=await get_next_round_name(tournament_id, stage_item.id),
+                name=await get_next_round_name(conn, tournament_id, stage_item.id),
             ),
         )
 
 
-async def build_matches_for_stage_item(stage_item: StageItem, tournament_id: TournamentId) -> None:
-    await create_rounds_for_new_stage_item(tournament_id, stage_item)
-    stage_item_with_rounds = await get_stage_item(tournament_id, stage_item.id)
+async def build_matches_for_stage_item(
+    conn: AsyncConnection, stage_item: StageItem, tournament_id: TournamentId
+) -> None:
+    await create_rounds_for_new_stage_item(conn, tournament_id, stage_item)
+    stage_item_with_rounds = await get_stage_item(conn, tournament_id, stage_item.id)
 
     match stage_item.type:
         case StageType.ROUND_ROBIN:
-            await build_round_robin_stage_item(tournament_id, stage_item_with_rounds)
+            await build_round_robin_stage_item(conn, tournament_id, stage_item_with_rounds)
         case StageType.SINGLE_ELIMINATION:
-            await build_single_elimination_stage_item(tournament_id, stage_item_with_rounds)
+            await build_single_elimination_stage_item(conn, tournament_id, stage_item_with_rounds)
         case StageType.SWISS:
             return None
 
@@ -67,7 +71,7 @@ async def build_matches_for_stage_item(stage_item: StageItem, tournament_id: Tou
                 400, f"Cannot automatically create matches for stage type {stage_item.type}"
             )
 
-    await recalculate_ranking_for_stage_item(tournament_id, stage_item_with_rounds)
+    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item_with_rounds)
 
 
 def determine_available_inputs(

@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 
 from bracket.logic.scheduling.ladder_teams import get_possible_upcoming_matches_for_swiss
@@ -10,10 +11,11 @@ from bracket.utils.id_types import StageItemId, TournamentId
 
 
 async def get_draft_round_in_stage_item(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
 ) -> tuple[RoundWithMatches, StageItemWithRounds]:
-    [stage] = await get_full_tournament_details(tournament_id, stage_item_ids={stage_item_id})
+    [stage] = await get_full_tournament_details(conn, tournament_id, stage_item_ids={stage_item_id})
     draft_round, stage_item = next(
         (
             (round_, stage_item)

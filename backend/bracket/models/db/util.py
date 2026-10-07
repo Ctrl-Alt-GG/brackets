@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from pydantic import field_validator, model_validator
@@ -52,11 +51,8 @@ class StageWithStageItems(Stage):
 
     @field_validator("stage_items", mode="before")
     @staticmethod
-    def handle_stage_items(values: list[StageItemWithRounds]) -> list[StageItemWithRounds]:
-        if isinstance(values, str):
-            values_json = json.loads(values)
-            if values_json == [None]:
-                return []
-            return values_json
-
-        return values
+    def handle_stage_items(
+        values: list[StageItemWithRounds | None],
+    ) -> list[StageItemWithRounds | None]:
+        # Stage items are aggregated with a LEFT JOIN, so a stage without any gives [null].
+        return [] if values == [None] else values

@@ -3,11 +3,12 @@ import csv
 import aiofiles.os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from heliclockter import datetime_utc
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 from starlette.responses import FileResponse
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.logic.subscriptions import check_requirement
 from bracket.logic.teams import get_team_logo_path
 from bracket.models.db.player import PlayerBody
@@ -56,63 +57,63 @@ router = APIRouter(prefix=config.api_prefix)
 
 
 async def update_team_members(
-    team_id: TeamId, tournament_id: TournamentId, player_ids: set[PlayerId]
+    conn: AsyncConnection, team_id: TeamId, tournament_id: TournamentId, player_ids: set[PlayerId]
 ) -> None:
-    [team] = await get_teams_with_members(tournament_id, team_id=team_id)
+    [team] = await get_teams_with_members(conn, tournament_id, team_id=team_id)
 
     # Add members to the team
     for player_id in player_ids:
         if player_id not in team.player_ids:
-            await database.execute(
-                query=players_x_teams.insert(),
-                values={"team_id": team_id, "player_id": player_id},
+            await conn.execute(
+                players_x_teams.insert().values(team_id=team_id, player_id=player_id)
             )
 
     # Remove old members from the team
-    await database.execute(
-        query=players_x_teams.delete().where(
-            (players_x_teams.c.player_id.not_in(player_ids))  # type: ignore[attr-defined]
+    await conn.execute(
+        players_x_teams.delete().where(
+            (players_x_teams.c.player_id.not_in(player_ids))
             & (players_x_teams.c.team_id == team_id)
-        ),
+        )
     )
 
 
 @router.get("/tournaments/{tournament_id}/teams", response_model=TeamsWithPlayersResponse)
 async def get_teams(
+    conn: DbConnection,
     tournament_id: TournamentId,
     pagination: PaginationTeams = Depends(),
     _: UserPublic = Depends(user_authenticated_or_public_dashboard),
 ) -> TeamsWithPlayersResponse:
     return TeamsWithPlayersResponse(
         data=PaginatedTeams(
-            teams=await get_teams_with_members(tournament_id, pagination=pagination),
-            count=await get_team_count(tournament_id),
+            teams=await get_teams_with_members(conn, tournament_id, pagination=pagination),
+            count=await get_team_count(conn, tournament_id),
         )
     )
 
 
 @router.put("/tournaments/{tournament_id}/teams/{team_id}", response_model=SingleTeamResponse)
 async def update_team_by_id(
+    conn: DbConnection,
     tournament_id: TournamentId,
     team_body: TeamBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     team: Team = Depends(team_dependency),
 ) -> SingleTeamResponse:
-    await check_foreign_keys_belong_to_tournament(team_body, tournament_id)
+    await check_foreign_keys_belong_to_tournament(conn, team_body, tournament_id)
 
-    await database.execute(
-        query=teams.update().where(
-            (teams.c.id == team.id) & (teams.c.tournament_id == tournament_id)
-        ),
-        values=team_body.model_dump(exclude={"player_ids"}),
+    await conn.execute(
+        teams.update()
+        .where((teams.c.id == team.id) & (teams.c.tournament_id == tournament_id))
+        .values(**team_body.model_dump(exclude={"player_ids"}))
     )
-    await update_team_members(team.id, tournament_id, team_body.player_ids)
+    await update_team_members(conn, team.id, tournament_id, team_body.player_ids)
 
     return SingleTeamResponse(
         data=assert_some(
             await fetch_one_parsed(
-                database,
+                conn,
                 Team,
                 teams.select().where(
                     (teams.c.id == team.id) & (teams.c.tournament_id == tournament_id)
@@ -124,13 +125,14 @@ async def update_team_by_id(
 
 @router.post("/tournaments/{tournament_id}/teams/{team_id}/logo", response_model=SingleTeamResponse)
 async def update_team_logo(
+    conn: DbConnection,
     tournament_id: TournamentId,
     file: UploadFile | None = None,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     team: Team = Depends(team_dependency),
 ) -> SingleTeamResponse:
-    old_logo_path = await get_team_logo_path(tournament_id, team.id)
+    old_logo_path = await get_team_logo_path(conn, tournament_id, team.id)
     filename: str | None = None
 
     if file:
@@ -142,21 +144,19 @@ async def update_team_logo(
         except OSError as exc:
             logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
 
-    await database.execute(
-        teams.update().where(teams.c.id == team.id),
-        values={"logo_path": filename},
-    )
-    return SingleTeamResponse(data=assert_some(await get_team_by_id(team.id, tournament_id)))
+    await conn.execute(teams.update().where(teams.c.id == team.id).values(logo_path=filename))
+    return SingleTeamResponse(data=assert_some(await get_team_by_id(conn, team.id, tournament_id)))
 
 
 @router.get("/tournaments/{tournament_id}/teams/{team_id}/logo")
 async def get_team_logo(
+    conn: DbConnection,
     tournament_id: TournamentId,
     team_id: TeamId,
     _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
 ) -> FileResponse:
-    team = assert_some(await get_team_by_id(team_id, tournament_id))
-    logo_path = await get_team_logo_path(tournament_id, team_id)
+    team = assert_some(await get_team_by_id(conn, team_id, tournament_id))
+    logo_path = await get_team_logo_path(conn, tournament_id, team_id)
     if team.logo_path is None or logo_path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
 
@@ -165,6 +165,7 @@ async def get_team_logo(
 
 @router.delete("/tournaments/{tournament_id}/teams/{team_id}", response_model=SuccessResponse)
 async def delete_team(
+    conn: DbConnection,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
@@ -177,40 +178,47 @@ async def delete_team(
             ForeignKey.matches_stage_item_input2_id_fkey,
         }
     ):
-        await sql_delete_team(tournament_id, team.id)
+        await sql_delete_team(conn, tournament_id, team.id)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/teams", response_model=SingleTeamResponse)
 async def create_team(
+    conn: DbConnection,
     team_to_insert: TeamBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SingleTeamResponse:
-    await check_foreign_keys_belong_to_tournament(team_to_insert, tournament_id)
+    await check_foreign_keys_belong_to_tournament(conn, team_to_insert, tournament_id)
 
-    existing_teams = await get_teams_with_members(tournament_id)
+    existing_teams = await get_teams_with_members(conn, tournament_id)
     check_requirement(existing_teams, user, "max_teams")
 
-    last_record_id = await database.execute(
-        query=teams.insert(),
-        values=TeamInsertable(
-            **team_to_insert.model_dump(exclude={"player_ids"}),
-            created=datetime_utc.now(),
-            tournament_id=tournament_id,
-        ).model_dump(),
+    last_record_id = TeamId(
+        await conn.scalar(
+            teams.insert()
+            .values(
+                **TeamInsertable(
+                    **team_to_insert.model_dump(exclude={"player_ids"}),
+                    created=datetime_utc.now(),
+                    tournament_id=tournament_id,
+                ).model_dump()
+            )
+            .returning(teams.c.id)
+        )
     )
-    await update_team_members(last_record_id, tournament_id, team_to_insert.player_ids)
+    await update_team_members(conn, last_record_id, tournament_id, team_to_insert.player_ids)
 
-    team_result = await get_team_by_id(last_record_id, tournament_id)
+    team_result = await get_team_by_id(conn, last_record_id, tournament_id)
     assert team_result is not None
     return SingleTeamResponse(data=team_result)
 
 
 @router.post("/tournaments/{tournament_id}/teams_multi", response_model=SuccessResponse)
 async def create_multiple_teams(
+    conn: DbConnection,
     team_body: TeamMultiBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
@@ -224,25 +232,25 @@ async def create_multiple_teams(
     ]
     players = [player for row in teams_and_players for player in row[1]]
 
-    existing_teams = await get_teams_with_members(tournament_id)
-    existing_players = await get_all_players_in_tournament(tournament_id)
+    existing_teams = await get_teams_with_members(conn, tournament_id)
+    existing_players = await get_all_players_in_tournament(conn, tournament_id)
 
     check_requirement(existing_teams, user, "max_teams", additions=len(reader))
     check_requirement(existing_players, user, "max_players", additions=len(players))
 
-    async with database.transaction():
-        for team_name, players in teams_and_players:
-            await database.execute(
-                query=teams.insert(),
-                values=TeamInsertable(
+    for team_name, players in teams_and_players:
+        await conn.execute(
+            teams.insert().values(
+                **TeamInsertable(
                     name=team_name,
                     active=team_body.active,
                     created=datetime_utc.now(),
                     tournament_id=tournament_id,
-                ).model_dump(),
+                ).model_dump()
             )
-            for player in players:
-                player_body = PlayerBody(name=player, active=team_body.active)
-                await insert_player(player_body, tournament_id)
+        )
+        for player in players:
+            player_body = PlayerBody(name=player, active=team_body.active)
+            await insert_player(conn, player_body, tournament_id)
 
     return SuccessResponse()

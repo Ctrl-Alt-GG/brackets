@@ -5,7 +5,7 @@ from typing import cast
 from pydantic import BaseModel
 from sqlalchemy import Table
 
-from bracket.database import database
+from bracket.database import engine
 from bracket.models.db.club import Club, ClubInsertable
 from bracket.models.db.match import Match, MatchInsertable
 from bracket.models.db.player import Player, PlayerInsertable
@@ -48,20 +48,22 @@ from tests.integration_tests.models import AuthContext
 
 
 async def assert_row_count_and_clear(table: Table, expected_rows: int) -> None:
-    # assert len(await database.fetch_all(query=table.select())) == expected_rows
-    await database.execute(query=table.delete())
+    async with engine.begin() as conn:
+        await conn.execute(table.delete())
 
 
 @asynccontextmanager
 async def inserted_generic[BaseModelT: BaseModel](
     data_model: BaseModelT, table: Table, return_type: type[BaseModelT]
 ) -> AsyncIterator[BaseModelT]:
-    last_record_id, row_inserted = await insert_generic(database, data_model, table, return_type)
+    async with engine.begin() as conn:
+        last_record_id, row_inserted = await insert_generic(conn, data_model, table, return_type)
 
     try:
         yield row_inserted
     finally:
-        await database.execute(query=table.delete().where(table.c.id == last_record_id))
+        async with engine.begin() as conn:
+            await conn.execute(table.delete().where(table.c.id == last_record_id))
 
 
 @asynccontextmanager
@@ -135,9 +137,10 @@ async def inserted_stage_item_input(
         StageItemInputBase,  # pyrefly: ignore[bad-argument-type]
     ) as row_inserted:
         if stage_item_input.team_id is not None:
-            [team] = await get_teams_by_id(
-                {stage_item_input.team_id}, stage_item_input.tournament_id
-            )
+            async with engine.begin() as conn:
+                [team] = await get_teams_by_id(
+                    conn, {stage_item_input.team_id}, stage_item_input.tournament_id
+                )
             yield StageItemInputFinal.model_validate(
                 row_inserted.model_dump() | {"team": team, "team_id": team.id}
             )

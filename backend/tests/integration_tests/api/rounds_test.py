@@ -1,6 +1,8 @@
-import pytest
+from http import HTTPMethod
 
-from bracket.database import database
+import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.round import Round
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputInsertable
@@ -14,7 +16,6 @@ from bracket.utils.dummy_records import (
     DUMMY_TEAM1,
     DUMMY_TEAM2,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
@@ -29,7 +30,7 @@ from tests.integration_tests.sql import (
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_round(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_team(
@@ -76,7 +77,7 @@ async def test_create_round(
             )
             == SUCCESS_RESPONSE
         )
-        stage_item = await get_stage_item(auth_context.tournament.id, stage_item_inserted.id)
+        stage_item = await get_stage_item(conn, auth_context.tournament.id, stage_item_inserted.id)
         [round_] = stage_item.rounds
         assert round_.is_draft
         assert len(round_.matches) == 1
@@ -113,7 +114,7 @@ async def test_delete_round(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_round(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Some new name", "is_draft": True}
     async with (
@@ -137,7 +138,7 @@ async def test_update_round(
             == SUCCESS_RESPONSE
         )
         updated_round = await fetch_one_parsed_certain(
-            database, Round, query=rounds.select().where(rounds.c.id == round_inserted.id)
+            conn, Round, query=rounds.select().where(rounds.c.id == round_inserted.id)
         )
         assert updated_round.name == body["name"]
         assert updated_round.is_draft == body["is_draft"]

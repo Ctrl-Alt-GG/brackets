@@ -1,8 +1,9 @@
 from decimal import Decimal
+from http import HTTPMethod
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
 from bracket.models.db.match import Match
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
@@ -24,7 +25,6 @@ from bracket.utils.dummy_records import (
     DUMMY_TEAM3,
     DUMMY_TOURNAMENT,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
@@ -152,7 +152,7 @@ async def test_delete_match(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_match(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -214,7 +214,7 @@ async def test_update_match(
             == SUCCESS_RESPONSE
         )
         updated_match = await fetch_one_parsed_certain(
-            database,
+            conn,
             Match,
             query=matches.select().where(matches.c.id == match_inserted.id),
         )
@@ -226,7 +226,7 @@ async def test_update_match(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_endpoint_custom_duration_margin(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -290,7 +290,7 @@ async def test_update_endpoint_custom_duration_margin(
             == SUCCESS_RESPONSE
         )
         updated_match = await fetch_one_parsed_certain(
-            database,
+            conn,
             Match,
             query=matches.select().where(matches.c.id == match_inserted.id),
         )
@@ -518,7 +518,7 @@ async def test_create_match_for_team_already_playing_in_round(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_match_of_other_tournament(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_tournament(
@@ -554,6 +554,6 @@ async def test_update_match_of_other_tournament(
         assert response == {"detail": f"Could not find match with id {match.id}"}
 
         unchanged_match = await fetch_one_parsed_certain(
-            database, Match, query=matches.select().where(matches.c.id == match.id)
+            conn, Match, query=matches.select().where(matches.c.id == match.id)
         )
         assert unchanged_match.stage_item_input1_score == DUMMY_MATCH1.stage_item_input1_score

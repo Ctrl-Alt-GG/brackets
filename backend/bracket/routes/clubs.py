@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from bracket.config import config
+from bracket.database import DbConnection
 from bracket.logic.subscriptions import check_requirement
 from bracket.models.db.club import ClubCreateBody, ClubUpdateBody
 from bracket.models.db.user import UserPublic
@@ -19,34 +20,39 @@ router = APIRouter(prefix=config.api_prefix)
 
 
 @router.get("/clubs", response_model=ClubsResponse)
-async def get_clubs(user: UserPublic = Depends(user_authenticated)) -> ClubsResponse:
-    return ClubsResponse(data=await get_clubs_for_user_id(user.id))
+async def get_clubs(
+    conn: DbConnection, user: UserPublic = Depends(user_authenticated)
+) -> ClubsResponse:
+    return ClubsResponse(data=await get_clubs_for_user_id(conn, user.id))
 
 
 @router.post("/clubs", response_model=ClubResponse)
 async def create_new_club(
-    club: ClubCreateBody, user: UserPublic = Depends(user_authenticated)
+    conn: DbConnection, club: ClubCreateBody, user: UserPublic = Depends(user_authenticated)
 ) -> ClubResponse:
-    existing_clubs = await get_clubs_for_user_id(user.id)
+    existing_clubs = await get_clubs_for_user_id(conn, user.id)
     check_requirement(existing_clubs, user, "max_clubs")
 
     with check_unique_constraint_violation({UniqueIndex.ix_clubs_name}):
-        return ClubResponse(data=await create_club(club, user.id))
+        return ClubResponse(data=await create_club(conn, club, user.id))
 
 
 @router.delete("/clubs/{club_id}", response_model=SuccessResponse)
 async def delete_club(
-    club_id: ClubId, _: UserPublic = Depends(user_authenticated_for_club)
+    conn: DbConnection, club_id: ClubId, _: UserPublic = Depends(user_authenticated_for_club)
 ) -> SuccessResponse:
     with check_foreign_key_violation({ForeignKey.tournaments_club_id_fkey}):
-        await sql_delete_club(club_id)
+        await sql_delete_club(conn, club_id)
 
     return SuccessResponse()
 
 
 @router.put("/clubs/{club_id}", response_model=ClubResponse)
 async def update_club(
-    club_id: ClubId, club: ClubUpdateBody, _: UserPublic = Depends(user_authenticated_for_club)
+    conn: DbConnection,
+    club_id: ClubId,
+    club: ClubUpdateBody,
+    _: UserPublic = Depends(user_authenticated_for_club),
 ) -> ClubResponse:
     with check_unique_constraint_violation({UniqueIndex.ix_clubs_name}):
-        return ClubResponse(data=await sql_update_club(club_id, club))
+        return ClubResponse(data=await sql_update_club(conn, club_id, club))

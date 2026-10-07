@@ -2,6 +2,8 @@ import math
 from collections import defaultdict
 from decimal import Decimal
 
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.logic.ranking.statistics import START_ELO, TeamStatistics
 from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.models.db.ranking import Ranking
@@ -135,7 +137,7 @@ def determine_team_ranking_for_stage_item(
 
 
 async def get_team_rankings_lookup_for_tournament(
-    tournament_id: TournamentId, stages: list[StageWithStageItems]
+    conn: AsyncConnection, tournament_id: TournamentId, stages: list[StageWithStageItems]
 ) -> StageItemXTeamRanking:
     stage_items = {
         stage_item.id: stage_item for stage in stages for stage_item in stage.stage_items
@@ -143,17 +145,18 @@ async def get_team_rankings_lookup_for_tournament(
     return {
         stage_item_id: determine_team_ranking_for_stage_item(
             stage_item,
-            assert_some(await get_ranking_for_stage_item(tournament_id, stage_item.id)),
+            assert_some(await get_ranking_for_stage_item(conn, tournament_id, stage_item.id)),
         )
         for stage_item_id, stage_item in stage_items.items()
     }
 
 
 async def recalculate_ranking_for_stage_item(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     stage_item: StageItemWithRounds,
 ) -> None:
-    ranking = await get_ranking_for_stage_item(tournament_id, stage_item.id)
+    ranking = await get_ranking_for_stage_item(conn, tournament_id, stage_item.id)
     assert stage_item, "Stage item not found"
     assert ranking, "Ranking not found"
 
@@ -167,5 +170,5 @@ async def recalculate_ranking_for_stage_item(
 
     for stage_item_input_id in team_x_stage_item_input_lookup.values():
         await update_team_stats(
-            tournament_id, stage_item_input_id, elo_per_input[stage_item_input_id]
+            conn, tournament_id, stage_item_input_id, elo_per_input[stage_item_input_id]
         )

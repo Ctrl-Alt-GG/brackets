@@ -1,183 +1,140 @@
-import { useState, type FormEvent } from 'react';
-import { Link, Navigate } from 'react-router';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { Navigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
-import { unwrap } from '../api';
-import { runAction, useResource } from '../hooks';
-import type { FlashMessage, Session } from '../types';
-import { formatDateTime } from '../utils';
 import {
-  Button,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  PageShell,
-  Pill,
-  Surface,
-  SurfaceHeading,
-} from '../ui';
+  createNewClubApiClubsPostMutation,
+  deleteClubApiClubsClubIdDeleteMutation,
+  getClubsApiClubsGetOptions,
+  updateClubApiClubsClubIdPutMutation,
+} from '../../openapi/@tanstack/react-query.gen';
+import { zClubCreateBody, zClubUpdateBody } from '../../openapi/zod.gen';
+import { useSession } from '../hooks';
+import { ErrorState, Field, LoadingState, PageShell, Surface, SurfaceHeading } from '../ui';
+import { formatDateTime, getErrorMessage } from '../utils';
 
-export function ClubsPage({
-  session,
-  setFlash,
-}: {
-  session: Session;
-  setFlash: (message: FlashMessage) => void;
-}) {
-  const clubs = useResource(
-    async () => {
-      const response = await unwrap(OpenApi.getClubsApiClubsGet({ throwOnError: true }));
-      return response.data;
-    },
-    [session?.access_token],
-    Boolean(session),
+function NewClubForm() {
+  const form = useForm({ defaultValues: { name: '' }, resolver: zodResolver(zClubCreateBody) });
+  const create = useMutation({
+    ...createNewClubApiClubsPostMutation(),
+    meta: { successMessage: 'Event created.' },
+  });
+
+  return (
+    <form
+      onSubmit={form.handleSubmit((body) =>
+        create.mutate({ body }, { onSuccess: () => form.reset() }),
+      )}
+    >
+      <Field error={form.formState.errors.name?.message} label="Event name">
+        <input
+          className="input w-full"
+          placeholder="Ctrl-Alt-GG"
+          required
+          {...form.register('name')}
+        />
+      </Field>
+      <button className="btn btn-primary mt-4" disabled={create.isPending} type="submit">
+        {create.isPending ? 'Creating…' : 'Create event'}
+      </button>
+    </form>
   );
-  const [nameError, setNameError] = useState<string | null>(null);
+}
+
+function ClubEditor({ club }: { club: OpenApi.Club }) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(zClubUpdateBody),
+    values: { name: club.name },
+  });
+  const update = useMutation({
+    ...updateClubApiClubsClubIdPutMutation(),
+    meta: { successMessage: 'Event saved.' },
+  });
+  const remove = useMutation({
+    ...deleteClubApiClubsClubIdDeleteMutation(),
+    meta: { successMessage: 'Event deleted.' },
+  });
+
+  return (
+    <details className="collapse collapse-arrow border border-base-300 bg-base-100/50">
+      <summary className="collapse-title">
+        <span className="font-semibold">{club.name}</span>
+        <span className="block text-sm text-base-content/70">
+          Created {formatDateTime(club.created)}
+        </span>
+      </summary>
+      <form
+        className="collapse-content flex flex-col gap-3 md:flex-row md:items-end"
+        onSubmit={form.handleSubmit((body) => update.mutate({ body, path: { club_id: club.id } }))}
+      >
+        <Field className="flex-1" error={form.formState.errors.name?.message} label="Event name">
+          <input className="input w-full" required {...form.register('name')} />
+        </Field>
+        <div className="flex gap-2">
+          <button className="btn btn-primary" disabled={update.isPending} type="submit">
+            Save
+          </button>
+          <button
+            className="btn btn-error btn-soft"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm(`Delete ${club.name}?`)) {
+                remove.mutate({ path: { club_id: club.id } });
+              }
+            }}
+            type="button"
+          >
+            Delete
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+export function ClubsPage() {
+  const [session] = useSession();
+  const clubs = useQuery({ ...getClubsApiClubsGetOptions(), enabled: Boolean(session) });
 
   if (!session) {
     return <Navigate replace to="/login" />;
   }
 
-  function findDuplicate(name: string, ignoreClubId?: number) {
-    const normalized = name.trim().toLocaleLowerCase();
-    return clubs.data?.some(
-      (club) => club.id !== ignoreClubId && club.name.trim().toLocaleLowerCase() === normalized,
-    );
-  }
-
-  async function createClub(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const name = String(formData.get('name') ?? '');
-
-    if (findDuplicate(name)) {
-      setNameError('An event with this name already exists.');
-      return;
-    }
-    setNameError(null);
-
-    await runAction(
-      setFlash,
-      async () => {
-        await OpenApi.createNewClubApiClubsPost({
-          body: { name },
-          throwOnError: true,
-        });
-      },
-      'Event created successfully.',
-      () => {
-        form.reset();
-        clubs.refresh();
-      },
-    );
-  }
-
   return (
     <PageShell title="Event manager">
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Surface className="space-y-4">
+      <div className="grid items-start gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <Surface>
           <SurfaceHeading title="New event" />
-          <form className="space-y-4" onSubmit={createClub}>
-            <FormField error={nameError} label="Event name">
-              <Input
-                name="name"
-                onChange={() => setNameError(null)}
-                placeholder="Ctrl-Alt-GG"
-                required
-              />
-            </FormField>
-            <Button type="submit">Create event</Button>
-          </form>
+          <NewClubForm />
         </Surface>
 
-        <Surface className="space-y-4">
+        <Surface>
           <SurfaceHeading
-            actions={<Pill>{`${clubs.data?.length ?? 0} events`}</Pill>}
+            actions={
+              <span className="text-sm text-base-content/70">
+                {clubs.data?.data.length ?? 0} events
+              </span>
+            }
             title="Existing events"
           />
-          {clubs.loading ? <LoadingState title="Loading events…" /> : null}
+          {clubs.isPending ? <LoadingState title="Loading events…" /> : null}
           {clubs.error ? (
             <ErrorState
-              error={clubs.error}
-              title="Unable to load events"
               action={
-                <Button onClick={clubs.refresh} type="button">
+                <button className="btn btn-sm" onClick={() => void clubs.refetch()} type="button">
                   Retry
-                </Button>
+                </button>
               }
+              error={getErrorMessage(clubs.error)}
+              title="Unable to load events"
             />
           ) : null}
-          <div className="space-y-4">
-            {clubs.data?.map((club) => (
-              <details
-                className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
-                key={club.id}
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-white">{club.name}</h3>
-                    <p className="text-sm text-zinc-400">Created {formatDateTime(club.created)}</p>
-                  </div>
-                  <Pill>#{club.id}</Pill>
-                </summary>
-                <form
-                  className="mt-4 flex flex-col gap-3 md:flex-row"
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    const name = String(formData.get('name') ?? '');
-
-                    if (findDuplicate(name, club.id)) {
-                      setFlash({
-                        text: 'An event with this name already exists.',
-                        tone: 'error',
-                      });
-                      return;
-                    }
-
-                    await runAction(
-                      setFlash,
-                      async () => {
-                        await OpenApi.updateClubApiClubsClubIdPut({
-                          body: { name },
-                          path: { club_id: club.id },
-                          throwOnError: true,
-                        });
-                      },
-                      'Event updated successfully.',
-                      clubs.refresh,
-                    );
-                  }}
-                >
-                  <Input defaultValue={club.name} name="name" />
-                  <div className="flex gap-3">
-                    <Button type="submit">Save</Button>
-                    <Button
-                      onClick={async () => {
-                        if (!window.confirm(`Delete ${club.name}?`)) return;
-                        await runAction(
-                          setFlash,
-                          async () => {
-                            await OpenApi.deleteClubApiClubsClubIdDelete({
-                              path: { club_id: club.id },
-                              throwOnError: true,
-                            });
-                          },
-                          'Event deleted successfully.',
-                          clubs.refresh,
-                        );
-                      }}
-                      tone="danger"
-                      type="button"
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </form>
-              </details>
+          <div className="space-y-3">
+            {clubs.data?.data.map((club) => (
+              <ClubEditor club={club} key={club.id} />
             ))}
           </div>
         </Surface>

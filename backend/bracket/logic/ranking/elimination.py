@@ -1,3 +1,5 @@
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.match import Match
 from bracket.models.db.stage_item_inputs import StageItemInput
 from bracket.models.db.util import StageItemWithRounds
@@ -73,6 +75,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
 
 
 async def update_inputs_in_subsequent_elimination_rounds(
+    conn: AsyncConnection,
     current_round_id: RoundId,
     stage_item: StageItemWithRounds,
     match_ids: set[MatchId] | None = None,
@@ -82,12 +85,13 @@ async def update_inputs_in_subsequent_elimination_rounds(
     )
     for _, match in updates.items():
         await sql_set_input_ids_for_match(
-            match.round_id, match.id, [match.stage_item_input1_id, match.stage_item_input2_id]
+            conn, match.round_id, match.id, [match.stage_item_input1_id, match.stage_item_input2_id]
         )
 
 
 async def update_inputs_in_complete_elimination_stage_item(
+    conn: AsyncConnection,
     stage_item: StageItemWithRounds,
 ) -> None:
     for round_ in stage_item.rounds:
-        await update_inputs_in_subsequent_elimination_rounds(round_.id, stage_item)
+        await update_inputs_in_subsequent_elimination_rounds(conn, round_.id, stage_item)

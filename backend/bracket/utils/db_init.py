@@ -3,9 +3,10 @@ from typing import TYPE_CHECKING, Any
 
 from heliclockter import datetime_utc
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.config import Environment, config, environment
-from bracket.database import database, engine
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import (
     recalculate_ranking_for_stage_item,
@@ -92,62 +93,61 @@ if TYPE_CHECKING:
     from sqlalchemy import Table
 
 
-async def create_admin_user() -> UserId:
+async def create_admin_user(conn: AsyncConnection) -> UserId:
     assert config.admin_email
     assert config.admin_password
 
     user = await create_user(
+        conn,
         UserInsertable(
             name="Admin",
             email=config.admin_email,
             password_hash=hash_password(config.admin_password),
             created=datetime_utc.now(),
             account_type=UserAccountType.REGULAR,
-        )
+        ),
     )
     return user.id
 
 
-async def init_db_when_empty() -> UserId | None:
-    table_count = await database.fetch_val(
-        "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
+async def init_db_when_empty(conn: AsyncConnection) -> UserId | None:
+    table_count = await conn.scalar(
+        text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
     )
-    if table_count <= 1:
+    if table_count is not None and table_count <= 1:
         logger.warning("Empty db detected, creating tables...")
-        metadata.create_all(engine)
-        with engine.begin() as connection:
-            connection.exec_driver_sql(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (LOWER(email));"
-            )
-        alembic_stamp_head()
+        await conn.run_sync(metadata.create_all)
+        await conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (LOWER(email));"
+        )
+        await conn.run_sync(alembic_stamp_head)
 
         if config.admin_email and config.admin_password:
             logger.warning("Empty db detected, creating admin user...")
-            return await create_admin_user()
+            return await create_admin_user(conn)
 
     if (
         config.admin_email
         and config.admin_password
         and environment is Environment.DEVELOPMENT
-        and await get_user(config.admin_email) is None
+        and await get_user(conn, config.admin_email) is None
     ):
         logger.warning("Admin user missing, creating admin user...")
-        return await create_admin_user()
+        return await create_admin_user(conn)
 
     return None
 
 
-async def sql_create_dev_db() -> UserId:
+async def sql_create_dev_db(conn: AsyncConnection) -> UserId:
     # TODO: refactor into smaller functions
     # pylint: disable=too-many-statements
     assert environment is not Environment.PRODUCTION
 
     logger.warning("Initializing database with dummy records")
-    await database.connect()
-    metadata.drop_all(engine)
-    metadata.create_all(engine)
-    real_user_id = await init_db_when_empty()
-    alembic_stamp_head()
+    await conn.run_sync(metadata.drop_all)
+    await conn.run_sync(metadata.create_all)
+    real_user_id = await init_db_when_empty(conn)
+    await conn.run_sync(alembic_stamp_head)
 
     table_lookup: dict[type, Table] = {
         UserInsertable: users,
@@ -169,7 +169,7 @@ async def sql_create_dev_db() -> UserId:
     ) -> int:
         resolved_update_data = update_data or {}
         record_id, _ = await insert_generic(
-            database,
+            conn,
             obj_to_insert.model_copy(update=resolved_update_data),
             table_lookup[type(obj_to_insert)],
             type(obj_to_insert),
@@ -265,6 +265,7 @@ async def sql_create_dev_db() -> UserId:
     await insert_dummy(DUMMY_PLAYER_X_TEAM, {"player_id": player_id_16, "team_id": team_id_8})
 
     stage_item_1 = await sql_create_stage_item_with_inputs(
+        conn,
         tournament_id_1,
         StageItemWithInputsCreate(
             stage_id=stage_id_1,
@@ -292,6 +293,7 @@ async def sql_create_dev_db() -> UserId:
         ),
     )
     stage_item_2 = await sql_create_stage_item_with_inputs(
+        conn,
         tournament_id_1,
         StageItemWithInputsCreate(
             stage_id=stage_id_1,
@@ -319,6 +321,7 @@ async def sql_create_dev_db() -> UserId:
         ),
     )
     stage_item_3 = await sql_create_stage_item_with_inputs(
+        conn,
         tournament_id_1,
         StageItemWithInputsCreate(
             stage_id=stage_id_2,
@@ -350,15 +353,16 @@ async def sql_create_dev_db() -> UserId:
         ),
     )
 
-    await build_matches_for_stage_item(stage_item_1, tournament_id_1)
-    await build_matches_for_stage_item(stage_item_2, tournament_id_1)
-    await build_matches_for_stage_item(stage_item_3, tournament_id_1)
+    await build_matches_for_stage_item(conn, stage_item_1, tournament_id_1)
+    await build_matches_for_stage_item(conn, stage_item_2, tournament_id_1)
+    await build_matches_for_stage_item(conn, stage_item_3, tournament_id_1)
 
-    for stage in await get_full_tournament_details(tournament_id_1):
+    for stage in await get_full_tournament_details(conn, tournament_id_1):
         for stage_item in stage.stage_items:
             for round_ in stage_item.rounds:
                 for match in round_.matches:
                     await sql_update_match(
+                        conn,
                         match_id=assert_some(match.id),
                         match=MatchBody.model_validate(
                             {
@@ -370,8 +374,8 @@ async def sql_create_dev_db() -> UserId:
                     )
 
     for _stage_item in (stage_item_1, stage_item_2, stage_item_3):
-        stage_item_with_rounds = await get_stage_item(tournament_id_1, _stage_item.id)
-        await recalculate_ranking_for_stage_item(tournament_id_1, stage_item_with_rounds)
+        stage_item_with_rounds = await get_stage_item(conn, tournament_id_1, _stage_item.id)
+        await recalculate_ranking_for_stage_item(conn, tournament_id_1, stage_item_with_rounds)
 
-    await schedule_all_matches(tournament_id_1)
+    await schedule_all_matches(conn, tournament_id_1)
     return user_id_1

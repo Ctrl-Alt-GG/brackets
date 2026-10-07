@@ -4,6 +4,7 @@ from starlette import status
 from starlette.requests import Request
 
 from bracket.config import config
+from bracket.database import DbConnection
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import (
     UserInsertable,
@@ -50,6 +51,7 @@ async def get_me(
 
 @router.put("/users/{user_id}", response_model=UserPublicResponse)
 async def update_user_details(
+    conn: DbConnection,
     user_id: UserId,
     user_to_update: UserToUpdate,
     user_public: UserPublic = Depends(user_authenticated),
@@ -57,27 +59,28 @@ async def update_user_details(
     if user_public.id != user_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Can't change details of this user")
 
-    await update_user(user_public.id, user_to_update)
-    user_updated = await get_user_by_id(user_id)
+    await update_user(conn, user_public.id, user_to_update)
+    user_updated = await get_user_by_id(conn, user_id)
     return UserPublicResponse(data=assert_some(user_updated))
 
 
 @router.put("/users/{user_id}/password", response_model=SuccessResponse)
 async def put_user_password(
+    conn: DbConnection,
     user_id: UserId,
     user_to_update: UserPasswordToUpdate,
     user_public: UserPublic = Depends(user_authenticated),
 ) -> SuccessResponse:
     if user_public.id != user_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Can't change details of this user")
-    await update_user_password(user_public.id, hash_password(user_to_update.password))
+    await update_user_password(conn, user_public.id, hash_password(user_to_update.password))
     return SuccessResponse()
 
 
 @router.post("/users/register", response_model=TokenResponse)
 @limiter.limit("5/15minutes")
 async def register_user(
-    request: Request, response: Response, user_to_register: UserToRegister
+    conn: DbConnection, request: Request, response: Response, user_to_register: UserToRegister
 ) -> TokenResponse:
     if not config.allow_user_registration:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account creation is unavailable for now")
@@ -91,10 +94,10 @@ async def register_user(
         created=datetime_utc.now(),
         account_type=UserAccountType.REGULAR,
     )
-    if await check_whether_email_is_in_use(user.email):
+    if await check_whether_email_is_in_use(conn, user.email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address already in use")
 
-    user_created = await create_user(user)
+    user_created = await create_user(conn, user)
     access_token_expires = timedelta(minutes=config.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user_created.email, "user": user_created.email},

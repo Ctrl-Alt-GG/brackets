@@ -1,32 +1,26 @@
-import re
 from collections.abc import Iterable
 
-import bcrypt
 from email_validator import EmailNotValidError, validate_email
-
-COMMON_PASSWORDS = {
-    "12345678",
-    "123456789",
-    "1234567890",
-    "adminadmin",
-    "letmein123",
-    "password",
-    "password12",
-    "password123",
-    "qwerty123",
-    "welcome123",
-}
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
+from pwdlib.hashers.bcrypt import BcryptHasher
+from zxcvbn import zxcvbn
 
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 72
 
+# New passwords are hashed with Argon2. Older bcrypt hashes still verify, and are replaced by an
+# Argon2 hash on the next login.
+password_hash = PasswordHash((Argon2Hasher(), BcryptHasher()))
+
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return password_hash.hash(password)
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+def verify_password(plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
+    """Whether the password is correct, and its new hash if the stored one is outdated."""
+    return password_hash.verify_and_update(plain_password, hashed_password)
 
 
 def normalize_email(email: str) -> str:
@@ -39,8 +33,7 @@ def normalize_email(email: str) -> str:
 
 
 def validate_password_strength(password: str, disallowed_values: Iterable[str] = ()) -> str:
-    normalized_password = password.strip()
-    if normalized_password != password:
+    if password.strip() != password:
         raise ValueError("Password must not start or end with whitespace")
 
     if len(password) < PASSWORD_MIN_LENGTH:
@@ -49,27 +42,16 @@ def validate_password_strength(password: str, disallowed_values: Iterable[str] =
     if len(password) > PASSWORD_MAX_LENGTH:
         raise ValueError(f"Password must be at most {PASSWORD_MAX_LENGTH} characters long")
 
-    if password.casefold() in COMMON_PASSWORDS:
-        raise ValueError("Password is too common")
-
-    lowered_password = password.casefold()
-    for disallowed_value in disallowed_values:
-        stripped_value = disallowed_value.strip()
-        if stripped_value and stripped_value.casefold() in lowered_password:
-            raise ValueError("Password must not contain your personal details")
-
-    category_count = sum(
-        (
-            bool(re.search(r"[a-z]", password)),
-            bool(re.search(r"[A-Z]", password)),
-            bool(re.search(r"\d", password)),
-            bool(re.search(r"[^A-Za-z0-9]", password)),
-        )
-    )
-    if category_count < 3:
+    # zxcvbn estimates how guessable the password is, also when it contains the user's details.
+    strength = zxcvbn(password, user_inputs=[value for value in disallowed_values if value.strip()])
+    if strength["score"] < 3:
         raise ValueError(
-            "Password must include at least three of the following: lowercase letters, "
-            "uppercase letters, numbers, and symbols"
+            " ".join(
+                filter(
+                    None, [strength["feedback"]["warning"], *strength["feedback"]["suggestions"]]
+                )
+            )
+            or "Password is too easy to guess"
         )
 
     return password

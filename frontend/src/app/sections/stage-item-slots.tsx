@@ -1,17 +1,26 @@
+import { useMutation } from '@tanstack/react-query';
+
 import * as OpenApi from '../../openapi';
-import { useTournamentMutation } from '../hooks';
+import { updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
 import { isEmptySlot } from '../utils';
-import { Select } from '../ui';
 
 type StageItemInput =
   | OpenApi.StageItemInputTentative
   | OpenApi.StageItemInputFinal
   | OpenApi.StageItemInputEmpty;
 type SlotOption = OpenApi.StageItemInputOptionFinal | OpenApi.StageItemInputOptionTentative;
+type SlotBody =
+  | OpenApi.StageItemInputUpdateBodyEmpty
+  | OpenApi.StageItemInputUpdateBodyFinal
+  | OpenApi.StageItemInputUpdateBodyTentative;
 
 const EMPTY_SLOT = 'empty';
 
-function slotValue(input: StageItemInput) {
+function slotValue(input: {
+  team_id?: number | null;
+  winner_from_stage_item_id?: number | null;
+  winner_position?: number | null;
+}) {
   if (input.team_id != null) return `team:${input.team_id}`;
   if (input.winner_from_stage_item_id != null && input.winner_position != null) {
     return `winner:${input.winner_from_stage_item_id}:${input.winner_position}`;
@@ -25,12 +34,7 @@ function optionValue(option: SlotOption) {
     : `winner:${option.winner_from_stage_item_id}:${option.winner_position}`;
 }
 
-function slotBody(
-  value: string,
-):
-  | OpenApi.StageItemInputUpdateBodyEmpty
-  | OpenApi.StageItemInputUpdateBodyFinal
-  | OpenApi.StageItemInputUpdateBodyTentative {
+function slotBody(value: string): SlotBody {
   const [kind, first, second] = value.split(':');
   if (kind === 'team') return { team_id: Number(first) };
   if (kind === 'winner') {
@@ -58,16 +62,16 @@ export function StageItemSlots({
 
   return (
     <details
-      className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
+      className="collapse collapse-arrow border border-base-300 bg-base-200/60"
       open={filled < stageItem.inputs.length}
     >
-      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-        <h5 className="font-semibold text-white">Teams</h5>
-        <span className="text-sm text-zinc-400">
+      <summary className="collapse-title">
+        <span className="font-semibold">Teams</span>
+        <span className="block text-sm text-base-content/70">
           {filled} of {stageItem.inputs.length} slots filled
         </span>
       </summary>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="collapse-content grid gap-3 md:grid-cols-2">
         {stageItem.inputs.map((input) => (
           <SlotSelect
             input={input}
@@ -79,20 +83,20 @@ export function StageItemSlots({
             tournamentId={tournamentId}
           />
         ))}
-      </div>
-      {nextStageEntries ? (
-        <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-          <p className="text-sm text-zinc-400">Teams moving in when this stage starts</p>
-          <div className="mt-3 space-y-2 text-sm text-zinc-200">
-            {nextStageEntries.map((entry) => (
-              <div className="flex items-center justify-between" key={entry.stage_item_input.id}>
-                <span>{entry.team.name}</span>
-                <span className="text-zinc-400">slot {entry.stage_item_input.slot}</span>
-              </div>
-            ))}
+        {nextStageEntries ? (
+          <div className="rounded-box border border-base-300 bg-base-100/50 p-4 md:col-span-2">
+            <p className="text-sm text-base-content/70">Teams moving in when this stage starts</p>
+            <div className="mt-3 space-y-2 text-sm">
+              {nextStageEntries.map((entry) => (
+                <div className="flex items-center justify-between" key={entry.stage_item_input.id}>
+                  <span>{entry.team.name}</span>
+                  <span className="text-base-content/70">slot {entry.stage_item_input.slot}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </details>
   );
 }
@@ -113,32 +117,32 @@ function SlotSelect({
   tournamentId: number;
 }) {
   const currentValue = slotValue(input);
-  const assign = useTournamentMutation(
-    (value: string) =>
-      OpenApi.updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPut(
-        {
-          body: slotBody(value),
-          path: {
-            stage_item_id: stageItemId,
-            stage_item_input_id: input.id,
-            tournament_id: tournamentId,
-          },
-          throwOnError: true,
-        },
-      ),
-    `Slot ${input.slot} updated.`,
-  );
+  const assign = useMutation({
+    ...updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation(),
+    meta: { successMessage: `Slot ${input.slot} updated.` },
+  });
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-white/10 bg-black/20 px-3 py-2">
-      <span className="text-sm font-semibold text-white">Slot {input.slot}</span>
-      <Select
+    <div className="flex items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100/50 px-3 py-2">
+      <span className="text-sm font-semibold">Slot {input.slot}</span>
+      <select
         aria-label={`Slot ${input.slot}`}
-        className="w-auto min-w-44"
+        className="select w-auto min-w-44"
         disabled={assign.isPending}
-        onChange={(event) => assign.mutate(event.target.value)}
+        onChange={(event) =>
+          assign.mutate({
+            body: slotBody(event.target.value),
+            path: {
+              stage_item_id: stageItemId,
+              stage_item_input_id: input.id,
+              tournament_id: tournamentId,
+            },
+          })
+        }
         // Shows the choice while it is saved, and falls back to the saved value if that fails.
-        value={assign.isPending ? (assign.variables ?? currentValue) : currentValue}
+        value={
+          assign.isPending && assign.variables ? slotValue(assign.variables.body) : currentValue
+        }
       >
         <option value={EMPTY_SLOT}>Open slot</option>
         {options.map((option) => {
@@ -160,7 +164,7 @@ function SlotSelect({
             </option>
           );
         })}
-      </Select>
+      </select>
     </div>
   );
 }

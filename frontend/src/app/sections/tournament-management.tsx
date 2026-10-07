@@ -1,147 +1,232 @@
-import type { FormEvent } from 'react';
-import { Link } from 'react-router';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
-import { runAction } from '../hooks';
-import { DateTimeField } from '../components/date-time-field';
+import {
+  activateNextStageApiTournamentsTournamentIdStagesActivatePostMutation,
+  changeStatusApiTournamentsTournamentIdChangeStatusPostMutation,
+  createRankingApiTournamentsTournamentIdRankingsPostMutation,
+  createStageApiTournamentsTournamentIdStagesPostMutation,
+  createStageItemApiTournamentsTournamentIdStageItemsPostMutation,
+  deleteRankingApiTournamentsTournamentIdRankingsRankingIdDeleteMutation,
+  deleteStageApiTournamentsTournamentIdStagesStageIdDeleteMutation,
+  deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDeleteMutation,
+  deleteTournamentApiTournamentsTournamentIdDeleteMutation,
+  getTournamentsApiTournamentsGetQueryKey,
+  scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation,
+  updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPutMutation,
+  updateStageApiTournamentsTournamentIdStagesStageIdPutMutation,
+  updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPutMutation,
+  updateTournamentByIdApiTournamentsTournamentIdPutMutation,
+  uploadLogoApiTournamentsTournamentIdLogoPostMutation,
+} from '../../openapi/@tanstack/react-query.gen';
+import {
+  zRankingBody,
+  zRankingCreateBody,
+  zStageItemCreateBody,
+  zStageItemUpdateBody,
+  zStageUpdateBody,
+  zTournamentUpdateBody,
+} from '../../openapi/zod.gen';
 import { MatchCard } from '../components/match-card';
+import { TeamLink } from '../components/team-link';
+import { TournamentStatusBadge } from '../components/tournament-status-badge';
+import { useTournamentContext } from '../tournament-context';
 import { StageItemRounds, stageItemStatus } from './stage-item-rounds';
 import { StageItemSlots } from './stage-item-slots';
 import { StageItemVisualization } from './tournament-overview';
-import type { FlashMessage, FlattenedMatch, TournamentBundle } from '../types';
+import type { FlattenedMatch, TournamentBundle } from '../types';
 import {
   cx,
-  formatDateTime,
+  DETAILS_PAGE_DESCRIPTION,
+  formatMatchTime,
   formatPoints,
   formatScoreDifference,
-  inputLabel,
-  isScored,
+  isBracket,
   matchStatus,
   normalizeDashboardEndpoint,
   pointsLabel,
   pointsPhrase,
+  publicTournamentPath,
   stageItemStandings,
-  toCheckbox,
-  toNumber,
-  toOptionalNumber,
-  toOptionalString,
+  toDateTimeLocal,
+  zLocalDateTime,
 } from '../utils';
-import { Button, FormField, Input, Pill, Select, Surface, SurfaceHeading, Textarea } from '../ui';
+import { CheckboxField, Field, Surface, SurfaceHeading } from '../ui';
 
-export function ScheduleSection({
-  compact,
-  isAuthenticated,
-  matches,
-  onRefresh,
-  setFlash,
+/** Matches sorted by time, grouped under the time they start. */
+function TimeSlots({
+  entries,
+  maxSlots,
+  size = 'md',
   stageItemsById,
-  tournamentId,
 }: {
-  compact?: boolean;
-  isAuthenticated: boolean;
-  matches: FlattenedMatch[];
-  onRefresh: () => void;
-  setFlash: (message: FlashMessage) => void;
+  entries: FlattenedMatch[];
+  maxSlots?: number;
+  size?: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  tournamentId: number;
 }) {
-  // Matches arrive sorted by start time, so the slots keep that order.
-  const slots = new Map<string, FlattenedMatch[]>();
-  matches
-    .filter(({ match }) => !compact || matchStatus(match) !== 'finished')
-    .forEach((entry) => {
-      const startTime = entry.match.start_time ?? '';
-      slots.set(startTime, [...(slots.get(startTime) ?? []), entry]);
-    });
-  const shownSlots = [...slots.entries()].slice(0, compact ? 2 : undefined);
+  const slots = Map.groupBy(entries, (entry) => entry.match.start_time ?? '');
 
   return (
-    <Surface className="space-y-6">
-      <SurfaceHeading
-        actions={
-          isAuthenticated && !compact ? (
-            <Button
-              onClick={async () => {
-                await runAction(
-                  setFlash,
-                  async () => {
-                    await OpenApi.scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost({
-                      path: { tournament_id: tournamentId },
-                      throwOnError: true,
-                    });
-                  },
-                  'Match times recalculated.',
-                  onRefresh,
-                );
-              }}
-              tone="secondary"
-              type="button"
-            >
-              Recalculate times
-            </Button>
-          ) : null
-        }
-        title={compact ? 'Now and next' : 'Schedule'}
-      />
-      {isAuthenticated && !compact ? (
-        <p className="text-sm text-zinc-400">
-          Match times are planned automatically: all matches of a round start together, and a round
-          starts when the previous one has finished. To move the schedule, change the start time,
-          match duration or break in Settings, or the match duration of a stage in Stages.
-        </p>
-      ) : null}
-      {shownSlots.length === 0 ? (
-        <p className="text-sm text-zinc-400">
-          {compact ? 'All matches are finished.' : 'No matches have been scheduled yet.'}
-        </p>
-      ) : null}
-      {shownSlots.map(([startTime, entries]) => (
+    <div className="space-y-6">
+      {[...slots.entries()].slice(0, maxSlots).map(([startTime, slotEntries]) => (
         <section className="space-y-3" key={startTime || 'unscheduled'}>
-          <h3
-            className={cx(
-              'font-display font-semibold text-white',
-              compact ? 'text-3xl' : 'text-xl',
-            )}
-          >
-            {startTime ? formatDateTime(startTime) : 'Not scheduled yet'}
+          <h3 className={cx('font-display font-semibold', size === 'lg' ? 'text-3xl' : 'text-xl')}>
+            {formatMatchTime(startTime || null)}
           </h3>
           <div
             className={cx(
               'grid gap-3',
-              compact ? 'xl:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3',
+              size === 'lg' ? 'xl:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3',
             )}
           >
-            {entries.map((entry) => (
+            {slotEntries.map((entry) => (
               <MatchCard
                 entry={entry}
                 key={entry.match.id}
-                size={compact ? 'lg' : 'md'}
+                showTime={false}
+                size={size}
                 stageItemsById={stageItemsById}
               />
             ))}
           </div>
         </section>
       ))}
+    </div>
+  );
+}
+
+export function ScheduleSection({
+  bigScreenPath,
+  canManage,
+  matches,
+  stageItemsById,
+  tournamentId,
+}: {
+  bigScreenPath: string;
+  canManage: boolean;
+  matches: FlattenedMatch[];
+  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+  tournamentId: number;
+}) {
+  const recalculate = useMutation({
+    ...scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation(),
+    meta: { successMessage: 'Match times recalculated.' },
+  });
+  const upcoming = matches.filter(({ match }) => matchStatus(match) !== 'finished');
+  // The latest results are the interesting ones, so finished matches run backwards.
+  const finished = matches.filter(({ match }) => matchStatus(match) === 'finished').toReversed();
+
+  return (
+    <Surface>
+      <SurfaceHeading
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {canManage ? (
+              <button
+                className="btn btn-soft btn-sm"
+                disabled={recalculate.isPending}
+                onClick={() => recalculate.mutate({ path: { tournament_id: tournamentId } })}
+                type="button"
+              >
+                Recalculate times
+              </button>
+            ) : null}
+            <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
+              Big screen
+            </Link>
+          </div>
+        }
+        title="Schedule"
+      />
+      {canManage ? (
+        <p className="text-sm text-base-content/70">
+          Match times are planned automatically: all matches of a round start together, and a round
+          starts when the previous one has finished. To move the schedule, change the start time,
+          match duration or break in Settings, or the match duration of a stage in Stages.
+        </p>
+      ) : null}
+      {matches.length === 0 ? (
+        <p className="text-sm text-base-content/70">No matches have been scheduled yet.</p>
+      ) : upcoming.length === 0 ? (
+        <p className="text-sm text-base-content/70">All matches are finished.</p>
+      ) : (
+        <TimeSlots entries={upcoming} stageItemsById={stageItemsById} />
+      )}
+      {finished.length > 0 ? (
+        <details
+          className="collapse collapse-arrow border border-base-300 bg-base-100/40"
+          open={upcoming.length === 0}
+        >
+          <summary className="collapse-title font-semibold">
+            Finished matches ({finished.length})
+          </summary>
+          <div className="collapse-content">
+            <TimeSlots entries={finished} stageItemsById={stageItemsById} />
+          </div>
+        </details>
+      ) : null}
     </Surface>
   );
 }
 
+/** The next two rounds in large print, for a screen at the venue. */
+export function BigScreenSchedule({
+  matches,
+  stageItemsById,
+}: {
+  matches: FlattenedMatch[];
+  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+}) {
+  const upcoming = matches.filter(({ match }) => matchStatus(match) !== 'finished');
+
+  return (
+    <Surface>
+      <SurfaceHeading title="Now and next" />
+      {upcoming.length === 0 ? (
+        <p className="text-lg text-base-content/80">All matches are finished.</p>
+      ) : (
+        <TimeSlots entries={upcoming} maxSlots={2} size="lg" stageItemsById={stageItemsById} />
+      )}
+    </Surface>
+  );
+}
+
+function ColumnHeading({ long, short }: { long: string; short: string }) {
+  return (
+    <th>
+      <abbr className="no-underline sm:hidden" title={long}>
+        {short}
+      </abbr>
+      <span className="hidden sm:inline">{long}</span>
+    </th>
+  );
+}
+
 export function StandingsSection({
+  bigScreenPath,
   compact,
   rankings,
   stages,
   standings,
   teamMap,
 }: {
+  bigScreenPath?: string;
   compact?: boolean;
   rankings: OpenApi.Ranking[];
   stages: OpenApi.StageWithStageItems[];
   standings: TournamentBundle['standings'];
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
 }) {
+  const { myTeamId } = useTournamentContext();
   // Results are kept per stage item, and teams only compete for a place within their own group.
+  // Knockout brackets have no table: the Bracket page shows them.
   const tables = stages.flatMap((stage) =>
     stage.stage_items
+      .filter((stageItem) => !isBracket(stageItem))
       .map((stageItem) => ({ entries: stageItemStandings(stageItem, standings), stage, stageItem }))
       .filter(({ entries }) => entries.length > 0),
   );
@@ -149,18 +234,31 @@ export function StandingsSection({
 
   return (
     <div className="space-y-6">
-      <Surface className="space-y-6">
-        <SurfaceHeading actions={<Pill>{`${teamMap.size} teams`}</Pill>} title="Standings" />
+      <Surface>
+        <SurfaceHeading
+          actions={
+            bigScreenPath ? (
+              <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
+                Big screen
+              </Link>
+            ) : null
+          }
+          title="Standings"
+        />
         {tables.length === 0 ? (
-          <p className="text-sm text-zinc-400">No standings yet: no team has joined a group.</p>
+          <p className="text-sm text-base-content/70">
+            No standings yet: no team has joined a group.
+          </p>
         ) : null}
         {tables.map(({ entries, stage, stageItem }) => (
-          <section className="space-y-3" key={stageItem.id}>
+          <section
+            className="scroll-mt-6 space-y-3"
+            id={`stage-item-${stageItem.id}`}
+            key={stageItem.id}
+          >
             <div>
-              <h3 className="text-lg font-semibold text-white">
-                {stageItem.name || stageItem.type_name}
-              </h3>
-              <p className="text-sm text-zinc-400">
+              <h3 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h3>
+              <p className="text-sm text-base-content/70">
                 {stage.name} · {stageItem.type_name}
               </p>
             </div>
@@ -168,19 +266,20 @@ export function StandingsSection({
               <div className="grid gap-3">
                 {entries.map(({ input, standing }, index) => (
                   <div
-                    className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4"
+                    className={cx(
+                      'grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-box border bg-base-100/60 px-4 py-4',
+                      input.team_id === myTeamId ? 'border-accent/60' : 'border-base-300',
+                    )}
                     key={input.id}
                   >
-                    <div className="min-w-12 text-center">
-                      <p className="font-display text-3xl font-semibold text-white">{index + 1}</p>
-                    </div>
-                    <p className="font-display text-2xl font-semibold text-white">
-                      {input.team.name}
+                    <p className="min-w-12 text-center font-display text-3xl font-semibold">
+                      {index + 1}
                     </p>
-                    <p className="text-right text-lg text-zinc-300">
-                      <span className="font-semibold text-emerald-300">{standing.wins}</span> won ·{' '}
+                    <p className="font-display text-2xl font-semibold">{input.team.name}</p>
+                    <p className="text-right text-lg text-base-content/80">
+                      <span className="font-semibold text-success">{standing.wins}</span> won ·{' '}
                       {standing.draws} drawn · {standing.losses} lost ·{' '}
-                      <span className="font-semibold text-white">
+                      <span className="font-semibold text-base-content">
                         {pointsPhrase(stageItem, standing.points)}
                       </span>
                     </p>
@@ -189,48 +288,46 @@ export function StandingsSection({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm text-zinc-200">
+                <table className="table">
                   <thead>
-                    <tr className="border-b border-white/10 text-xs uppercase tracking-[0.3em] text-zinc-400">
-                      <th className="px-3 py-3">#</th>
-                      <th className="px-3 py-3">Team</th>
-                      <th className="px-3 py-3">Players</th>
-                      <th className="px-3 py-3">Played</th>
-                      <th className="px-3 py-3">Won</th>
-                      <th className="px-3 py-3">Drawn</th>
-                      <th className="px-3 py-3">Lost</th>
-                      <th className="px-3 py-3" title="Score difference">
-                        +/−
-                      </th>
-                      <th className="px-3 py-3">{pointsLabel(stageItem)}</th>
+                    <tr>
+                      <th>#</th>
+                      <th>Team</th>
+                      <th className="hidden md:table-cell">Players</th>
+                      <ColumnHeading long="Played" short="P" />
+                      <ColumnHeading long="Won" short="W" />
+                      <ColumnHeading long="Drawn" short="D" />
+                      <ColumnHeading long="Lost" short="L" />
+                      <th title="Score difference">+/−</th>
+                      <th>{pointsLabel(stageItem)}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {entries.map(({ input, standing }, index) => (
-                      <tr className="border-b border-white/5" key={input.id}>
-                        <td className="px-3 py-4 text-zinc-500">{index + 1}</td>
-                        <td className="px-3 py-4 font-semibold text-white">{input.team.name}</td>
-                        <td className="px-3 py-4 text-zinc-400">
+                      <tr
+                        className={cx(input.team_id === myTeamId && 'bg-accent/10')}
+                        key={input.id}
+                      >
+                        <td className="text-base-content/70">{index + 1}</td>
+                        <td className="font-semibold">
+                          <TeamLink teamId={input.team_id}>{input.team.name}</TeamLink>
+                        </td>
+                        <td className="hidden text-base-content/70 md:table-cell">
                           {teamMap
                             .get(input.team_id)
                             ?.players.map((player) => player.name)
                             .join(', ') || '—'}
                         </td>
-                        <td className="px-3 py-4">
-                          {standing.wins + standing.draws + standing.losses}
-                        </td>
-                        <td className="px-3 py-4">{standing.wins}</td>
-                        <td className="px-3 py-4">{standing.draws}</td>
-                        <td className="px-3 py-4">{standing.losses}</td>
+                        <td>{standing.wins + standing.draws + standing.losses}</td>
+                        <td>{standing.wins}</td>
+                        <td>{standing.draws}</td>
+                        <td>{standing.losses}</td>
                         <td
-                          className="px-3 py-4"
                           title={`${standing.score_for} scored, ${standing.score_against} conceded`}
                         >
                           {formatScoreDifference(standing)}
                         </td>
-                        <td className="px-3 py-4 font-semibold text-white">
-                          {formatPoints(standing.points)}
-                        </td>
+                        <td className="font-semibold">{formatPoints(standing.points)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -241,22 +338,21 @@ export function StandingsSection({
         ))}
       </Surface>
       {!compact ? (
-        <Surface className="space-y-4">
+        <Surface>
           <SurfaceHeading title="How points are awarded" />
           <div className="grid gap-4 lg:grid-cols-2">
             {rankings.map((ranking) => (
-              <div
-                className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
+              <p
+                className="rounded-box border border-base-300 bg-base-100/50 p-4 text-sm text-base-content/80"
                 key={ranking.id}
               >
-                <p className="text-sm text-zinc-300">
-                  A win is worth {ranking.win_points} points, a draw {ranking.draw_points} and a
-                  loss {ranking.loss_points}.
-                </p>
-              </div>
+                A win is worth {formatPoints(ranking.win_points)}{' '}
+                {Number(ranking.win_points) === 1 ? 'point' : 'points'}, a draw{' '}
+                {formatPoints(ranking.draw_points)} and a loss {formatPoints(ranking.loss_points)}.
+              </p>
             ))}
           </div>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-base-content/70">
             Teams with the same points are ranked by score difference, then by their total score,
             then by the number of wins, and after that by their seeding. Teams go through to the
             next stage in this order.
@@ -270,15 +366,161 @@ export function StandingsSection({
   );
 }
 
+const ADD_SCORE_POINTS_DESCRIPTION =
+  'Teams also get their score in each match added to their points.';
+
+const POINT_FIELDS = [
+  ['win_points', 'Win points'],
+  ['draw_points', 'Draw points'],
+  ['loss_points', 'Loss points'],
+] as const;
+
+function NewRankingForm({ tournamentId }: { tournamentId: number }) {
+  const form = useForm({
+    defaultValues: { add_score_points: false, draw_points: 1, loss_points: 0, win_points: 3 },
+    resolver: zodResolver(zRankingCreateBody),
+  });
+  const create = useMutation({
+    ...createRankingApiTournamentsTournamentIdRankingsPostMutation(),
+    meta: { successMessage: 'Ranking created.' },
+  });
+
+  return (
+    <form
+      onSubmit={form.handleSubmit((body) =>
+        create.mutate(
+          { body, path: { tournament_id: tournamentId } },
+          { onSuccess: () => form.reset() },
+        ),
+      )}
+    >
+      <div className="grid gap-x-4 md:grid-cols-3">
+        {POINT_FIELDS.map(([name, label]) => (
+          <Field error={form.formState.errors[name]?.message} key={name} label={label}>
+            <input
+              className="input w-full"
+              required
+              step="any"
+              type="number"
+              {...form.register(name, { valueAsNumber: true })}
+            />
+          </Field>
+        ))}
+      </div>
+      <CheckboxField
+        className="mt-3"
+        description={ADD_SCORE_POINTS_DESCRIPTION}
+        label="Add raw score points"
+        {...form.register('add_score_points')}
+      />
+      <button className="btn btn-primary mt-4" disabled={create.isPending} type="submit">
+        Create ranking
+      </button>
+    </form>
+  );
+}
+
+function RankingEditor({
+  ranking,
+  tournamentId,
+}: {
+  ranking: OpenApi.Ranking;
+  tournamentId: number;
+}) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(zRankingBody),
+    // Follows the saved ranking, without throwing away what the organizer is typing.
+    values: {
+      add_score_points: ranking.add_score_points,
+      draw_points: ranking.draw_points,
+      loss_points: ranking.loss_points,
+      position: ranking.position,
+      win_points: ranking.win_points,
+    },
+  });
+  const update = useMutation({
+    ...updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPutMutation(),
+    meta: { successMessage: 'Ranking saved.' },
+  });
+  const remove = useMutation({
+    ...deleteRankingApiTournamentsTournamentIdRankingsRankingIdDeleteMutation(),
+    meta: { successMessage: 'Ranking deleted.' },
+  });
+  const path = { ranking_id: ranking.id, tournament_id: tournamentId };
+  const { errors } = form.formState;
+
+  return (
+    <details className="collapse collapse-arrow border border-base-300 bg-base-100/50">
+      <summary className="collapse-title">
+        <span className="flex flex-wrap items-center gap-2 font-semibold">
+          Ranking #{ranking.position}
+          {ranking.add_score_points ? (
+            <span className="badge badge-soft badge-accent badge-sm">Adds match scores</span>
+          ) : null}
+        </span>
+        <span className="block text-sm text-base-content/70">
+          Win {formatPoints(ranking.win_points)} · Draw {formatPoints(ranking.draw_points)} · Loss{' '}
+          {formatPoints(ranking.loss_points)}
+        </span>
+      </summary>
+      <form
+        className="collapse-content"
+        onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
+      >
+        <div className="grid gap-x-4 md:grid-cols-2">
+          <Field error={errors.position?.message} label="Position">
+            <input
+              className="input w-full"
+              min={0}
+              required
+              type="number"
+              {...form.register('position', { valueAsNumber: true })}
+            />
+          </Field>
+          {POINT_FIELDS.map(([name, label]) => (
+            <Field error={errors[name]?.message} key={name} label={label}>
+              <input
+                className="input w-full"
+                required
+                step="any"
+                type="number"
+                {...form.register(name, { valueAsNumber: true })}
+              />
+            </Field>
+          ))}
+        </div>
+        <CheckboxField
+          className="mt-3"
+          description={ADD_SCORE_POINTS_DESCRIPTION}
+          label="Add raw score points"
+          {...form.register('add_score_points')}
+        />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button className="btn btn-primary" disabled={update.isPending} type="submit">
+            Save ranking
+          </button>
+          <button
+            className="btn btn-error btn-soft"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm(`Delete ranking #${ranking.position}?`)) remove.mutate({ path });
+            }}
+            type="button"
+          >
+            Delete ranking
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 export function RankingsSection({
   bundle,
-  onRefresh,
-  setFlash,
   teamMap,
 }: {
   bundle: TournamentBundle;
-  onRefresh: () => void;
-  setFlash: (message: FlashMessage) => void;
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
 }) {
   return (
@@ -289,163 +531,27 @@ export function RankingsSection({
         standings={bundle.standings}
         teamMap={teamMap}
       />
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Surface className="space-y-4">
+      <div className="grid items-start gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <Surface>
           <SurfaceHeading title="Ranking rule" />
-          <form
-            className="space-y-4"
-            onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              const form = event.currentTarget;
-              const formData = new FormData(form);
-              await runAction(
-                setFlash,
-                async () => {
-                  await OpenApi.createRankingApiTournamentsTournamentIdRankingsPost({
-                    body: {
-                      add_score_points: toCheckbox(formData.get('add_score_points')),
-                      draw_points: toNumber(formData.get('draw_points')),
-                      loss_points: toNumber(formData.get('loss_points')),
-                      win_points: toNumber(formData.get('win_points')),
-                    },
-                    path: { tournament_id: bundle.tournament.id },
-                    throwOnError: true,
-                  });
-                },
-                'Ranking created successfully.',
-                () => {
-                  form.reset();
-                  onRefresh();
-                },
-              );
-            }}
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField label="Win points">
-                <Input defaultValue={3} name="win_points" type="number" />
-              </FormField>
-              <FormField label="Draw points">
-                <Input defaultValue={1} name="draw_points" type="number" />
-              </FormField>
-              <FormField label="Loss points">
-                <Input defaultValue={0} name="loss_points" type="number" />
-              </FormField>
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-                <input
-                  className="h-4 w-4 accent-brand-500"
-                  name="add_score_points"
-                  type="checkbox"
-                />
-                <span>Add raw score points</span>
-              </label>
-            </div>
-            <Button type="submit">Create ranking</Button>
-          </form>
+          <NewRankingForm tournamentId={bundle.tournament.id} />
         </Surface>
-
-        <Surface className="space-y-4">
+        <Surface>
           <SurfaceHeading
-            actions={<Pill>{`${bundle.rankings.length} rankings`}</Pill>}
+            actions={
+              <span className="text-sm text-base-content/70">
+                {bundle.rankings.length} rankings
+              </span>
+            }
             title="Ranking definitions"
           />
-          <div className="space-y-4">
+          <div className="space-y-3">
             {bundle.rankings.map((ranking) => (
-              <details
-                className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
+              <RankingEditor
                 key={ranking.id}
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-white">Ranking #{ranking.position}</h3>
-                    <p className="text-sm text-zinc-400">
-                      Win {ranking.win_points} · Draw {ranking.draw_points} · Loss{' '}
-                      {ranking.loss_points}
-                    </p>
-                  </div>
-                  {ranking.add_score_points ? (
-                    <Pill tone="accent">score-aware</Pill>
-                  ) : (
-                    <Pill>flat</Pill>
-                  )}
-                </summary>
-                <form
-                  className="mt-4 grid gap-4 md:grid-cols-2"
-                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    await runAction(
-                      setFlash,
-                      async () => {
-                        await OpenApi.updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPut(
-                          {
-                            body: {
-                              add_score_points: toCheckbox(formData.get('add_score_points')),
-                              draw_points: toNumber(formData.get('draw_points')),
-                              loss_points: toNumber(formData.get('loss_points')),
-                              position: toNumber(formData.get('position')),
-                              win_points: toNumber(formData.get('win_points')),
-                            },
-                            path: { ranking_id: ranking.id, tournament_id: bundle.tournament.id },
-                            throwOnError: true,
-                          },
-                        );
-                      },
-                      'Ranking updated successfully.',
-                      onRefresh,
-                    );
-                  }}
-                >
-                  <FormField label="Position">
-                    <Input defaultValue={ranking.position} name="position" type="number" />
-                  </FormField>
-                  <FormField label="Win points">
-                    <Input defaultValue={ranking.win_points} name="win_points" type="number" />
-                  </FormField>
-                  <FormField label="Draw points">
-                    <Input defaultValue={ranking.draw_points} name="draw_points" type="number" />
-                  </FormField>
-                  <FormField label="Loss points">
-                    <Input defaultValue={ranking.loss_points} name="loss_points" type="number" />
-                  </FormField>
-                  <label className="md:col-span-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-                    <input
-                      className="h-4 w-4 accent-brand-500"
-                      defaultChecked={ranking.add_score_points}
-                      name="add_score_points"
-                      type="checkbox"
-                    />
-                    <span>Add raw score points</span>
-                  </label>
-                  <div className="md:col-span-2 flex flex-wrap gap-3">
-                    <Button type="submit">Save ranking</Button>
-                    <Button
-                      onClick={async () => {
-                        if (!window.confirm(`Delete ranking #${ranking.position}?`)) return;
-                        await runAction(
-                          setFlash,
-                          async () => {
-                            await OpenApi.deleteRankingApiTournamentsTournamentIdRankingsRankingIdDelete(
-                              {
-                                path: {
-                                  ranking_id: ranking.id,
-                                  tournament_id: bundle.tournament.id,
-                                },
-                                throwOnError: true,
-                              },
-                            );
-                          },
-                          'Ranking deleted successfully.',
-                          onRefresh,
-                        );
-                      }}
-                      tone="danger"
-                      type="button"
-                    >
-                      Delete ranking
-                    </Button>
-                  </div>
-                </form>
-              </details>
+                ranking={ranking}
+                tournamentId={bundle.tournament.id}
+              />
             ))}
           </div>
         </Surface>
@@ -454,543 +560,527 @@ export function RankingsSection({
   );
 }
 
-export function ResultsSection({
-  matches,
-  stageItemsById,
-}: {
-  matches: FlattenedMatch[];
-  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-}) {
-  const scoredMatches = matches.filter(({ match }) => isScored(match)).reverse();
+const tournamentSettingsSchema = zTournamentUpdateBody.extend({ start_time: zLocalDateTime });
+
+function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament }) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(tournamentSettingsSchema),
+    values: {
+      dashboard_endpoint: normalizeDashboardEndpoint(tournament.dashboard_endpoint) ?? '',
+      dashboard_public: tournament.dashboard_public,
+      duration_minutes: tournament.duration_minutes,
+      margin_minutes: tournament.margin_minutes,
+      name: tournament.name,
+      players_can_be_in_multiple_teams: tournament.players_can_be_in_multiple_teams,
+      start_time: toDateTimeLocal(tournament.start_time),
+    },
+  });
+  const update = useMutation({
+    ...updateTournamentByIdApiTournamentsTournamentIdPutMutation(),
+    meta: { successMessage: 'Tournament saved.' },
+  });
+  const uploadLogo = useMutation({
+    ...uploadLogoApiTournamentsTournamentIdLogoPostMutation(),
+    meta: { successMessage: 'Logo uploaded.' },
+  });
+  const path = { tournament_id: tournament.id };
+  const { errors } = form.formState;
 
   return (
-    <Surface className="space-y-4">
-      <SurfaceHeading
-        actions={<Pill>{`${scoredMatches.length} scored matches`}</Pill>}
-        title="Latest results"
-      />
-      <div className="grid gap-3">
-        {scoredMatches.map(({ match, round, stage, stageItem }) => (
-          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4" key={match.id}>
-            <p className="text-xs text-zinc-400">
-              {stage.name} / {stageItem.name || stageItem.type_name} / {round.name}
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-white">
-              {inputLabel(match.stage_item_input1, stageItemsById)}{' '}
-              <span className="text-brand-300">{match.stage_item_input1_score}</span> -{' '}
-              <span className="text-brand-300">{match.stage_item_input2_score}</span>{' '}
-              {inputLabel(match.stage_item_input2, stageItemsById)}
-            </h3>
-            <p className="mt-2 text-sm text-zinc-400">{formatDateTime(match.start_time)}</p>
-          </div>
-        ))}
+    <form onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}>
+      <div className="grid gap-x-4 md:grid-cols-2">
+        <Field error={errors.name?.message} label="Tournament name">
+          <input className="input w-full" required {...form.register('name')} />
+        </Field>
+        <Field label="Details link">
+          <input
+            className="input w-full"
+            placeholder="summer-cup-2026"
+            {...form.register('dashboard_endpoint')}
+          />
+        </Field>
+        <Field error={errors.start_time?.message} label="Start time">
+          <input
+            className="input w-full"
+            required
+            type="datetime-local"
+            {...form.register('start_time')}
+          />
+        </Field>
+        <Field label="Tournament logo">
+          <input
+            accept="image/*"
+            className="file-input w-full"
+            disabled={uploadLogo.isPending}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadLogo.mutate({ body: { file }, path });
+            }}
+            type="file"
+          />
+        </Field>
+        <Field error={errors.duration_minutes?.message} label="Match duration (minutes)">
+          <input
+            className="input w-full"
+            min={1}
+            required
+            type="number"
+            {...form.register('duration_minutes', { valueAsNumber: true })}
+          />
+        </Field>
+        <Field error={errors.margin_minutes?.message} label="Break between rounds (minutes)">
+          <input
+            className="input w-full"
+            min={0}
+            required
+            type="number"
+            {...form.register('margin_minutes', { valueAsNumber: true })}
+          />
+        </Field>
       </div>
-    </Surface>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <CheckboxField
+          description={DETAILS_PAGE_DESCRIPTION}
+          label="Details page enabled"
+          {...form.register('dashboard_public')}
+        />
+        <CheckboxField
+          label="Players can join multiple teams"
+          {...form.register('players_can_be_in_multiple_teams')}
+        />
+      </div>
+      <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
+        {update.isPending ? 'Saving…' : 'Save tournament'}
+      </button>
+    </form>
   );
 }
 
-export function SettingsSection({
-  bundle,
-  onRefresh,
-  setFlash,
-  tournamentKey,
-}: {
-  bundle: TournamentBundle;
-  onRefresh: () => void;
-  setFlash: (message: FlashMessage) => void;
-  tournamentKey: string;
-}) {
+export function SettingsSection({ bundle }: { bundle: TournamentBundle }) {
+  const navigate = useNavigate();
   const tournament = bundle.tournament;
+  const isOpen = tournament.status === 'OPEN';
+  const detailsPath = publicTournamentPath(tournament);
+  const path = { tournament_id: tournament.id };
+  const changeStatus = useMutation({
+    ...changeStatusApiTournamentsTournamentIdChangeStatusPostMutation(),
+    meta: { successMessage: isOpen ? 'Tournament archived.' : 'Tournament reopened.' },
+  });
+  const remove = useMutation({
+    ...deleteTournamentApiTournamentsTournamentIdDeleteMutation(),
+    // Reloading the deleted tournament would fail as unauthorized, which logs the organizer out.
+    meta: {
+      invalidates: [getTournamentsApiTournamentsGetQueryKey()],
+      successMessage: 'Tournament deleted.',
+    },
+    onSuccess: () => navigate('/'),
+  });
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-      <Surface className="space-y-4">
-        <SurfaceHeading title="Metadata and policy" />
-        <form
-          className="grid gap-4 md:grid-cols-2"
-          onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            await runAction(
-              setFlash,
-              async () => {
-                await OpenApi.updateTournamentByIdApiTournamentsTournamentIdPut({
-                  body: {
-                    dashboard_endpoint: toOptionalString(formData.get('dashboard_endpoint')),
-                    dashboard_public: toCheckbox(formData.get('dashboard_public')),
-                    duration_minutes: toNumber(formData.get('duration_minutes')),
-                    margin_minutes: toNumber(formData.get('margin_minutes')),
-                    name: String(formData.get('name') ?? ''),
-                    players_can_be_in_multiple_teams: toCheckbox(
-                      formData.get('players_can_be_in_multiple_teams'),
-                    ),
-                    start_time: String(formData.get('start_time') ?? ''),
-                  },
-                  path: { tournament_id: tournament.id },
-                  throwOnError: true,
-                });
-
-                const file = formData.get('logo');
-                if (file instanceof File && file.size > 0) {
-                  await OpenApi.uploadLogoApiTournamentsTournamentIdLogoPost({
-                    body: { file },
-                    path: { tournament_id: tournament.id },
-                    throwOnError: true,
-                  });
-                }
-              },
-              'Tournament updated successfully.',
-              onRefresh,
-            );
-          }}
-        >
-          <FormField label="Tournament name">
-            <Input defaultValue={tournament.name} name="name" />
-          </FormField>
-          <FormField label="Dashboard endpoint">
-            <Input
-              defaultValue={normalizeDashboardEndpoint(tournament.dashboard_endpoint) ?? ''}
-              name="dashboard_endpoint"
-            />
-          </FormField>
-          <FormField label="Start time">
-            <DateTimeField defaultValue={tournament.start_time} name="start_time" />
-          </FormField>
-          <FormField label="Tournament logo">
-            <Input accept="image/*" name="logo" type="file" />
-          </FormField>
-          <FormField label="Match duration (minutes)">
-            <Input
-              defaultValue={tournament.duration_minutes}
-              name="duration_minutes"
-              type="number"
-            />
-          </FormField>
-          <FormField label="Break between rounds (minutes)">
-            <Input defaultValue={tournament.margin_minutes} name="margin_minutes" type="number" />
-          </FormField>
-          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-            <input
-              className="h-4 w-4 accent-brand-500"
-              defaultChecked={tournament.dashboard_public}
-              name="dashboard_public"
-              type="checkbox"
-            />
-            <span>Public dashboard enabled</span>
-          </label>
-          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-200">
-            <input
-              className="h-4 w-4 accent-brand-500"
-              defaultChecked={tournament.players_can_be_in_multiple_teams}
-              name="players_can_be_in_multiple_teams"
-              type="checkbox"
-            />
-            <span>Players can join multiple teams</span>
-          </label>
-          <div className="md:col-span-2">
-            <Button type="submit">Save tournament</Button>
-          </div>
-        </form>
+    <div className="grid items-start gap-6 xl:grid-cols-[1fr_0.8fr]">
+      <Surface>
+        <SurfaceHeading title="Tournament settings" />
+        <TournamentSettingsForm tournament={tournament} />
       </Surface>
 
-      <Surface className="space-y-4">
+      <Surface>
         <SurfaceHeading title="Status and sharing" />
-        <p className="text-sm text-zinc-300">
-          Public dashboard link:{' '}
-          <Link
-            className="underline decoration-brand-400/50 underline-offset-4 hover:text-white"
-            to={`/tournaments/${normalizeDashboardEndpoint(tournament.dashboard_endpoint) ?? tournamentKey}/dashboard`}
-          >{`/tournaments/${normalizeDashboardEndpoint(tournament.dashboard_endpoint) ?? tournamentKey}/dashboard`}</Link>
-        </p>
-        <div className="grid gap-3">
-          <Button
-            onClick={async () => {
-              await runAction(
-                setFlash,
-                async () => {
-                  await OpenApi.changeStatusApiTournamentsTournamentIdChangeStatusPost({
-                    body: { status: tournament.status === 'OPEN' ? 'ARCHIVED' : 'OPEN' },
-                    path: { tournament_id: tournament.id },
-                    throwOnError: true,
-                  });
-                },
-                'Tournament status updated successfully.',
-                onRefresh,
-              );
-            }}
+        <section className="space-y-3">
+          <div className="flex items-center gap-3 text-sm">
+            Status: <TournamentStatusBadge tournament={tournament} />
+          </div>
+          <p className="text-sm text-base-content/70">
+            {isOpen
+              ? 'Archive the tournament once it is over. Archived tournaments can no longer be changed.'
+              : 'This tournament is archived. Reopen it to make changes again.'}
+          </p>
+          <button
+            className="btn btn-soft"
+            disabled={changeStatus.isPending}
+            onClick={() =>
+              changeStatus.mutate({ body: { status: isOpen ? 'ARCHIVED' : 'OPEN' }, path })
+            }
             type="button"
           >
-            Switch to {tournament.status === 'OPEN' ? 'ARCHIVED' : 'OPEN'}
-          </Button>
-          <Button
-            onClick={async () => {
-              if (!window.confirm(`Delete ${tournament.name}?`)) return;
-              await runAction(
-                setFlash,
-                async () => {
-                  await OpenApi.deleteTournamentApiTournamentsTournamentIdDelete({
-                    path: { tournament_id: tournament.id },
-                    throwOnError: true,
-                  });
-                },
-                'Tournament deleted successfully. Return to the overview page.',
-              );
+            {isOpen ? 'Archive tournament' : 'Reopen tournament'}
+          </button>
+        </section>
+
+        <section className="space-y-2 border-t border-base-300 pt-5">
+          <h3 className="text-sm font-medium">Details page</h3>
+          {tournament.dashboard_public ? (
+            <p className="text-sm text-base-content/80">
+              Share this link with players:{' '}
+              <Link className="link break-all" to={detailsPath}>
+                {detailsPath}
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-base-content/70">
+              Turn on “Details page enabled” to share a link to it, and to keep it visible after the
+              tournament is archived.
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-3 border-t border-base-300 pt-5">
+          <h3 className="text-sm font-medium">Delete tournament</h3>
+          <p className="text-sm text-base-content/70">
+            Deletes the tournament with its teams, players and results. This cannot be undone.
+          </p>
+          <button
+            className="btn btn-error"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm(`Delete ${tournament.name}? This cannot be undone.`)) {
+                remove.mutate({ path });
+              }
             }}
-            tone="danger"
             type="button"
           >
             Delete tournament
-          </Button>
-        </div>
+          </button>
+        </section>
       </Surface>
     </div>
+  );
+}
+
+function StageForm({
+  stage,
+  tournament,
+}: {
+  stage: OpenApi.StageWithStageItems;
+  tournament: OpenApi.Tournament;
+}) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(zStageUpdateBody),
+    values: { custom_duration_minutes: stage.custom_duration_minutes, name: stage.name },
+  });
+  const update = useMutation({
+    ...updateStageApiTournamentsTournamentIdStagesStageIdPutMutation(),
+    meta: { successMessage: 'Stage saved.' },
+  });
+  const remove = useMutation({
+    ...deleteStageApiTournamentsTournamentIdStagesStageIdDeleteMutation(),
+    meta: { successMessage: 'Stage deleted.' },
+  });
+  const path = { stage_id: stage.id, tournament_id: tournament.id };
+
+  return (
+    <form
+      className="grid items-end gap-x-4 md:grid-cols-[1fr_1fr_auto_auto]"
+      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
+    >
+      <Field error={form.formState.errors.name?.message} label="Stage name">
+        <input className="input w-full" {...form.register('name')} />
+      </Field>
+      <Field
+        error={form.formState.errors.custom_duration_minutes?.message}
+        label="Match duration (minutes)"
+      >
+        <input
+          className="input w-full"
+          min={1}
+          placeholder={`Tournament default (${tournament.duration_minutes})`}
+          type="number"
+          {...form.register('custom_duration_minutes', {
+            setValueAs: (value) => (value === '' || value == null ? null : Number(value)),
+          })}
+        />
+      </Field>
+      <button className="btn btn-primary mb-1" disabled={update.isPending} type="submit">
+        Save stage
+      </button>
+      <button
+        className="btn btn-error btn-soft mb-1"
+        disabled={remove.isPending}
+        onClick={() => {
+          if (window.confirm(`Delete stage ${stage.name}?`)) remove.mutate({ path });
+        }}
+        type="button"
+      >
+        Delete stage
+      </button>
+    </form>
+  );
+}
+
+function NewStageItemForm({
+  rankings,
+  stageId,
+  tournamentId,
+}: {
+  rankings: OpenApi.Ranking[];
+  stageId: number;
+  tournamentId: number;
+}) {
+  const form = useForm({
+    defaultValues: {
+      name: '',
+      ranking_id: rankings[0]?.id ?? null,
+      stage_id: stageId,
+      team_count: 8,
+      type: 'ROUND_ROBIN' as const,
+    },
+    resolver: zodResolver(zStageItemCreateBody),
+  });
+  const create = useMutation({
+    ...createStageItemApiTournamentsTournamentIdStageItemsPostMutation(),
+    meta: { successMessage: 'Stage item created.' },
+  });
+
+  return (
+    <form
+      className="grid items-end gap-x-4 rounded-box border border-base-300 bg-base-100/40 p-4 md:grid-cols-4"
+      onSubmit={form.handleSubmit((body) =>
+        create.mutate(
+          {
+            body: { ...body, name: body.name?.trim() || null },
+            path: { tournament_id: tournamentId },
+          },
+          { onSuccess: () => form.reset() },
+        ),
+      )}
+    >
+      <Field label="Name">
+        <input className="input w-full" placeholder="Upper bracket" {...form.register('name')} />
+      </Field>
+      <Field label="Type">
+        <select className="select w-full" {...form.register('type')}>
+          <option value="ROUND_ROBIN">Round robin</option>
+          <option value="SINGLE_ELIMINATION">Single elimination</option>
+          <option value="SWISS">Swiss</option>
+        </select>
+      </Field>
+      <Field error={form.formState.errors.team_count?.message} label="Team count">
+        <input
+          className="input w-full"
+          max={64}
+          min={2}
+          required
+          type="number"
+          {...form.register('team_count', { valueAsNumber: true })}
+        />
+      </Field>
+      {rankings.length > 1 ? (
+        <Field label="Ranking">
+          <select
+            className="select w-full"
+            {...form.register('ranking_id', { valueAsNumber: true })}
+          >
+            {rankings.map((ranking) => (
+              <option key={ranking.id} value={ranking.id}>
+                #{ranking.position}: win {formatPoints(ranking.win_points)}, draw{' '}
+                {formatPoints(ranking.draw_points)}, loss {formatPoints(ranking.loss_points)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+      <div className="md:col-span-4">
+        <button className="btn btn-primary mt-3" disabled={create.isPending} type="submit">
+          Create stage item
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function StageItemNameForm({
+  stageItem,
+  tournamentId,
+}: {
+  stageItem: OpenApi.StageItemWithRounds;
+  tournamentId: number;
+}) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(zStageItemUpdateBody),
+    values: { name: stageItem.name, ranking_id: stageItem.ranking_id ?? 0 },
+  });
+  const update = useMutation({
+    ...updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPutMutation(),
+    meta: { successMessage: 'Name saved.' },
+  });
+  const remove = useMutation({
+    ...deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDeleteMutation(),
+    meta: { successMessage: 'Stage item deleted.' },
+  });
+  const path = { stage_item_id: stageItem.id, tournament_id: tournamentId };
+
+  return (
+    <form
+      className="flex flex-col gap-2 md:flex-row"
+      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
+    >
+      <input
+        aria-label="Stage item name"
+        className="input w-full"
+        placeholder="Stage item name"
+        {...form.register('name')}
+      />
+      <button className="btn btn-primary" disabled={update.isPending} type="submit">
+        Save name
+      </button>
+      <button
+        className="btn btn-error btn-soft"
+        disabled={remove.isPending}
+        onClick={() => {
+          if (window.confirm(`Delete stage item ${stageItem.name || stageItem.type_name}?`)) {
+            remove.mutate({ path });
+          }
+        }}
+        type="button"
+      >
+        Delete item
+      </button>
+    </form>
   );
 }
 
 export function StagesSection({
   bundle,
   focusStageItem,
-  onRefresh,
-  setFlash,
 }: {
   bundle: TournamentBundle;
   focusStageItem: OpenApi.StageItemWithRounds | null;
-  onRefresh: () => void;
-  setFlash: (message: FlashMessage) => void;
 }) {
   const teamLookup = new Map(bundle.teams.map((team) => [team.id, team] as const));
-  const rankings = [...bundle.rankings].sort((left, right) => left.position - right.position);
-  const stageItemsById = new Map<number, OpenApi.StageItemWithRounds>();
-  bundle.stages.forEach((stage) =>
-    stage.stage_items.forEach((item) => stageItemsById.set(item.id, item)),
+  const rankings = bundle.rankings.toSorted((left, right) => left.position - right.position);
+  const stageItemsById = new Map(
+    bundle.stages.flatMap((stage) => stage.stage_items.map((item) => [item.id, item] as const)),
   );
+  const path = { tournament_id: bundle.tournament.id };
+  const createStage = useMutation({
+    ...createStageApiTournamentsTournamentIdStagesPostMutation(),
+    meta: { successMessage: 'Stage created.' },
+  });
+  const activateNext = useMutation({
+    ...activateNextStageApiTournamentsTournamentIdStagesActivatePostMutation(),
+    meta: { successMessage: 'Moved active stage forward.' },
+  });
+  const activatePrevious = useMutation({
+    ...activateNextStageApiTournamentsTournamentIdStagesActivatePostMutation(),
+    meta: { successMessage: 'Moved active stage backward.' },
+  });
 
   return (
     <div className="space-y-6">
-      <Surface className="space-y-4">
+      <Surface>
         <SurfaceHeading
           actions={
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={async () => {
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.createStageApiTournamentsTournamentIdStagesPost({
-                        path: { tournament_id: bundle.tournament.id },
-                        throwOnError: true,
-                      });
-                    },
-                    'Stage created successfully.',
-                    onRefresh,
-                  );
-                }}
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={createStage.isPending}
+                onClick={() => createStage.mutate({ path })}
                 type="button"
               >
                 Add stage
-              </Button>
-              <Button
-                onClick={async () => {
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
-                        body: { direction: 'next' },
-                        path: { tournament_id: bundle.tournament.id },
-                        throwOnError: true,
-                      });
-                    },
-                    'Moved active stage forward.',
-                    onRefresh,
-                  );
-                }}
-                tone="secondary"
+              </button>
+              <button
+                className="btn btn-soft btn-sm"
+                disabled={activateNext.isPending}
+                onClick={() => activateNext.mutate({ body: { direction: 'next' }, path })}
                 type="button"
               >
                 Activate next stage
-              </Button>
-              <Button
-                onClick={async () => {
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.activateNextStageApiTournamentsTournamentIdStagesActivatePost({
-                        body: { direction: 'previous' },
-                        path: { tournament_id: bundle.tournament.id },
-                        throwOnError: true,
-                      });
-                    },
-                    'Moved active stage backward.',
-                    onRefresh,
-                  );
-                }}
-                tone="ghost"
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={activatePrevious.isPending}
+                onClick={() => activatePrevious.mutate({ body: { direction: 'previous' }, path })}
                 type="button"
               >
                 Activate previous stage
-              </Button>
+              </button>
             </div>
           }
           title="Bracket editor"
         />
         {focusStageItem ? (
-          <div className="rounded-[1.25rem] border border-accent-400/30 bg-accent-500/10 p-4 text-sm text-accent-100">
+          <div className="alert alert-soft alert-warning text-sm">
             Focusing stage item <strong>{focusStageItem.name || focusStageItem.type_name}</strong>{' '}
             via the swiss route.
           </div>
         ) : null}
       </Surface>
-      <div className="space-y-6">
-        {bundle.stages.map((stage) => (
-          <details
-            className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5"
-            key={stage.id}
-            open={
-              stage.is_active || stage.stage_items.some((item) => item.id === focusStageItem?.id)
-            }
-          >
-            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {stage.is_active ? <Pill tone="accent">active</Pill> : <Pill>inactive</Pill>}
-                  <Pill>{`${stage.stage_items.length} stage items`}</Pill>
-                </div>
-                <h3 className="mt-3 font-display text-2xl font-semibold text-white">
-                  {stage.name}
-                </h3>
-              </div>
-            </summary>
-            <div className="mt-5 space-y-5">
-              <form
-                className="grid items-end gap-4 md:grid-cols-[1fr_1fr_auto_auto]"
-                onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                  event.preventDefault();
-                  const formData = new FormData(event.currentTarget);
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.updateStageApiTournamentsTournamentIdStagesStageIdPut({
-                        body: {
-                          custom_duration_minutes: toOptionalNumber(
-                            formData.get('custom_duration_minutes'),
-                          ),
-                          name: String(formData.get('name') ?? ''),
-                        },
-                        path: { stage_id: stage.id, tournament_id: bundle.tournament.id },
-                        throwOnError: true,
-                      });
-                    },
-                    'Stage updated successfully.',
-                    onRefresh,
-                  );
-                }}
+      {bundle.stages.map((stage) => (
+        <details
+          className="collapse collapse-arrow border border-base-300 bg-base-200/60"
+          key={stage.id}
+          open={stage.is_active || stage.stage_items.some((item) => item.id === focusStageItem?.id)}
+        >
+          <summary className="collapse-title">
+            <span className="flex flex-wrap items-center gap-2">
+              <span
+                className={cx('badge badge-soft badge-sm', stage.is_active ? 'badge-accent' : null)}
               >
-                <FormField label="Stage name">
-                  <Input defaultValue={stage.name} name="name" />
-                </FormField>
-                <FormField label="Match duration (minutes)">
-                  <Input
-                    defaultValue={stage.custom_duration_minutes ?? ''}
-                    min={1}
-                    name="custom_duration_minutes"
-                    placeholder={`Tournament default (${bundle.tournament.duration_minutes})`}
-                    type="number"
+                {stage.is_active ? 'Active' : 'Inactive'}
+              </span>
+              <span className="text-sm text-base-content/70">
+                {stage.stage_items.length} stage items
+              </span>
+            </span>
+            <span className="mt-2 block font-display text-2xl font-semibold">{stage.name}</span>
+          </summary>
+          <div className="collapse-content space-y-5">
+            <StageForm stage={stage} tournament={bundle.tournament} />
+            <NewStageItemForm
+              rankings={rankings}
+              stageId={stage.id}
+              tournamentId={bundle.tournament.id}
+            />
+            {stage.stage_items.map((stageItem) => (
+              <details
+                className="collapse collapse-arrow border border-base-300 bg-base-100/50"
+                key={stageItem.id}
+                open
+              >
+                <summary className="collapse-title">
+                  <span className="badge badge-soft badge-sm">{stageItem.type_name}</span>
+                  <span className="mt-2 block text-xl font-semibold">
+                    {stageItem.name || stageItem.type_name}
+                  </span>
+                  <span className="mt-1 block text-sm text-base-content/70">
+                    {stageItemStatus(stageItem)}
+                  </span>
+                </summary>
+                <div className="collapse-content space-y-5">
+                  <StageItemNameForm stageItem={stageItem} tournamentId={bundle.tournament.id} />
+                  <StageItemSlots
+                    nextStageEntries={bundle.nextStageRankings[String(stageItem.id)]}
+                    options={bundle.availableInputs[String(stage.id)] ?? []}
+                    stageItem={stageItem}
+                    stageItemsById={stageItemsById}
+                    teamLookup={teamLookup}
+                    tournamentId={bundle.tournament.id}
                   />
-                </FormField>
-                <Button type="submit">Save stage</Button>
-                <Button
-                  onClick={async () => {
-                    if (!window.confirm(`Delete stage ${stage.name}?`)) return;
-                    await runAction(
-                      setFlash,
-                      async () => {
-                        await OpenApi.deleteStageApiTournamentsTournamentIdStagesStageIdDelete({
-                          path: { stage_id: stage.id, tournament_id: bundle.tournament.id },
-                          throwOnError: true,
-                        });
-                      },
-                      'Stage deleted successfully.',
-                      onRefresh,
-                    );
-                  }}
-                  tone="danger"
-                  type="button"
-                >
-                  Delete stage
-                </Button>
-              </form>
-
-              <form
-                className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/20 p-4 md:grid-cols-4"
-                onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                  event.preventDefault();
-                  const form = event.currentTarget;
-                  const formData = new FormData(form);
-                  await runAction(
-                    setFlash,
-                    async () => {
-                      await OpenApi.createStageItemApiTournamentsTournamentIdStageItemsPost({
-                        body: {
-                          name: toOptionalString(formData.get('name')),
-                          ranking_id: toOptionalNumber(formData.get('ranking_id')),
-                          stage_id: stage.id,
-                          team_count: toNumber(formData.get('team_count')),
-                          type: String(formData.get('type') ?? 'ROUND_ROBIN') as OpenApi.StageType,
-                        },
-                        path: { tournament_id: bundle.tournament.id },
-                        throwOnError: true,
-                      });
-                    },
-                    'Stage item created successfully.',
-                    () => {
-                      form.reset();
-                      onRefresh();
-                    },
-                  );
-                }}
-              >
-                <FormField label="Name">
-                  <Input name="name" placeholder="Upper bracket" />
-                </FormField>
-                <FormField label="Type">
-                  <Select defaultValue="ROUND_ROBIN" name="type">
-                    <option value="ROUND_ROBIN">Round robin</option>
-                    <option value="SINGLE_ELIMINATION">Single elimination</option>
-                    <option value="SWISS">Swiss</option>
-                  </Select>
-                </FormField>
-                <FormField label="Team count">
-                  <Input defaultValue={8} min={2} name="team_count" type="number" />
-                </FormField>
-                {rankings.length > 1 ? (
-                  <FormField label="Ranking">
-                    <Select defaultValue={rankings[0].id} name="ranking_id">
-                      {rankings.map((ranking) => (
-                        <option key={ranking.id} value={ranking.id}>
-                          #{ranking.position}: win {ranking.win_points}, draw {ranking.draw_points},
-                          loss {ranking.loss_points}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                ) : null}
-                <div className="md:col-span-4">
-                  <Button type="submit">Create stage item</Button>
+                  <section className="space-y-4 rounded-box border border-base-300 bg-base-200/60 p-4">
+                    <h5 className="font-semibold">Rounds</h5>
+                    <StageItemRounds
+                      stageItem={stageItem}
+                      stageItemsById={stageItemsById}
+                      tournamentId={bundle.tournament.id}
+                    />
+                  </section>
+                  <StageItemVisualization
+                    showMatches={false}
+                    stageItem={stageItem}
+                    stageItemsById={stageItemsById}
+                    standings={bundle.standings}
+                    teamMap={teamLookup}
+                    tournamentId={bundle.tournament.id}
+                  />
                 </div>
-              </form>
-              <div className="space-y-4">
-                {stage.stage_items.map((stageItem) => (
-                  <details
-                    className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
-                    key={stageItem.id}
-                    open
-                  >
-                    <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <Pill tone="accent">{stageItem.type_name}</Pill>
-                        <h4 className="mt-3 text-xl font-semibold text-white">
-                          {stageItem.name || stageItem.type_name}
-                        </h4>
-                        <p className="mt-1 text-sm text-zinc-400">{stageItemStatus(stageItem)}</p>
-                      </div>
-                    </summary>
-                    <div className="mt-5 space-y-5">
-                      <form
-                        className="grid gap-4 md:grid-cols-[1fr_auto_auto]"
-                        onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                          event.preventDefault();
-                          const formData = new FormData(event.currentTarget);
-                          await runAction(
-                            setFlash,
-                            async () => {
-                              await OpenApi.updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPut(
-                                {
-                                  body: {
-                                    name: String(formData.get('name') ?? ''),
-                                    ranking_id: stageItem.ranking_id ?? 0,
-                                  },
-                                  path: {
-                                    stage_item_id: stageItem.id,
-                                    tournament_id: bundle.tournament.id,
-                                  },
-                                  throwOnError: true,
-                                },
-                              );
-                            },
-                            'Name saved.',
-                            onRefresh,
-                          );
-                        }}
-                      >
-                        <Input
-                          defaultValue={stageItem.name}
-                          name="name"
-                          placeholder="Stage item name"
-                        />
-                        <Button type="submit">Save name</Button>
-                        <Button
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `Delete stage item ${stageItem.name || stageItem.type_name}?`,
-                              )
-                            )
-                              return;
-                            await runAction(
-                              setFlash,
-                              async () => {
-                                await OpenApi.deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDelete(
-                                  {
-                                    path: {
-                                      stage_item_id: stageItem.id,
-                                      tournament_id: bundle.tournament.id,
-                                    },
-                                    throwOnError: true,
-                                  },
-                                );
-                              },
-                              'Stage item deleted successfully.',
-                              onRefresh,
-                            );
-                          }}
-                          tone="danger"
-                          type="button"
-                        >
-                          Delete item
-                        </Button>
-                      </form>
-                      <StageItemSlots
-                        nextStageEntries={bundle.nextStageRankings[String(stageItem.id)]}
-                        options={bundle.availableInputs[String(stage.id)] ?? []}
-                        stageItem={stageItem}
-                        stageItemsById={stageItemsById}
-                        teamLookup={teamLookup}
-                        tournamentId={bundle.tournament.id}
-                      />
-                      <Surface className="space-y-4 border-white/10 bg-white/5 p-4">
-                        <h5 className="font-semibold text-white">Rounds</h5>
-                        <StageItemRounds
-                          stageItem={stageItem}
-                          stageItemsById={stageItemsById}
-                          tournamentId={bundle.tournament.id}
-                        />
-                      </Surface>
-                      <StageItemVisualization
-                        showMatches={false}
-                        stageItem={stageItem}
-                        stageItemsById={stageItemsById}
-                        standings={bundle.standings}
-                        teamMap={teamLookup}
-                        tournamentId={bundle.tournament.id}
-                      />
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </div>
-          </details>
-        ))}
-      </div>
+              </details>
+            ))}
+          </div>
+        </details>
+      ))}
     </div>
   );
 }

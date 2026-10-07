@@ -2,16 +2,17 @@
 import asyncio
 import functools
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import click
 from heliclockter import datetime_utc
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.app import app
 from bracket.config import config
-from bracket.database import database
-from bracket.logger import get_logger
+from bracket.database import engine
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import UserInsertable
 from bracket.sql.users import (
@@ -25,28 +26,23 @@ from openapi import openapi  # noqa: F401
 
 OPENAPI_JSON_PATH = "openapi/openapi.json"
 
-logger = get_logger("cli")
+logging.basicConfig(format="%(asctime)s [%(name)s] %(levelname)s: %(message)s", level=logging.INFO)
+logger = logging.getLogger("cli")
 
 
 def run_async(f: Any) -> Any:
+    """Run an async command in one transaction, which it receives as its first argument."""
+
     @functools.wraps(f)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        loop = asyncio.new_event_loop()
-
         async def inner() -> None:
             try:
-                await database.connect()
-                await f(*args, **kwargs)
-
-            except KeyboardInterrupt:
-                logger.debug("Closing the process.")
-            except Exception as e:
-                logger.error(e, exc_info=True)
-                raise e
+                async with engine.begin() as conn:
+                    await f(conn, *args, **kwargs)
             finally:
-                await database.disconnect()
+                await engine.dispose()
 
-        return loop.run_until_complete(inner())
+        return asyncio.run(inner())
 
     return wrapper
 
@@ -83,8 +79,8 @@ def clear_user_lock(email: str) -> None:
 
 @cli.command()
 @run_async
-async def create_dev_db() -> None:
-    await sql_create_dev_db()
+async def create_dev_db(conn: AsyncConnection) -> None:
+    await sql_create_dev_db(conn)
 
 
 @cli.command()
@@ -92,7 +88,7 @@ async def create_dev_db() -> None:
 @click.option("--password", prompt="Password", help="The password used to log into the account.")
 @click.option("--name", prompt="Name", help="The name associated with the account.")
 @run_async
-async def register_user(email: str, password: str, name: str) -> None:
+async def register_user(conn: AsyncConnection, email: str, password: str, name: str) -> None:
     user = UserInsertable(
         email=email,
         password_hash=hash_password(password),
@@ -100,10 +96,10 @@ async def register_user(email: str, password: str, name: str) -> None:
         created=datetime_utc.now(),
         account_type=UserAccountType.REGULAR,
     )
-    if await check_whether_email_is_in_use(email):
+    if await check_whether_email_is_in_use(conn, email):
         logger.error("Email address already in use")
         raise SystemExit(1)
-    user_created = await create_user(user)
+    user_created = await create_user(conn, user)
     logger.info(f"Created user with id: {user_created.id}")
 
 

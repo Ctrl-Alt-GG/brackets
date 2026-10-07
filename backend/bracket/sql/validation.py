@@ -3,6 +3,7 @@ from typing import Any, NoReturn, get_args
 
 from fastapi import HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 
 from bracket.models.db.util import StageWithStageItems
@@ -20,23 +21,31 @@ from bracket.utils.id_types import (
     TournamentId,
 )
 
-CheckCallableT = Callable[[Any, list[StageWithStageItems], TournamentId], Awaitable[bool]]
+CheckCallableT = Callable[
+    [AsyncConnection, Any, list[StageWithStageItems], TournamentId], Awaitable[bool]
+]
 
 
 async def check_stage_belongs_to_tournament(
-    stage_id: StageId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncConnection, stage_id: StageId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(stage.id == stage_id for stage in stages)
 
 
 async def check_team_belongs_to_tournament(
-    team_id: TeamId, _: list[StageWithStageItems], tournament_id: TournamentId
+    conn: AsyncConnection,
+    team_id: TeamId,
+    _: list[StageWithStageItems],
+    tournament_id: TournamentId,
 ) -> bool:
-    return await get_team_by_id(team_id, tournament_id) is not None
+    return await get_team_by_id(conn, team_id, tournament_id) is not None
 
 
 async def check_stage_item_belongs_to_tournament(
-    stage_item_id: StageItemId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncConnection,
+    stage_item_id: StageItemId,
+    stages: list[StageWithStageItems],
+    _: TournamentId,
 ) -> bool:
     return any(
         stage_item.id == stage_item_id for stage in stages for stage_item in stage.stage_items
@@ -44,7 +53,10 @@ async def check_stage_item_belongs_to_tournament(
 
 
 async def check_stage_item_input_belongs_to_tournament(
-    stage_item_input_id: StageItemInputId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncConnection,
+    stage_item_input_id: StageItemInputId,
+    stages: list[StageWithStageItems],
+    _: TournamentId,
 ) -> bool:
     return any(
         stage_item_input.id == stage_item_input_id
@@ -55,7 +67,7 @@ async def check_stage_item_input_belongs_to_tournament(
 
 
 async def check_round_belongs_to_tournament(
-    round_id: RoundId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncConnection, round_id: RoundId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(
         round_.id == round_id
@@ -66,7 +78,7 @@ async def check_round_belongs_to_tournament(
 
 
 async def check_match_belongs_to_tournament(
-    match_id: MatchId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncConnection, match_id: MatchId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(
         match.id == match_id
@@ -78,16 +90,19 @@ async def check_match_belongs_to_tournament(
 
 
 async def check_player_belongs_to_tournament(
-    player_id: PlayerId, _: list[StageWithStageItems], tournament_id: TournamentId
+    conn: AsyncConnection,
+    player_id: PlayerId,
+    _: list[StageWithStageItems],
+    tournament_id: TournamentId,
 ) -> bool:
-    return await get_player_by_id(player_id, tournament_id) is not None
+    return await get_player_by_id(conn, player_id, tournament_id) is not None
 
 
 async def check_players_belong_to_tournament(
-    player_ids: set[PlayerId], tournament_id: TournamentId
+    conn: AsyncConnection, player_ids: set[PlayerId], tournament_id: TournamentId
 ) -> bool:
     return player_ids.issubset(
-        player.id for player in await get_all_players_in_tournament(tournament_id)
+        player.id for player in await get_all_players_in_tournament(conn, tournament_id)
     )
 
 
@@ -98,14 +113,14 @@ def raise_exception(field_type: Any, field_value: Any) -> NoReturn:
 
 
 async def check_foreign_keys_belong_to_tournament(
-    some_body: BaseModel, tournament_id: TournamentId
+    conn: AsyncConnection, some_body: BaseModel, tournament_id: TournamentId
 ) -> None:
     """
     Inspects the types of BaseModel attributes, and based on that checks whether that attribute
     is indeed part of the tournament. This prohibits e.g. adding players from another tournament to
     a certain team.
     """
-    stages = await get_full_tournament_details(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
 
     check_lookup: dict[type[Any], CheckCallableT] = {  # pyrefly: ignore [bad-assignment]
         StageId: check_stage_belongs_to_tournament,
@@ -123,10 +138,10 @@ async def check_foreign_keys_belong_to_tournament(
             continue
 
         if isinstance(field_value, BaseModel):
-            await check_foreign_keys_belong_to_tournament(field_value, tournament_id)
+            await check_foreign_keys_belong_to_tournament(conn, field_value, tournament_id)
         elif isinstance(field_value, set):
             if field_info.annotation == set[PlayerId]:
-                if not await check_players_belong_to_tournament(field_value, tournament_id):
+                if not await check_players_belong_to_tournament(conn, field_value, tournament_id):
                     raise_exception(PlayerId, field_value)
             else:
                 raise Exception(f"Unknown set type: {field_info.annotation}")
@@ -136,6 +151,6 @@ async def check_foreign_keys_belong_to_tournament(
                 if possible_type is not None:
                     check_callable = check_lookup.get(possible_type)
                     if check_callable is not None and not await check_callable(
-                        field_value, stages, tournament_id
+                        conn, field_value, stages, tournament_id
                     ):
                         raise_exception(possible_type, field_value)

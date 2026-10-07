@@ -1,12 +1,12 @@
 from typing import Literal
 
 import aiofiles.os
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from starlette import status
 from starlette.responses import FileResponse
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.subscriptions import check_requirement
 from bracket.logic.tournaments import get_tournament_logo_path, sql_delete_tournament_completely
@@ -46,7 +46,11 @@ from bracket.utils.errors import (
 )
 from bracket.utils.id_types import TournamentId
 from bracket.utils.logging import logger
-from bracket.utils.uploads import get_image_media_type, store_validated_image_upload
+from bracket.utils.uploads import (
+    get_image_media_type,
+    remove_existing_upload,
+    store_validated_image_upload,
+)
 
 router = APIRouter(prefix=config.api_prefix)
 
@@ -59,25 +63,27 @@ unauthorized_exception = HTTPException(
 
 @router.get("/tournaments/{tournament_id}", response_model=TournamentResponse)
 async def get_tournament(
+    conn: DbConnection,
     tournament_id: TournamentId,
     user: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
 ) -> TournamentResponse:
-    tournament = await sql_get_tournament(tournament_id)
+    tournament = await sql_get_tournament(conn, tournament_id)
     return TournamentResponse(data=tournament)
 
 
 @router.get("/tournaments", response_model=TournamentsResponse)
 async def get_tournaments(
+    conn: DbConnection,
     user: UserPublic | None = Depends(user_authenticated_or_public_dashboard_by_endpoint_name),
     filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "OPEN",
     endpoint_name: str | None = None,
 ) -> TournamentsResponse:
     match user, endpoint_name:
         case None, None:
-            return TournamentsResponse(data=await sql_get_public_tournaments(filter_))
+            return TournamentsResponse(data=await sql_get_public_tournaments(conn, filter_))
 
         case _, str() as endpoint_name:
-            tournament = await sql_get_tournament_by_endpoint_name(endpoint_name)
+            tournament = await sql_get_tournament_by_endpoint_name(conn, endpoint_name)
             if tournament is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -87,9 +93,9 @@ async def get_tournaments(
             return TournamentsResponse(data=[tournament])
 
         case _, _ if isinstance(user, UserPublic):
-            user_club_ids = await get_which_clubs_has_user_access_to(user.id)
+            user_club_ids = await get_which_clubs_has_user_access_to(conn, user.id)
             return TournamentsResponse(
-                data=await sql_get_tournaments(tuple(user_club_ids), endpoint_name, filter_)
+                data=await sql_get_tournaments(conn, tuple(user_club_ids), endpoint_name, filter_)
             )
 
     raise RuntimeError()
@@ -97,28 +103,35 @@ async def get_tournaments(
 
 @router.put("/tournaments/{tournament_id}", response_model=SuccessResponse)
 async def update_tournament_by_id(
+    conn: DbConnection,
     tournament_id: TournamentId,
     tournament_body: TournamentUpdateBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
     with check_unique_constraint_violation({UniqueIndex.ix_tournaments_dashboard_endpoint}):
-        await sql_update_tournament(tournament_id, tournament_body)
+        await sql_update_tournament(conn, tournament_id, tournament_body)
 
-    await schedule_all_matches(tournament_id)
+    await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 
 
 @router.delete("/tournaments/{tournament_id}", response_model=SuccessResponse)
 async def delete_tournament(
-    tournament_id: TournamentId, _: UserPublic = Depends(user_authenticated_for_tournament)
+    conn: DbConnection,
+    tournament_id: TournamentId,
+    background_tasks: BackgroundTasks,
+    _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> SuccessResponse:
-    await sql_delete_tournament_completely(tournament_id)
+    logo_path = await sql_delete_tournament_completely(conn, tournament_id)
+    # Background tasks run after the response, so the deletion is committed by then.
+    background_tasks.add_task(remove_existing_upload, "tournament-logos", logo_path)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/change-status", response_model=SuccessResponse)
 async def change_status(
+    conn: DbConnection,
     tournament_id: TournamentId,
     body: TournamentChangeStatusBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -127,7 +140,7 @@ async def change_status(
     Make a tournament archived or non-archived.
     """
 
-    tournament = await sql_get_tournament(tournament_id)
+    tournament = await sql_get_tournament(conn, tournament_id)
     if tournament.status == body.status:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,18 +148,20 @@ async def change_status(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    await sql_update_tournament_status(tournament_id, body)
+    await sql_update_tournament_status(conn, tournament_id, body)
     return SuccessResponse()
 
 
 @router.post("/tournaments", response_model=SuccessResponse)
 async def create_tournament(
-    tournament_to_insert: TournamentBody, user: UserPublic = Depends(user_authenticated)
+    conn: DbConnection,
+    tournament_to_insert: TournamentBody,
+    user: UserPublic = Depends(user_authenticated),
 ) -> SuccessResponse:
-    existing_tournaments = await sql_get_tournaments((tournament_to_insert.club_id,))
+    existing_tournaments = await sql_get_tournaments(conn, (tournament_to_insert.club_id,))
     check_requirement(existing_tournaments, user, "max_tournaments")
 
-    has_access_to_club = await get_user_access_to_club(tournament_to_insert.club_id, user.id)
+    has_access_to_club = await get_user_access_to_club(conn, tournament_to_insert.club_id, user.id)
     if not has_access_to_club:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -154,24 +169,24 @@ async def create_tournament(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    async with database.transaction():
-        with check_unique_constraint_violation({UniqueIndex.ix_tournaments_dashboard_endpoint}):
-            tournament_id = await sql_create_tournament(tournament_to_insert)
+    with check_unique_constraint_violation({UniqueIndex.ix_tournaments_dashboard_endpoint}):
+        tournament_id = await sql_create_tournament(conn, tournament_to_insert)
 
-        ranking = RankingCreateBody()
-        await sql_create_ranking(tournament_id, ranking, position=0)
+    ranking = RankingCreateBody()
+    await sql_create_ranking(conn, tournament_id, ranking, position=0)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/logo")
 async def upload_logo(
+    conn: DbConnection,
     tournament_id: TournamentId,
     file: UploadFile | None = None,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> TournamentResponse:
-    old_logo_path = await get_tournament_logo_path(tournament_id)
+    old_logo_path = await get_tournament_logo_path(conn, tournament_id)
     filename: str | None = None
 
     if file:
@@ -183,20 +198,20 @@ async def upload_logo(
         except OSError as exc:
             logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
 
-    await database.execute(
-        tournaments.update().where(tournaments.c.id == tournament_id),
-        values={"logo_path": filename},
+    await conn.execute(
+        tournaments.update().where(tournaments.c.id == tournament_id).values(logo_path=filename)
     )
-    return TournamentResponse(data=await sql_get_tournament(tournament_id))
+    return TournamentResponse(data=await sql_get_tournament(conn, tournament_id))
 
 
 @router.get("/tournaments/{tournament_id}/logo")
 async def get_tournament_logo(
+    conn: DbConnection,
     tournament_id: TournamentId,
     _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
 ) -> FileResponse:
-    tournament = await sql_get_tournament(tournament_id)
-    logo_path = await get_tournament_logo_path(tournament_id)
+    tournament = await sql_get_tournament(conn, tournament_id)
+    logo_path = await get_tournament_logo_path(conn, tournament_id)
     if tournament.logo_path is None or logo_path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
 

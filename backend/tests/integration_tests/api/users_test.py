@@ -1,16 +1,17 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPMethod
 
 import pytest
 from heliclockter import datetime_utc
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
+from bracket.database import engine
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import User, UserInsertable
 from bracket.schema import users
 from bracket.sql.users import create_user, delete_user, get_user_by_id
 from bracket.utils.db import fetch_one_parsed_certain
-from bracket.utils.http import HTTPMethod
 from bracket.utils.security import hash_password
 from bracket.utils.types import assert_some
 from tests.integration_tests.api.shared import send_auth_request, send_request
@@ -42,7 +43,7 @@ async def test_users_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_user(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "name": "Some new name",
@@ -53,7 +54,7 @@ async def test_create_user(
     assert "data" in response, response
     assert response["data"]["token_type"] == "bearer"
     assert response["data"]["user_id"]
-    await delete_user(response["data"]["user_id"])
+    await delete_user(conn, response["data"]["user_id"])
 
 
 @asynccontextmanager
@@ -67,17 +68,19 @@ async def temporary_user() -> AsyncIterator[tuple[User, dict[str, str]]]:
             created=datetime_utc.now(),
             account_type=UserAccountType.REGULAR,
         )
-        user_created = await create_user(new_user)
+        async with engine.begin() as conn:
+            user_created = await create_user(conn, new_user)
         headers = {"Authorization": f"Bearer {get_mock_token(user_created.email)}"}
         yield user_created, headers
     finally:
         if user_created is not None:
-            await delete_user(user_created.id)
+            async with engine.begin() as conn:
+                await delete_user(conn, user_created.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
         body = {"name": "Some new name", "email": "some_email@email.com"}
@@ -87,17 +90,17 @@ async def test_update_user(
             auth_context.model_copy(update={"user": user_created, "headers": headers}),
             json=body,
         )
-        updated_user = assert_some(await get_user_by_id(user_created.id))
+        updated_user = assert_some(await get_user_by_id(conn, user_created.id))
         assert response["data"]["name"] == body["name"]
         assert updated_user.name == body["name"]
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user_password(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
-        body = {"password": "somepassword"}
+        body = {"password": "correct-horse-battery-staple"}
         response = await send_auth_request(
             HTTPMethod.PUT,
             f"users/{user_created.id}/password",
@@ -105,9 +108,9 @@ async def test_update_user_password(
             json=body,
         )
         updated_user = await fetch_one_parsed_certain(
-            database, User, query=users.select().where(users.c.id == user_created.id)
+            conn, User, query=users.select().where(users.c.id == user_created.id)
         )
 
         assert response.get("success") is True, response
-        assert updated_user.password_hash and len(updated_user.password_hash) == 60
+        assert updated_user.password_hash and updated_user.password_hash.startswith("$argon2id$")
         assert auth_context.user != updated_user.password_hash

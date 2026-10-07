@@ -1,67 +1,70 @@
 @import 'tailwindcss';
-@import 'react-datepicker/dist/react-datepicker.css';
+
+@plugin 'daisyui' {
+  themes: false;
+}
+
+/* Small corners for badges and checkboxes, rounder ones for buttons and fields, so a status never
+   looks like something to press. */
+@plugin 'daisyui/theme' {
+  name: 'ctrlaltgg';
+  default: true;
+  color-scheme: dark;
+  --color-base-100: #120f12;
+  --color-base-200: #1a1619;
+  --color-base-300: #2a242a;
+  --color-base-content: #f4f4f5;
+  --color-primary: #dd2525;
+  --color-primary-content: #ffffff;
+  --color-secondary: #352d35;
+  --color-secondary-content: #f4f4f5;
+  --color-accent: #ddb534;
+  --color-accent-content: #1a1300;
+  --color-neutral: #241f24;
+  --color-neutral-content: #f4f4f5;
+  --color-info: #60a5fa;
+  --color-info-content: #06101f;
+  --color-success: #34d399;
+  --color-success-content: #03140d;
+  --color-warning: #eac667;
+  --color-warning-content: #1a1300;
+  --color-error: #ff5d5d;
+  --color-error-content: #1a0000;
+  --radius-selector: 0.375rem;
+  --radius-field: 1.25rem;
+  --radius-box: 1.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
 
 @theme {
   --font-sans: 'Outfit', 'Segoe UI', sans-serif;
   --font-display: 'Sora', 'Outfit', 'Segoe UI', sans-serif;
-
-  --color-brand-50: #fff1f1;
-  --color-brand-100: #ffdcdc;
-  --color-brand-200: #ffb5b5;
-  --color-brand-300: #ff8a8a;
-  --color-brand-400: #ff5d5d;
-  --color-brand-500: #f13c3c;
-  --color-brand-600: #dd2525;
-  --color-brand-700: #b81e1e;
-  --color-brand-800: #8f1717;
-  --color-brand-900: #641010;
-  --color-brand-950: #220606;
-
-  --color-accent-300: #eac667;
-  --color-accent-400: #ddb534;
-  --color-accent-500: #c8960c;
-
-  --color-surface-900: #120f12;
-  --color-surface-800: #1a1619;
-  --color-surface-700: #241f24;
-  --color-surface-600: #352d35;
 }
 
 @layer base {
-  html {
-    color-scheme: dark;
-  }
-
   body {
-    @apply min-h-screen bg-[radial-gradient(circle_at_top,_rgba(221,37,37,0.18),_transparent_28%),linear-gradient(180deg,#171114_0%,#0c090b_100%)] text-zinc-100 antialiased;
-  }
-
-  a {
-    @apply transition-colors;
-  }
-
-  button,
-  input,
-  select,
-  textarea {
-    font: inherit;
+    @apply min-h-screen bg-[radial-gradient(circle_at_top,_rgba(221,37,37,0.18),_transparent_28%),linear-gradient(180deg,#171114_0%,#0c090b_100%)] antialiased;
   }
 }
 
 /* Brand theme for brackets-viewer (its own stylesheet is imported by the React wrapper). */
 .brackets-viewer {
   --primary-background: transparent;
-  --secondary-background: rgba(255, 255, 255, 0.06);
-  --match-background: rgba(0, 0, 0, 0.25);
-  --font-color: #f4f4f5;
-  --win-color: #6ee7b7;
-  --loss-color: #71717a;
+  --secondary-background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+  --match-background: var(--color-base-100);
+  --font-color: var(--color-base-content);
+  --win-color: var(--color-success);
+  --loss-color: #a1a1aa;
   --label-color: #a1a1aa;
   --hint-color: #a1a1aa;
-  --connector-color: rgba(255, 255, 255, 0.28);
-  --border-color: rgba(255, 255, 255, 0.12);
-  --border-hover-color: var(--color-brand-300);
-  --border-selected-color: var(--color-brand-400);
+  --connector-color: color-mix(in oklab, var(--color-base-content) 28%, transparent);
+  --border-color: var(--color-base-300);
+  --border-hover-color: var(--color-primary);
+  --border-selected-color: var(--color-primary);
 
   --text-size: 14px;
   --round-margin: 48px;
@@ -91,69 +94,21 @@
 }
 
 .brackets-viewer .participant.loss .name {
-  color: #71717a;
+  color: #a1a1aa;
+}
+
+/* Teams in a bracket open their page; BracketViewer marks them once they are known. */
+.brackets-viewer .participant.team-link {
+  cursor: pointer;
+}
+
+.brackets-viewer .participant.team-link:hover .name {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 /* An undecided slot renders with an empty name. */
 .brackets-viewer .participant .name:empty::before {
   content: 'TBD';
   color: var(--hint-color);
-}
-
-/* Brand theme for react-datepicker, which ships a light-only stylesheet. */
-.react-datepicker-popper {
-  z-index: 50;
-}
-
-.react-datepicker {
-  font-family: var(--font-sans);
-  background-color: #1a1619;
-  color: #f4f4f5;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1rem;
-  overflow: hidden;
-}
-
-.react-datepicker__header {
-  background-color: rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.react-datepicker__current-month,
-.react-datepicker-time__header,
-.react-datepicker__day-name,
-.react-datepicker__day,
-.react-datepicker__time-name {
-  color: #f4f4f5;
-}
-
-.react-datepicker__navigation-icon::before {
-  border-color: #a1a1aa;
-}
-
-.react-datepicker__day:hover,
-.react-datepicker__time-list-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.react-datepicker__day--selected,
-.react-datepicker__day--keyboard-selected,
-.react-datepicker__time-list-item--selected {
-  background-color: var(--color-brand-500);
-  color: #ffffff;
-}
-
-.react-datepicker__day--disabled,
-.react-datepicker__day--outside-month {
-  color: #71717a;
-}
-
-.react-datepicker__time-container,
-.react-datepicker__time-container .react-datepicker__time {
-  background-color: transparent;
-  border-left-color: rgba(255, 255, 255, 0.12);
-}
-
-.react-datepicker__triangle {
-  display: none;
 }

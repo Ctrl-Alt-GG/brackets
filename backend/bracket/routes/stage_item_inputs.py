@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.models.db.stage_item_inputs import (
     StageItemInput,
     StageItemInputUpdateBody,
@@ -32,6 +34,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 
 async def validate_stage_item_update(
+    conn: AsyncConnection,
     stage_item_input_db: StageItemInput | None,
     stage_item_input_body: StageItemInputUpdateBody,
     tournament_id: TournamentId,
@@ -45,7 +48,7 @@ async def validate_stage_item_update(
     if isinstance(stage_item_input_body, StageItemInputUpdateBodyTentative):
         input_id = stage_item_input_body.winner_from_stage_item_id
         winner_from_stage = await get_full_tournament_details(
-            tournament_id, stage_item_ids={input_id}
+            conn, tournament_id, stage_item_ids={input_id}
         )
         if winner_from_stage is None:
             raise HTTPException(
@@ -55,7 +58,7 @@ async def validate_stage_item_update(
 
     if (
         isinstance(stage_item_input_body, StageItemInputUpdateBodyFinal)
-        and await get_team_by_id(stage_item_input_body.team_id, tournament_id) is None
+        and await get_team_by_id(conn, stage_item_input_body.team_id, tournament_id) is None
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -68,6 +71,7 @@ async def validate_stage_item_update(
     response_model=SuccessResponse,
 )
 async def update_stage_item_input(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_input_id: StageItemInputId,
@@ -76,8 +80,8 @@ async def update_stage_item_input(
     __: StageItemWithRounds = Depends(stage_item_dependency),
     ___: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    stage_item_input = await get_stage_item_input_by_id(tournament_id, stage_item_input_id)
-    await validate_stage_item_update(stage_item_input, stage_item_body, tournament_id)
+    stage_item_input = await get_stage_item_input_by_id(conn, tournament_id, stage_item_input_id)
+    await validate_stage_item_update(conn, stage_item_input, stage_item_body, tournament_id)
 
     query = """
         UPDATE stage_item_inputs
@@ -96,9 +100,9 @@ async def update_stage_item_input(
         ),
         check_foreign_key_violation({ForeignKey.stage_item_inputs_team_id_fkey}),
     ):
-        await database.execute(
-            query=query,
-            values={
+        await conn.execute(
+            text(query),
+            {
                 "tournament_id": tournament_id,
                 "stage_item_input_id": stage_item_input_id,
                 "team_id": stage_item_body.team_id

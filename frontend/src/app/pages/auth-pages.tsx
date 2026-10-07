@@ -1,81 +1,92 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
-import type { FormEvent } from 'react';
 
-import * as OpenApi from '../../openapi';
-import { unwrap } from '../api';
-import { runAction } from '../hooks';
-import type { AuthFeatures, FlashMessage, Session } from '../types';
-import { Button, EmptyState, FormField, Input, PageShell, Surface } from '../ui';
+import {
+  getAuthFeaturesApiAuthFeaturesGetOptions,
+  loginForAccessTokenApiTokenPostMutation,
+  registerUserApiUsersRegisterPostMutation,
+} from '../../openapi/@tanstack/react-query.gen';
+import {
+  zBodyLoginForAccessTokenApiTokenPost,
+  zUserPasswordToUpdate,
+  zUserToRegister,
+} from '../../openapi/zod.gen';
+import { useSession } from '../hooks';
+import { EmptyState, Field, PageShell, Surface } from '../ui';
 
-export function LoginPage({
-  authFeatures,
-  setFlash,
-  setSession,
-}: {
-  authFeatures: AuthFeatures | null;
-  setFlash: (message: FlashMessage) => void;
-  setSession: (session: Session) => void;
-}) {
+const loginSchema = zBodyLoginForAccessTokenApiTokenPost.pick({ password: true, username: true });
+
+export function LoginPage() {
   const navigate = useNavigate();
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-
-    const username = String(formData.get('username') ?? '');
-    const password = String(formData.get('password') ?? '');
-
-    const success = await runAction(
-      setFlash,
-      async () => {
-        const response = await unwrap(
-          OpenApi.loginForAccessTokenApiTokenPost({
-            body: {
-              client_id: null,
-              client_secret: null,
-              grant_type: 'password',
-              password,
-              scope: '',
-              username,
-            },
-            throwOnError: true,
-          }),
-        );
-
-        setSession(response);
-      },
-      'Logged in successfully.',
-    );
-
-    if (success) {
+  const [, setSession] = useSession();
+  const authFeatures = useQuery(getAuthFeaturesApiAuthFeaturesGetOptions());
+  const form = useForm({
+    defaultValues: { password: '', username: '' },
+    resolver: zodResolver(loginSchema),
+  });
+  const login = useMutation({
+    ...loginForAccessTokenApiTokenPostMutation(),
+    meta: { successMessage: 'Logged in successfully.' },
+    onSuccess: (token) => {
+      setSession(token);
       navigate('/');
-    }
-  }
+    },
+  });
 
   return (
-    <PageShell title="Log in">
-      <Surface className="mx-auto max-w-xl space-y-6">
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <FormField label="Email">
-            <Input name="username" placeholder="captain@ctrl-alt-gg.hu" required type="email" />
-          </FormField>
-          <FormField label="Password">
-            <Input name="password" placeholder="••••••••" required type="password" />
-          </FormField>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit">Log in</Button>
-            {authFeatures?.userRegistrationEnabled ? (
-              <Link
-                className="text-sm text-zinc-300 underline decoration-brand-400/50 underline-offset-4 hover:text-white"
-                to="/create-account"
-              >
+    <PageShell title="Organizer login">
+      <Surface className="mx-auto w-full max-w-xl">
+        <p className="text-sm text-base-content/80">
+          Players don't need an account:{' '}
+          <Link className="link font-semibold" to="/">
+            open a tournament
+          </Link>{' '}
+          to see its schedule, teams and standings.
+        </p>
+        <form
+          onSubmit={form.handleSubmit((credentials) =>
+            login.mutate({
+              body: {
+                ...credentials,
+                client_id: null,
+                client_secret: null,
+                grant_type: 'password',
+                scope: '',
+              },
+            }),
+          )}
+        >
+          <Field label="Email">
+            <input
+              autoComplete="username"
+              className="input w-full"
+              placeholder="captain@ctrl-alt-gg.hu"
+              required
+              type="email"
+              {...form.register('username')}
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              autoComplete="current-password"
+              className="input w-full"
+              required
+              type="password"
+              {...form.register('password')}
+            />
+          </Field>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <button className="btn btn-primary" disabled={login.isPending} type="submit">
+              {login.isPending ? 'Logging in…' : 'Log in'}
+            </button>
+            {authFeatures.data?.data.user_registration_enabled ? (
+              <Link className="link text-sm" to="/create-account">
                 Create account
               </Link>
             ) : null}
-            <Link
-              className="text-sm text-zinc-300 underline decoration-brand-400/50 underline-offset-4 hover:text-white"
-              to="/password-reset"
-            >
+            <Link className="link text-sm" to="/password-reset">
               Password reset
             </Link>
           </div>
@@ -85,26 +96,33 @@ export function LoginPage({
   );
 }
 
-export function RegisterPage({
-  authFeatures,
-  setFlash,
-  setSession,
-}: {
-  authFeatures: AuthFeatures | null;
-  setFlash: (message: FlashMessage) => void;
-  setSession: (session: Session) => void;
-}) {
-  const navigate = useNavigate();
+// The server checks the strength, so the form only repeats the length rule for quick feedback.
+const registerSchema = zUserToRegister.extend({ password: zUserPasswordToUpdate.shape.password });
 
-  if (!authFeatures?.userRegistrationEnabled) {
+export function RegisterPage() {
+  const navigate = useNavigate();
+  const [, setSession] = useSession();
+  const authFeatures = useQuery(getAuthFeaturesApiAuthFeaturesGetOptions());
+  const form = useForm({
+    defaultValues: { email: '', name: '', password: '' },
+    resolver: zodResolver(registerSchema),
+  });
+  const register = useMutation({
+    ...registerUserApiUsersRegisterPostMutation(),
+    meta: { successMessage: 'Account created successfully.' },
+    onSuccess: (response) => {
+      setSession(response.data);
+      navigate('/');
+    },
+  });
+  const { errors } = form.formState;
+
+  if (authFeatures.data && !authFeatures.data.data.user_registration_enabled) {
     return (
-      <PageShell title="Create account">
+      <PageShell title="Create an organizer account">
         <EmptyState
           action={
-            <Link
-              className="inline-flex rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-100 transition hover:bg-white/10"
-              to="/login"
-            >
+            <Link className="btn btn-ghost btn-sm" to="/login">
               Go to login
             </Link>
           }
@@ -115,59 +133,45 @@ export function RegisterPage({
     );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-
-    const success = await runAction(
-      setFlash,
-      async () => {
-        const response = await unwrap(
-          OpenApi.registerUserApiUsersRegisterPost({
-            body: {
-              email: String(formData.get('email') ?? ''),
-              name: String(formData.get('name') ?? ''),
-              password: String(formData.get('password') ?? ''),
-            },
-            throwOnError: true,
-          }),
-        );
-
-        setSession(response.data);
-      },
-      'Account created successfully.',
-    );
-
-    if (success) navigate('/');
-  }
-
   return (
-    <PageShell title="Create account">
-      <Surface className="mx-auto max-w-2xl space-y-6">
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-          <FormField label="Display name">
-            <Input name="name" placeholder="Tournament director" required />
-          </FormField>
-          <FormField label="Email">
-            <Input name="email" placeholder="director@ctrl-alt-gg.hu" required type="email" />
-          </FormField>
-          <div className="md:col-span-2">
-            <FormField label="Password">
-              <Input
-                minLength={12}
-                name="password"
+    <PageShell title="Create an organizer account">
+      <Surface className="mx-auto w-full max-w-2xl">
+        <form onSubmit={form.handleSubmit((body) => register.mutate({ body }))}>
+          <div className="grid gap-x-4 md:grid-cols-2">
+            <Field error={errors.name?.message} label="Display name">
+              <input
+                className="input w-full"
+                placeholder="Tournament director"
+                required
+                {...form.register('name')}
+              />
+            </Field>
+            <Field error={errors.email?.message} label="Email">
+              <input
+                autoComplete="email"
+                className="input w-full"
+                placeholder="director@ctrl-alt-gg.hu"
+                required
+                type="email"
+                {...form.register('email')}
+              />
+            </Field>
+            <Field className="md:col-span-2" error={errors.password?.message} label="Password">
+              <input
+                autoComplete="new-password"
+                className="input w-full"
                 placeholder="Use at least twelve characters"
                 required
                 type="password"
+                {...form.register('password')}
               />
-            </FormField>
+            </Field>
           </div>
-          <div className="md:col-span-2 flex items-center gap-3">
-            <Button type="submit">Create account</Button>
-            <Link
-              className="text-sm text-zinc-300 underline decoration-brand-400/50 underline-offset-4 hover:text-white"
-              to="/login"
-            >
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <button className="btn btn-primary" disabled={register.isPending} type="submit">
+              {register.isPending ? 'Creating…' : 'Create account'}
+            </button>
+            <Link className="link text-sm" to="/login">
               I already have an account
             </Link>
           </div>
@@ -180,8 +184,8 @@ export function RegisterPage({
 export function PasswordResetStatusPage() {
   return (
     <PageShell title="Password reset">
-      <Surface className="space-y-3">
-        <p className="text-sm text-zinc-300">Password reset is currently unavailable.</p>
+      <Surface>
+        <p className="text-sm text-base-content/80">Password reset is currently unavailable.</p>
       </Surface>
     </PageShell>
   );

@@ -1,59 +1,108 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
-import type { FormEvent } from 'react';
 
 import * as OpenApi from '../../openapi';
-import { unwrap } from '../api';
-import { runAction, useResource } from '../hooks';
-import type { FlashMessage, Session } from '../types';
-import { formatDateTime } from '../utils';
 import {
-  Button,
+  getUserApiUsersMeGetOptions,
+  putUserPasswordApiUsersUserIdPasswordPutMutation,
+  updateUserDetailsApiUsersUserIdPutMutation,
+} from '../../openapi/@tanstack/react-query.gen';
+import { zUserPasswordToUpdate, zUserToUpdate } from '../../openapi/zod.gen';
+import { useSession } from '../hooks';
+import {
   EmptyState,
   ErrorState,
-  FormField,
-  Input,
+  Field,
   LoadingState,
   PageShell,
-  Pill,
   Surface,
   SurfaceHeading,
 } from '../ui';
+import { formatDateTime, getErrorMessage } from '../utils';
 
-export function UserPage({
-  session,
-  setFlash,
-}: {
-  session: Session;
-  setFlash: (message: FlashMessage) => void;
-}) {
-  const profile = useResource(
-    async () => {
-      const response = await unwrap(
-        OpenApi.getUserApiUsersMeGet({
-          auth: session?.access_token,
-          throwOnError: true,
-        }),
-      );
-      return response.data;
-    },
-    [session?.access_token],
-    Boolean(session),
+function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
+  const form = useForm({
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(zUserToUpdate),
+    values: { email: user.email, name: user.name },
+  });
+  const update = useMutation({
+    ...updateUserDetailsApiUsersUserIdPutMutation(),
+    meta: { successMessage: 'Account saved.' },
+  });
+  const { errors } = form.formState;
+
+  return (
+    <form
+      onSubmit={form.handleSubmit((body) => update.mutate({ body, path: { user_id: user.id } }))}
+    >
+      <Field error={errors.name?.message} label="Display name">
+        <input className="input w-full" required {...form.register('name')} />
+      </Field>
+      <Field error={errors.email?.message} label="Email">
+        <input className="input w-full" required type="email" {...form.register('email')} />
+      </Field>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-base-content/70">
+        <span className="badge badge-soft badge-sm">{user.account_type.toLowerCase()} account</span>
+        <span>Created {formatDateTime(user.created)}</span>
+      </div>
+      <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
+        {update.isPending ? 'Saving…' : 'Save profile'}
+      </button>
+    </form>
   );
+}
+
+function PasswordForm({ userId }: { userId: number }) {
+  const form = useForm({
+    defaultValues: { password: '' },
+    resolver: zodResolver(zUserPasswordToUpdate),
+  });
+  const update = useMutation({
+    ...putUserPasswordApiUsersUserIdPasswordPutMutation(),
+    meta: { successMessage: 'Password updated.' },
+  });
+
+  return (
+    <form
+      onSubmit={form.handleSubmit((body) =>
+        update.mutate({ body, path: { user_id: userId } }, { onSuccess: () => form.reset() }),
+      )}
+    >
+      <Field error={form.formState.errors.password?.message} label="New password">
+        <input
+          autoComplete="new-password"
+          className="input w-full"
+          placeholder="At least twelve characters"
+          required
+          type="password"
+          {...form.register('password')}
+        />
+      </Field>
+      <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
+        {update.isPending ? 'Updating…' : 'Update password'}
+      </button>
+    </form>
+  );
+}
+
+export function UserPage() {
+  const [session] = useSession();
+  const profile = useQuery({ ...getUserApiUsersMeGetOptions(), enabled: Boolean(session) });
 
   if (!session) {
     return (
       <PageShell title="Account">
         <EmptyState
-          text="Log in first to view or update your account."
-          title="Authentication required"
           action={
-            <Link
-              className="inline-flex rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
-              to="/login"
-            >
-              Log in
+            <Link className="btn btn-primary btn-sm" to="/login">
+              Organizer login
             </Link>
           }
+          text="Log in first to view or update your account."
+          title="Organizers only"
         />
       </PageShell>
     );
@@ -61,109 +110,30 @@ export function UserPage({
 
   return (
     <PageShell title="Account">
-      {profile.loading ? <LoadingState title="Loading account…" /> : null}
+      {profile.isPending ? <LoadingState title="Loading account…" /> : null}
       {profile.error ? (
         <ErrorState
-          error={profile.error}
-          title="Unable to load account"
           action={
-            <Button onClick={profile.refresh} type="button">
+            <button className="btn btn-sm" onClick={() => void profile.refetch()} type="button">
               Retry
-            </Button>
+            </button>
           }
+          error={getErrorMessage(profile.error)}
+          title="Unable to load account"
         />
       ) : null}
-      {profile.data
-        ? (() => {
-            const profileData = profile.data;
-
-            return (
-              <div className="grid gap-6 xl:grid-cols-2">
-                <Surface className="space-y-4">
-                  <SurfaceHeading title="Identity" />
-                  <form
-                    className="space-y-4"
-                    onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                      event.preventDefault();
-                      const formData = new FormData(event.currentTarget);
-                      await runAction(
-                        setFlash,
-                        async () => {
-                          await OpenApi.updateUserDetailsApiUsersUserIdPut({
-                            body: {
-                              email: String(formData.get('email') ?? ''),
-                              name: String(formData.get('name') ?? ''),
-                            },
-                            path: { user_id: profileData.id },
-                            throwOnError: true,
-                          });
-                        },
-                        'Account updated successfully.',
-                        profile.refresh,
-                      );
-                    }}
-                  >
-                    <FormField label="Display name">
-                      <Input defaultValue={profileData.name} name="name" required />
-                    </FormField>
-                    <FormField label="Email">
-                      <Input defaultValue={profileData.email} name="email" required type="email" />
-                    </FormField>
-                    <div className="flex items-center gap-3 text-sm text-zinc-400">
-                      <Pill tone="success">{profileData.account_type}</Pill>
-                      <span>Created {formatDateTime(profileData.created)}</span>
-                    </div>
-                    <Button type="submit">Save profile</Button>
-                  </form>
-                </Surface>
-
-                <Surface className="space-y-4">
-                  <SurfaceHeading title="Password" />
-                  <form
-                    className="space-y-4"
-                    onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                      event.preventDefault();
-                      const form = event.currentTarget;
-                      const formData = new FormData(form);
-                      const password = String(formData.get('password') ?? '');
-                      if (password.length < 8) {
-                        setFlash({
-                          text: 'Password must contain at least eight characters.',
-                          tone: 'error',
-                        });
-                        return;
-                      }
-
-                      await runAction(
-                        setFlash,
-                        async () => {
-                          await OpenApi.putUserPasswordApiUsersUserIdPasswordPut({
-                            body: { password },
-                            path: { user_id: profileData.id },
-                            throwOnError: true,
-                          });
-                        },
-                        'Password updated successfully.',
-                        () => form.reset(),
-                      );
-                    }}
-                  >
-                    <FormField label="New password">
-                      <Input
-                        minLength={8}
-                        name="password"
-                        placeholder="At least eight characters"
-                        required
-                        type="password"
-                      />
-                    </FormField>
-                    <Button type="submit">Update password</Button>
-                  </form>
-                </Surface>
-              </div>
-            );
-          })()
-        : null}
+      {profile.data ? (
+        <div className="grid items-start gap-6 xl:grid-cols-2">
+          <Surface>
+            <SurfaceHeading title="Identity" />
+            <IdentityForm user={profile.data.data} />
+          </Surface>
+          <Surface>
+            <SurfaceHeading title="Password" />
+            <PasswordForm userId={profile.data.data.id} />
+          </Surface>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

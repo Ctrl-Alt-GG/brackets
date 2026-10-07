@@ -1776,23 +1776,6 @@ export type UpdateClubApiClubsClubIdPutResponses = {
 export type UpdateClubApiClubsClubIdPutResponse =
   UpdateClubApiClubsClubIdPutResponses[keyof UpdateClubApiClubsClubIdPutResponses];
 
-export type GetMetricsApiMetricsGetData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/api/metrics';
-};
-
-export type GetMetricsApiMetricsGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: string;
-};
-
-export type GetMetricsApiMetricsGetResponse =
-  GetMetricsApiMetricsGetResponses[keyof GetMetricsApiMetricsGetResponses];
-
 export type PingApiPingGetData = {
   body?: never;
   path?: never;

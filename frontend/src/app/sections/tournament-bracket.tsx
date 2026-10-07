@@ -1,66 +1,75 @@
-import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
-import { StageItemVisualization } from './tournament-overview';
-import type { TournamentBundle } from '../types';
-import { cx } from '../utils';
+import { toBracketViewerData } from '../bracket-adapter';
+import { BracketViewer } from '../components/bracket-viewer';
+import { teamPath, useTournamentContext } from '../tournament-context';
+import { hasTeam, isBracket } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 export function BracketSection({
-  bundle,
+  bigScreenPath,
+  stages,
   stageItemsById,
-  teamMap,
+  tournamentId,
 }: {
-  bundle: TournamentBundle;
+  bigScreenPath?: string;
+  stages: OpenApi.StageWithStageItems[];
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
+  tournamentId: number;
 }) {
-  const stageItems = bundle.stages.flatMap((stage) =>
-    stage.stage_items.map((stageItem) => ({ stage, stageItem })),
+  const navigate = useNavigate();
+  const { publicPath } = useTournamentContext();
+  const brackets = stages.flatMap((stage) =>
+    stage.stage_items.filter(isBracket).map((stageItem) => ({ stage, stageItem })),
   );
-  const [selectedId, setSelectedId] = useState<number | null>(stageItems[0]?.stageItem.id ?? null);
-  const selected =
-    stageItems.find((entry) => entry.stageItem.id === selectedId) ?? stageItems[0] ?? null;
 
-  if (!selected) {
-    return (
-      <Surface>
-        <p className="text-sm text-zinc-400">
-          Nothing to show yet — the tournament format has not been set up.
-        </p>
-      </Surface>
-    );
-  }
+  if (brackets.length === 0) return null;
 
   return (
-    <Surface className="space-y-4">
-      <SurfaceHeading title="Brackets and groups" />
-      {stageItems.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
-          {stageItems.map(({ stage, stageItem }) => (
-            <button
-              className={cx(
-                'rounded-full px-4 py-2 text-sm font-semibold transition',
-                stageItem.id === selected.stageItem.id
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-white/10 text-zinc-200 hover:bg-white/20',
-              )}
-              key={stageItem.id}
-              onClick={() => setSelectedId(stageItem.id)}
-              type="button"
-            >
-              {stage.name} · {stageItem.name || stageItem.type_name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <StageItemVisualization
-        stageItem={selected.stageItem}
-        stageItemsById={stageItemsById}
-        standings={bundle.standings}
-        teamMap={teamMap}
-        tournamentId={bundle.tournament.id}
+    <Surface className="space-y-6">
+      <SurfaceHeading
+        actions={
+          bigScreenPath ? (
+            <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
+              Big screen
+            </Link>
+          ) : null
+        }
+        title={brackets.length === 1 ? 'Bracket' : 'Brackets'}
       />
+      {brackets.map(({ stage, stageItem }) => {
+        const data = toBracketViewerData(stageItem, stageItemsById, tournamentId);
+        const teamParticipants = new Map(
+          stageItem.inputs.filter(hasTeam).map((input) => [input.id, input.team_id] as const),
+        );
+
+        return (
+          <section
+            className="scroll-mt-6 space-y-3"
+            id={`stage-item-${stageItem.id}`}
+            key={stageItem.id}
+          >
+            <div>
+              <h3 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h3>
+              <p className="text-sm text-base-content/70">
+                {stage.name} · {stageItem.team_count} teams
+              </p>
+            </div>
+            {data ? (
+              <BracketViewer
+                data={data}
+                onTeamClick={(teamId) => navigate(teamPath(publicPath, teamId))}
+                teamParticipants={teamParticipants}
+              />
+            ) : (
+              <p className="text-sm text-base-content/70">
+                The bracket appears here once the matches have been drawn.
+              </p>
+            )}
+          </section>
+        );
+      })}
     </Surface>
   );
 }

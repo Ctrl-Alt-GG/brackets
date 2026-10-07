@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 from typing import Annotated
 
@@ -47,14 +46,9 @@ class TeamWithPlayers(BaseModel):
 
     @field_validator("players", mode="before")
     @staticmethod
-    def handle_players(values: list[Player]) -> list[Player]:
-        if isinstance(values, str):
-            values_json = json.loads(values)
-            if values_json == [None]:
-                return []
-            return values_json
-
-        return values
+    def handle_players(values: list[Player | None]) -> list[Player | None]:
+        # The query aggregates players with a LEFT JOIN, so a team without any gives [null].
+        return [] if values == [None] else values
 
 
 class FullTeamWithPlayers(TeamWithPlayers, Team):

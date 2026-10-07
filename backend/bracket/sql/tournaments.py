@@ -1,6 +1,8 @@
 from typing import Any, Literal
 
-from bracket.database import database
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.tournament import (
     Tournament,
     TournamentBody,
@@ -10,29 +12,31 @@ from bracket.models.db.tournament import (
 from bracket.utils.id_types import TournamentId
 
 
-async def sql_get_tournament(tournament_id: TournamentId) -> Tournament:
+async def sql_get_tournament(conn: AsyncConnection, tournament_id: TournamentId) -> Tournament:
     query = """
         SELECT *
         FROM tournaments
         WHERE id = :tournament_id
         """
-    result = await database.fetch_one(query=query, values={"tournament_id": tournament_id})
-    assert result is not None
-    return Tournament.model_validate(result)
+    result = await conn.execute(text(query), {"tournament_id": tournament_id})
+    return Tournament.model_validate(result.one()._mapping)
 
 
-async def sql_get_tournament_by_endpoint_name(endpoint_name: str) -> Tournament | None:
+async def sql_get_tournament_by_endpoint_name(
+    conn: AsyncConnection, endpoint_name: str
+) -> Tournament | None:
     query = """
         SELECT *
         FROM tournaments
         WHERE dashboard_endpoint = :endpoint_name
         AND dashboard_public IS TRUE
         """
-    result = await database.fetch_one(query=query, values={"endpoint_name": endpoint_name})
-    return Tournament.model_validate(result) if result is not None else None
+    result = (await conn.execute(text(query), {"endpoint_name": endpoint_name})).first()
+    return Tournament.model_validate(result._mapping) if result is not None else None
 
 
 async def sql_get_tournaments(
+    conn: AsyncConnection,
     club_ids: tuple[int, ...],
     endpoint_name: str | None = None,
     filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "ALL",
@@ -53,11 +57,12 @@ async def sql_get_tournaments(
         query += " AND status = :status"
         params["status"] = filter_
 
-    result = await database.fetch_all(query=query, values=params)
-    return [Tournament.model_validate(x) for x in result]
+    result = await conn.execute(text(query), params)
+    return [Tournament.model_validate(x._mapping) for x in result]
 
 
 async def sql_get_public_tournaments(
+    conn: AsyncConnection,
     filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "OPEN",
 ) -> list[Tournament]:
     # Same rule as `user_authenticated_or_public_dashboard`: open tournaments are visible to
@@ -76,20 +81,20 @@ async def sql_get_public_tournaments(
     # Running tournaments first, then the most recent ones.
     query += " ORDER BY status = 'ARCHIVED', start_time DESC"
 
-    result = await database.fetch_all(query=query, values=params)
-    return [Tournament.model_validate(x) for x in result]
+    result = await conn.execute(text(query), params)
+    return [Tournament.model_validate(x._mapping) for x in result]
 
 
-async def sql_delete_tournament(tournament_id: TournamentId) -> None:
+async def sql_delete_tournament(conn: AsyncConnection, tournament_id: TournamentId) -> None:
     query = """
         DELETE FROM tournaments
         WHERE id = :tournament_id
         """
-    await database.fetch_one(query=query, values={"tournament_id": tournament_id})
+    await conn.execute(text(query), {"tournament_id": tournament_id})
 
 
 async def sql_update_tournament(
-    tournament_id: TournamentId, tournament: TournamentUpdateBody
+    conn: AsyncConnection, tournament_id: TournamentId, tournament: TournamentUpdateBody
 ) -> None:
     query = """
         UPDATE tournaments
@@ -103,14 +108,13 @@ async def sql_update_tournament(
             margin_minutes = :margin_minutes
         WHERE tournaments.id = :tournament_id
         """
-    await database.execute(
-        query=query,
-        values={"tournament_id": tournament_id, **tournament.model_dump()},
+    await conn.execute(
+        text(query), {"tournament_id": tournament_id, **tournament.model_dump(exclude_none=False)}
     )
 
 
 async def sql_update_tournament_status(
-    tournament_id: TournamentId, body: TournamentChangeStatusBody
+    conn: AsyncConnection, tournament_id: TournamentId, body: TournamentChangeStatusBody
 ) -> None:
     # The public dashboard setting is left alone, so a public tournament stays public once
     # archived and its results remain available.
@@ -119,11 +123,10 @@ async def sql_update_tournament_status(
         SET status = :state
         WHERE tournaments.id = :tournament_id
         """
-    params = {"tournament_id": tournament_id, "state": body.status.value}
-    await database.execute(query=query, values=params)
+    await conn.execute(text(query), {"tournament_id": tournament_id, "state": body.status.value})
 
 
-async def sql_create_tournament(tournament: TournamentBody) -> TournamentId:
+async def sql_create_tournament(conn: AsyncConnection, tournament: TournamentBody) -> TournamentId:
     query = """
         INSERT INTO tournaments (
             name,
@@ -131,7 +134,6 @@ async def sql_create_tournament(tournament: TournamentBody) -> TournamentId:
             club_id,
             dashboard_public,
             dashboard_endpoint,
-            logo_path,
             players_can_be_in_multiple_teams,
             duration_minutes,
             margin_minutes
@@ -142,12 +144,10 @@ async def sql_create_tournament(tournament: TournamentBody) -> TournamentId:
             :club_id,
             :dashboard_public,
             :dashboard_endpoint,
-            :logo_path,
             :players_can_be_in_multiple_teams,
             :duration_minutes,
             :margin_minutes
         )
         RETURNING id
         """
-    new_id = await database.fetch_val(query=query, values=tournament.model_dump())
-    return TournamentId(new_id)
+    return TournamentId(await conn.scalar(text(query), tournament.model_dump(exclude_none=False)))

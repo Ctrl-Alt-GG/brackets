@@ -1,9 +1,7 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Table, UniqueConstraint, func
-from sqlalchemy.orm import declarative_base  # type: ignore[attr-defined]
+from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, UniqueConstraint, func
 from sqlalchemy.sql.sqltypes import BigInteger, Boolean, DateTime, Enum, Float, Text
 
-Base = declarative_base()
-metadata = Base.metadata
+metadata = MetaData()
 DateTimeTZ = DateTime(timezone=True)
 
 clubs = Table(

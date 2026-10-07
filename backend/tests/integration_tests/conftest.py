@@ -5,16 +5,22 @@ from time import sleep
 
 import pytest
 import pytest_asyncio
-from databases import Database
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database, engine
+from bracket.database import engine
 from bracket.schema import metadata
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_auth_context
 
 
+async def recreate_tables() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(metadata.drop_all)
+        await connection.run_sync(metadata.create_all)
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
-async def reinit_database(worker_id: str) -> AsyncIterator[Database]:
+async def reinit_database(worker_id: str) -> AsyncIterator[None]:
     """
     Creates the test database on the first test run in the session.
 
@@ -22,16 +28,13 @@ async def reinit_database(worker_id: str) -> AsyncIterator[Database]:
     database. The other runners poll this file and wait until it has been removed by gw0.
     When running tests sequentially, the master worker just creates the test database and that's it.
     """
-    await database.connect()
-
     if worker_id == "master":
-        metadata.drop_all(engine)
-        metadata.create_all(engine)
+        await recreate_tables()
 
         try:
-            yield database
+            yield
         finally:
-            await database.disconnect()
+            await engine.dispose()
 
         return
 
@@ -42,8 +45,7 @@ async def reinit_database(worker_id: str) -> AsyncIterator[Database]:
             with open(lock_path, mode="w") as file:
                 file.write("")
 
-            metadata.drop_all(engine)
-            metadata.create_all(engine)
+            await recreate_tables()
         finally:
             os.remove(lock_path)
     else:
@@ -53,12 +55,19 @@ async def reinit_database(worker_id: str) -> AsyncIterator[Database]:
                 break
 
     try:
-        yield database
+        yield
     finally:
-        await database.disconnect()
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def conn() -> AsyncIterator[AsyncConnection]:
+    """A connection that commits every statement, so the API under test sees changes at once."""
+    async with engine.connect() as connection:
+        yield await connection.execution_options(isolation_level="AUTOCOMMIT")
 
 
 @pytest.fixture(scope="session")
-async def auth_context(reinit_database: Database) -> AsyncIterator[AuthContext]:
-    async with reinit_database, inserted_auth_context() as auth_context:
+async def auth_context(reinit_database: None) -> AsyncIterator[AuthContext]:
+    async with inserted_auth_context() as auth_context:
         yield auth_context

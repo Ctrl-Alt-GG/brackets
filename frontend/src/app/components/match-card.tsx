@@ -1,51 +1,73 @@
 import * as OpenApi from '../../openapi';
+import { useTournamentContext } from '../tournament-context';
 import type { FlattenedMatch } from '../types';
 import {
   cx,
-  formatDateTime,
+  formatMatchTime,
   inputLabel,
+  inputTeamId,
   MATCH_STATUS_LABELS,
   matchStatus,
   matchWinner,
+  type MatchStatus,
 } from '../utils';
+import { TeamLink } from './team-link';
+
+const STATUS_BADGES: Record<MatchStatus, string> = {
+  finished: 'badge-success',
+  live: 'badge-error',
+  scheduled: '',
+  waiting: 'badge-ghost',
+};
 
 function Side({
-  label,
+  input,
+  isLoser,
+  isMine,
+  isWinner,
   score,
   showScore,
-  isWinner,
-  isLoser,
   size,
+  stageItemsById,
 }: {
+  input: OpenApi.MatchWithDetails['stage_item_input1'];
   isLoser: boolean;
+  isMine: boolean;
   isWinner: boolean;
-  label: string;
   score: number;
   showScore: boolean;
   size: 'lg' | 'md';
+  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
 }) {
   return (
     <div
       className={cx(
-        'flex items-center justify-between gap-3 rounded-xl px-3 py-2',
-        isWinner ? 'bg-emerald-500/10' : null,
+        'flex items-center justify-between gap-3 rounded-field px-3 py-2',
+        isWinner && 'bg-success/10',
       )}
     >
-      <span
+      <TeamLink
         className={cx(
-          'truncate',
+          'min-w-0 truncate',
           size === 'lg' ? 'text-xl' : 'text-sm',
-          isWinner ? 'font-semibold text-white' : null,
-          isLoser ? 'text-zinc-500' : 'text-zinc-200',
+          isWinner && 'font-semibold',
+          isMine
+            ? 'text-accent'
+            : isWinner
+              ? 'text-base-content'
+              : isLoser
+                ? 'text-base-content/60'
+                : 'text-base-content/90',
         )}
+        teamId={inputTeamId(input)}
       >
-        {label}
-      </span>
+        {inputLabel(input, stageItemsById)}
+      </TeamLink>
       <span
         className={cx(
           'shrink-0 font-semibold tabular-nums',
           size === 'lg' ? 'text-2xl' : 'text-base',
-          showScore ? (isWinner ? 'text-emerald-300' : 'text-zinc-400') : 'text-zinc-600',
+          showScore ? (isWinner ? 'text-success' : 'text-base-content/80') : 'text-base-content/50',
         )}
       >
         {showScore ? score : '–'}
@@ -56,63 +78,68 @@ function Side({
 
 export function MatchCard({
   entry,
-  showContext = true,
+  showTime = true,
   size = 'md',
   stageItemsById,
 }: {
   entry: FlattenedMatch;
-  showContext?: boolean;
+  showTime?: boolean;
   size?: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
 }) {
-  const { match, round, stage, stageItem } = entry;
+  const { myTeamId } = useTournamentContext();
+  const { match, round, stageItem } = entry;
   const status = matchStatus(match);
   const winner = matchWinner(match);
   const showScore = status === 'finished' || status === 'live';
+  const isMine1 = myTeamId != null && inputTeamId(match.stage_item_input1) === myTeamId;
+  const isMine2 = myTeamId != null && inputTeamId(match.stage_item_input2) === myTeamId;
 
   return (
-    <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+    <div
+      className={cx(
+        'card border bg-base-100/60 p-4',
+        isMine1 || isMine2 ? 'border-accent/60' : 'border-base-300',
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {showContext ? (
-          <p className="text-xs text-zinc-500">
-            {stageItem.name || stageItem.type_name} · {round.name}
-          </p>
-        ) : (
-          <p className="text-xs text-zinc-500">{stage.name}</p>
-        )}
-        <span
-          className={cx(
-            'rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.15em]',
-            status === 'live' ? 'bg-brand-500/20 text-brand-200' : null,
-            status === 'finished' ? 'bg-emerald-500/15 text-emerald-200' : null,
-            status === 'scheduled' ? 'bg-white/10 text-zinc-300' : null,
-            status === 'waiting' ? 'bg-white/5 text-zinc-500' : null,
-          )}
-        >
+        <p className="text-xs text-base-content/70">
+          {stageItem.name || stageItem.type_name} · {round.name}
+        </p>
+        <span className={cx('badge badge-soft badge-sm', STATUS_BADGES[status])}>
+          {status === 'live' ? (
+            <span aria-hidden="true" className="status status-error motion-safe:animate-pulse" />
+          ) : null}
           {MATCH_STATUS_LABELS[status]}
         </span>
       </div>
 
       <div className="mt-3 space-y-1">
         <Side
+          input={match.stage_item_input1}
           isLoser={winner === 2}
+          isMine={isMine1}
           isWinner={winner === 1}
-          label={inputLabel(match.stage_item_input1, stageItemsById)}
           score={match.stage_item_input1_score}
           showScore={showScore}
           size={size}
+          stageItemsById={stageItemsById}
         />
         <Side
+          input={match.stage_item_input2}
           isLoser={winner === 1}
+          isMine={isMine2}
           isWinner={winner === 2}
-          label={inputLabel(match.stage_item_input2, stageItemsById)}
           score={match.stage_item_input2_score}
           showScore={showScore}
           size={size}
+          stageItemsById={stageItemsById}
         />
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">{formatDateTime(match.start_time)}</p>
+      {showTime ? (
+        <p className="mt-3 text-xs text-base-content/70">{formatMatchTime(match.start_time)}</p>
+      ) : null}
     </div>
   );
 }

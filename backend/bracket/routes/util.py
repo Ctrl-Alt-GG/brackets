@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from starlette import status
 
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.models.db.match import Match
 from bracket.models.db.round import Round
 from bracket.models.db.team import FullTeamWithPlayers, Team
@@ -17,9 +17,11 @@ from bracket.utils.db import fetch_one_parsed
 from bracket.utils.id_types import MatchId, RoundId, StageId, StageItemId, TeamId, TournamentId
 
 
-async def round_dependency(tournament_id: TournamentId, round_id: RoundId) -> Round:
+async def round_dependency(
+    tournament_id: TournamentId, round_id: RoundId, conn: DbConnection
+) -> Round:
     round_ = await fetch_one_parsed(
-        database,
+        conn,
         Round,
         rounds.select()
         .select_from(
@@ -40,14 +42,16 @@ async def round_dependency(tournament_id: TournamentId, round_id: RoundId) -> Ro
 
 
 async def round_with_matches_dependency(
-    tournament_id: TournamentId, round_id: RoundId
+    tournament_id: TournamentId, round_id: RoundId, conn: DbConnection
 ) -> RoundWithMatches:
-    return await get_round_by_id(tournament_id, round_id)
+    return await get_round_by_id(conn, tournament_id, round_id)
 
 
-async def stage_dependency(tournament_id: TournamentId, stage_id: StageId) -> StageWithStageItems:
+async def stage_dependency(
+    tournament_id: TournamentId, stage_id: StageId, conn: DbConnection
+) -> StageWithStageItems:
     stages_result = await get_full_tournament_details(
-        tournament_id, no_draft_rounds=False, stage_id=stage_id
+        conn, tournament_id, no_draft_rounds=False, stage_id=stage_id
     )
 
     if len(stages_result) < 1:
@@ -60,14 +64,16 @@ async def stage_dependency(tournament_id: TournamentId, stage_id: StageId) -> St
 
 
 async def stage_item_dependency(
-    tournament_id: TournamentId, stage_item_id: StageItemId
+    tournament_id: TournamentId, stage_item_id: StageItemId, conn: DbConnection
 ) -> StageItemWithRounds:
-    return await get_stage_item(tournament_id, stage_item_id=stage_item_id)
+    return await get_stage_item(conn, tournament_id, stage_item_id=stage_item_id)
 
 
-async def match_dependency(tournament_id: TournamentId, match_id: MatchId) -> Match:
+async def match_dependency(
+    tournament_id: TournamentId, match_id: MatchId, conn: DbConnection
+) -> Match:
     match = await fetch_one_parsed(
-        database,
+        conn,
         Match,
         matches.select()
         .select_from(
@@ -87,9 +93,9 @@ async def match_dependency(tournament_id: TournamentId, match_id: MatchId) -> Ma
     return match
 
 
-async def team_dependency(tournament_id: TournamentId, team_id: TeamId) -> Team:
+async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: DbConnection) -> Team:
     team = await fetch_one_parsed(
-        database,
+        conn,
         Team,
         teams.select().where((teams.c.id == team_id) & (teams.c.tournament_id == tournament_id)),
     )
@@ -104,9 +110,9 @@ async def team_dependency(tournament_id: TournamentId, team_id: TeamId) -> Team:
 
 
 async def team_with_players_dependency(
-    tournament_id: TournamentId, team_id: TeamId
+    tournament_id: TournamentId, team_id: TeamId, conn: DbConnection
 ) -> FullTeamWithPlayers:
-    teams_with_members = await get_teams_with_members(tournament_id, team_id=team_id)
+    teams_with_members = await get_teams_with_members(conn, tournament_id, team_id=team_id)
 
     if len(teams_with_members) < 1:
         raise HTTPException(
@@ -117,8 +123,10 @@ async def team_with_players_dependency(
     return teams_with_members[0]
 
 
-async def disallow_archived_tournament(tournament_id: TournamentId) -> Tournament:
-    tournament = await sql_get_tournament(tournament_id)
+async def disallow_archived_tournament(
+    tournament_id: TournamentId, conn: DbConnection
+) -> Tournament:
+    tournament = await sql_get_tournament(conn, tournament_id)
     if tournament.status is TournamentStatus.ARCHIVED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

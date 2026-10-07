@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from heliclockter import datetime_utc
+from sqlalchemy import text
 from starlette import status
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.planning.rounds import get_draft_round
 from bracket.logic.ranking.calculation import (
@@ -44,6 +45,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.delete("/tournaments/{tournament_id}/rounds/{round_id}", response_model=SuccessResponse)
 async def delete_round(
+    conn: DbConnection,
     tournament_id: TournamentId,
     round_id: RoundId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -51,18 +53,19 @@ async def delete_round(
     round_with_matches: RoundWithMatches = Depends(round_with_matches_dependency),
 ) -> SuccessResponse:
     for match in round_with_matches.matches:
-        await sql_delete_match(match.id)
+        await sql_delete_match(conn, match.id)
 
-    await sql_delete_round(round_id)
+    await sql_delete_round(conn, round_id)
 
-    stage_item = await get_stage_item(tournament_id, round_with_matches.stage_item_id)
-    await recalculate_ranking_for_stage_item(tournament_id, stage_item)
-    await schedule_all_matches(tournament_id)
+    stage_item = await get_stage_item(conn, tournament_id, round_with_matches.stage_item_id)
+    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
+    await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/rounds", response_model=SuccessResponse)
 async def create_round(
+    conn: DbConnection,
     tournament_id: TournamentId,
     round_body: RoundCreateBody,
     user: UserPublic = Depends(user_authenticated_for_tournament),
@@ -74,9 +77,9 @@ async def create_round(
     Only organizers see the draft. Its pairings can be changed by adding and deleting matches, and
     it is published by updating the round with `is_draft` set to false.
     """
-    await check_foreign_keys_belong_to_tournament(round_body, tournament_id)
+    await check_foreign_keys_belong_to_tournament(conn, round_body, tournament_id)
 
-    stages = await get_full_tournament_details(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
     existing_rounds = [
         round_
         for stage in stages
@@ -85,7 +88,7 @@ async def create_round(
     ]
     check_requirement(existing_rounds, user, "max_rounds")
 
-    stage_item = await get_stage_item(tournament_id, stage_item_id=round_body.stage_item_id)
+    stage_item = await get_stage_item(conn, tournament_id, stage_item_id=round_body.stage_item_id)
 
     if not stage_item.type.supports_dynamic_number_of_rounds:
         raise HTTPException(
@@ -112,36 +115,38 @@ async def create_round(
             ),
         )
 
-    async with database.transaction():
-        round_id = await sql_create_round(
-            RoundInsertable(
-                created=datetime_utc.now(),
-                is_draft=True,
-                stage_item_id=stage_item.id,
-                name=round_body.name or await get_next_round_name(tournament_id, stage_item.id),
+    round_id = await sql_create_round(
+        conn,
+        RoundInsertable(
+            created=datetime_utc.now(),
+            is_draft=True,
+            stage_item_id=stage_item.id,
+            name=round_body.name or await get_next_round_name(conn, tournament_id, stage_item.id),
+        ),
+    )
+    for input1, input2 in pairing.pairs:
+        await sql_create_match(
+            conn,
+            MatchCreateBody(
+                round_id=round_id,
+                stage_item_input1_id=input1.id,
+                stage_item_input2_id=input2.id,
+                stage_item_input1_winner_from_match_id=None,
+                stage_item_input2_winner_from_match_id=None,
+                duration_minutes=tournament.duration_minutes,
+                margin_minutes=tournament.margin_minutes,
+                custom_duration_minutes=None,
+                custom_margin_minutes=None,
             ),
         )
-        for input1, input2 in pairing.pairs:
-            await sql_create_match(
-                MatchCreateBody(
-                    round_id=round_id,
-                    stage_item_input1_id=input1.id,
-                    stage_item_input2_id=input2.id,
-                    stage_item_input1_winner_from_match_id=None,
-                    stage_item_input2_winner_from_match_id=None,
-                    duration_minutes=tournament.duration_minutes,
-                    margin_minutes=tournament.margin_minutes,
-                    custom_duration_minutes=None,
-                    custom_margin_minutes=None,
-                )
-            )
 
-    await schedule_all_matches(tournament_id)
+    await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 
 
 @router.put("/tournaments/{tournament_id}/rounds/{round_id}", response_model=SuccessResponse)
 async def update_round_by_id(
+    conn: DbConnection,
     tournament_id: TournamentId,
     round_id: RoundId,
     round_body: RoundUpdateBody,
@@ -161,9 +166,9 @@ async def update_round_by_id(
         )
         AND rounds.id = :round_id
     """
-    await database.execute(
-        query=query,
-        values={
+    await conn.execute(
+        text(query),
+        {
             "tournament_id": tournament_id,
             "round_id": round_id,
             "name": round_body.name,

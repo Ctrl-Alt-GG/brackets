@@ -1,4 +1,7 @@
+from http import HTTPMethod
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.match import MatchBody, MatchWithDetailsDefinitive
@@ -19,7 +22,6 @@ from bracket.utils.dummy_records import (
     DUMMY_STAGE_ITEM3,
     DUMMY_TEAM1,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
@@ -30,7 +32,7 @@ from tests.integration_tests.sql import (
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_activate_next_stage(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -54,6 +56,7 @@ async def test_activate_next_stage(
     ):
         tournament_id = auth_context.tournament.id
         stage_item_1 = await sql_create_stage_item_with_inputs(
+            conn,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage_inserted_1.id,
@@ -81,6 +84,7 @@ async def test_activate_next_stage(
             ),
         )
         stage_item_2 = await sql_create_stage_item_with_inputs(
+            conn,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage_inserted_2.id,
@@ -101,16 +105,17 @@ async def test_activate_next_stage(
                 ],
             ),
         )
-        await build_matches_for_stage_item(stage_item_1, tournament_id)
-        await build_matches_for_stage_item(stage_item_2, tournament_id)
+        await build_matches_for_stage_item(conn, stage_item_1, tournament_id)
+        await build_matches_for_stage_item(conn, stage_item_2, tournament_id)
 
         # Set match score to get a winner (team 4) that goes to the next round. The first round
         # of a round robin pairs the first slot with the last one.
-        [prev_stage, _] = await get_full_tournament_details(auth_context.tournament.id)
+        [prev_stage, _] = await get_full_tournament_details(conn, auth_context.tournament.id)
         match1 = prev_stage.stage_items[0].rounds[0].matches[0]
         assert isinstance(match1, MatchWithDetailsDefinitive)
         assert match1.stage_item_input2.team_id == team_inserted_4.id
         await sql_update_match(
+            conn,
             match1.id,
             MatchBody(**match1.model_copy(update={"stage_item_input2_score": 42}).model_dump()),
         )
@@ -118,10 +123,10 @@ async def test_activate_next_stage(
         response = await send_tournament_request(
             HTTPMethod.POST, "stages/activate?direction=next", auth_context, json={}
         )
-        [_, next_stage] = await get_full_tournament_details(auth_context.tournament.id)
+        [_, next_stage] = await get_full_tournament_details(conn, auth_context.tournament.id)
 
-        await sql_delete_stage_item_with_foreign_keys(stage_item_2.id)
-        await sql_delete_stage_item_with_foreign_keys(stage_item_1.id)
+        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_2.id)
+        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_1.id)
 
     assert response == SUCCESS_RESPONSE
 

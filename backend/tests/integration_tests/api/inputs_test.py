@@ -1,3 +1,5 @@
+from http import HTTPMethod
+
 import pytest
 
 from bracket.models.db.stage_item_inputs import StageItemInputInsertable
@@ -6,7 +8,6 @@ from bracket.utils.dummy_records import (
     DUMMY_STAGE_ITEM1,
     DUMMY_TEAM1,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import (
     send_tournament_request,
 )

@@ -1,17 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from 'react-router/dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 
-import { App } from './app';
-import { ErrorBoundary } from './app/ui';
+import { router } from './app';
+import { queryClient } from './app/query-client';
 import './styles.css';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1 },
-  },
-});
 
 // The deployed app has shown intermittent blank first paints; log anything that escapes React.
 window.addEventListener('error', (event) => {
@@ -24,11 +18,7 @@ window.addEventListener('unhandledrejection', (event) => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ErrorBoundary title="The app failed to start">
-          <App />
-        </ErrorBoundary>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 );

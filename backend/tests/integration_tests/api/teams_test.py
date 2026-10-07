@@ -1,13 +1,14 @@
+from http import HTTPMethod
+
 import aiofiles.os
 import aiohttp
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.database import database
 from bracket.models.db.team import Team
 from bracket.schema import players, teams
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -92,7 +93,7 @@ async def test_delete_team(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_team(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Some new name", "active": True, "player_ids": []}
     async with inserted_team(
@@ -102,7 +103,7 @@ async def test_update_team(
             HTTPMethod.PUT, f"teams/{team_inserted.id}", auth_context, None, body
         )
         updated_team = await fetch_one_parsed_certain(
-            database, Team, query=teams.select().where(teams.c.id == team_inserted.id)
+            conn, Team, query=teams.select().where(teams.c.id == team_inserted.id)
         )
         assert updated_team.name == body["name"]
         assert response["data"]["name"] == body["name"]

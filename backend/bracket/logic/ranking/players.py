@@ -2,6 +2,8 @@ import math
 from collections import defaultdict
 from decimal import Decimal
 
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.logic.ranking.calculation import D, K
 from bracket.logic.ranking.statistics import START_ELO, PlayerStatistics
 from bracket.models.db.match import MatchWithDetailsDefinitive
@@ -90,7 +92,9 @@ def determine_player_statistics(
     return dict(statistics)
 
 
-async def get_player_statistics(tournament_id: TournamentId) -> dict[PlayerId, PlayerStatistics]:
-    stages = await get_full_tournament_details(tournament_id, no_draft_rounds=True)
-    teams = await get_teams_with_members(tournament_id)
+async def get_player_statistics(
+    conn: AsyncConnection, tournament_id: TournamentId
+) -> dict[PlayerId, PlayerStatistics]:
+    stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
+    teams = await get_teams_with_members(conn, tournament_id)
     return determine_player_statistics(stages, teams)

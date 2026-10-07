@@ -1,20 +1,26 @@
-from bracket.database import database
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.ranking import Ranking, RankingBody, RankingCreateBody
 from bracket.utils.id_types import RankingId, StageItemId, TournamentId
 
 
-async def get_all_rankings_in_tournament(tournament_id: TournamentId) -> list[Ranking]:
+async def get_all_rankings_in_tournament(
+    conn: AsyncConnection, tournament_id: TournamentId
+) -> list[Ranking]:
     query = """
         SELECT *
         FROM rankings
         WHERE rankings.tournament_id = :tournament_id
         ORDER BY position
         """
-    result = await database.fetch_all(query=query, values={"tournament_id": tournament_id})
-    return [Ranking.model_validate(dict(x._mapping)) for x in result]
+    result = await conn.execute(text(query), {"tournament_id": tournament_id})
+    return [Ranking.model_validate(x._mapping) for x in result]
 
 
-async def get_default_rankings_in_tournament(tournament_id: TournamentId) -> Ranking:
+async def get_default_rankings_in_tournament(
+    conn: AsyncConnection, tournament_id: TournamentId
+) -> Ranking:
     query = """
         SELECT *
         FROM rankings
@@ -22,13 +28,13 @@ async def get_default_rankings_in_tournament(tournament_id: TournamentId) -> Ran
         ORDER BY position
         LIMIT 1
         """
-    result = await database.fetch_one(query=query, values={"tournament_id": tournament_id})
+    result = (await conn.execute(text(query), {"tournament_id": tournament_id})).first()
     assert result is not None, "No default ranking found"
-    return Ranking.model_validate(dict(result._mapping))
+    return Ranking.model_validate(result._mapping)
 
 
 async def get_ranking_for_stage_item(
-    tournament_id: TournamentId, stage_item_id: StageItemId
+    conn: AsyncConnection, tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> Ranking | None:
     query = """
         SELECT rankings.*
@@ -37,15 +43,20 @@ async def get_ranking_for_stage_item(
         WHERE rankings.tournament_id = :tournament_id
         AND stage_items.id = :stage_item_id
         """
-    result = await database.fetch_one(
-        query=query, values={"tournament_id": tournament_id, "stage_item_id": stage_item_id}
-    )
-    return Ranking.model_validate(dict(result._mapping)) if result else None
+    result = (
+        await conn.execute(
+            text(query), {"tournament_id": tournament_id, "stage_item_id": stage_item_id}
+        )
+    ).first()
+    return Ranking.model_validate(result._mapping) if result else None
 
 
 async def sql_update_ranking(
-    tournament_id: TournamentId, ranking_id: RankingId, ranking_body: RankingBody
-) -> list[Ranking]:
+    conn: AsyncConnection,
+    tournament_id: TournamentId,
+    ranking_id: RankingId,
+    ranking_body: RankingBody,
+) -> None:
     query = """
         UPDATE rankings
         SET position = :position,
@@ -56,9 +67,9 @@ async def sql_update_ranking(
         WHERE rankings.tournament_id = :tournament_id
         AND rankings.id = :ranking_id
         """
-    result = await database.fetch_all(
-        query=query,
-        values={
+    await conn.execute(
+        text(query),
+        {
             "ranking_id": ranking_id,
             "tournament_id": tournament_id,
             "win_points": float(ranking_body.win_points),
@@ -68,18 +79,20 @@ async def sql_update_ranking(
             "position": ranking_body.position,
         },
     )
-    return [Ranking.model_validate(dict(x._mapping)) for x in result]
 
 
-async def sql_delete_ranking(tournament_id: TournamentId, ranking_id: RankingId) -> None:
+async def sql_delete_ranking(
+    conn: AsyncConnection, tournament_id: TournamentId, ranking_id: RankingId
+) -> None:
     query = "DELETE FROM rankings WHERE id = :ranking_id AND tournament_id = :tournament_id"
-    await database.fetch_one(
-        query=query, values={"ranking_id": ranking_id, "tournament_id": tournament_id}
-    )
+    await conn.execute(text(query), {"ranking_id": ranking_id, "tournament_id": tournament_id})
 
 
 async def sql_create_ranking(
-    tournament_id: TournamentId, ranking_body: RankingCreateBody, position: int
+    conn: AsyncConnection,
+    tournament_id: TournamentId,
+    ranking_body: RankingCreateBody,
+    position: int,
 ) -> None:
     query = """
         INSERT INTO rankings
@@ -94,9 +107,9 @@ async def sql_create_ranking(
         )
         """
 
-    await database.execute(
-        query=query,
-        values={
+    await conn.execute(
+        text(query),
+        {
             "tournament_id": tournament_id,
             "win_points": float(ranking_body.win_points),
             "draw_points": float(ranking_body.draw_points),

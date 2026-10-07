@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from starlette import status
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.scheduling.builder import determine_available_inputs
 from bracket.logic.scheduling.handle_stage_activation import (
@@ -41,6 +42,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/stages", response_model=StagesWithStageItemsResponse)
 async def get_stages(
+    conn: DbConnection,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_or_public_dashboard),
     no_draft_rounds: bool = False,
@@ -51,12 +53,15 @@ async def get_stages(
             detail="Can't view draft rounds when not authorized",
         )
 
-    stages_ = await get_full_tournament_details(tournament_id, no_draft_rounds=no_draft_rounds)
+    stages_ = await get_full_tournament_details(
+        conn, tournament_id, no_draft_rounds=no_draft_rounds
+    )
     return StagesWithStageItemsResponse(data=stages_)
 
 
 @router.delete("/tournaments/{tournament_id}/stages/{stage_id}", response_model=SuccessResponse)
 async def delete_stage(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_id: StageId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -75,26 +80,28 @@ async def delete_stage(
             detail="Stage is active, please activate another stage first",
         )
 
-    await sql_delete_stage(tournament_id, stage_id)
+    await sql_delete_stage(conn, tournament_id, stage_id)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stages", response_model=SuccessResponse)
 async def create_stage(
+    conn: DbConnection,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    existing_stages = await get_full_tournament_details(tournament_id)
+    existing_stages = await get_full_tournament_details(conn, tournament_id)
     check_requirement(existing_stages, user, "max_stages")
 
-    await sql_create_stage(tournament_id)
+    await sql_create_stage(conn, tournament_id)
     return SuccessResponse()
 
 
 @router.put("/tournaments/{tournament_id}/stages/{stage_id}", response_model=SuccessResponse)
 async def update_stage(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_id: StageId,
     stage_body: StageUpdateBody,
@@ -110,9 +117,9 @@ async def update_stage(
         WHERE stages.id = :stage_id
         AND stages.tournament_id = :tournament_id
     """
-    await database.execute(
-        query=query,
-        values={
+    await conn.execute(
+        text(query),
+        {
             **values,
             "name": stage_body.name,
             "custom_duration_minutes": stage_body.custom_duration_minutes,
@@ -120,35 +127,38 @@ async def update_stage(
     )
 
     if stage_body.custom_duration_minutes != stage.custom_duration_minutes:
-        await schedule_all_matches(tournament_id)
+        await schedule_all_matches(conn, tournament_id)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stages/activate", response_model=SuccessResponse)
 async def activate_next_stage(
+    conn: DbConnection,
     tournament_id: TournamentId,
     stage_body: StageActivateBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    new_active_stage_id = await get_next_stage_in_tournament(tournament_id, stage_body.direction)
+    new_active_stage_id = await get_next_stage_in_tournament(
+        conn, tournament_id, stage_body.direction
+    )
     if new_active_stage_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"There is no {stage_body.direction} stage",
         )
 
-    stages = await get_full_tournament_details(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
     deactivated_stage = next((stage for stage in stages if stage.is_active), None)
 
     if stage_body.direction == "next":
-        await update_matches_in_activated_stage(tournament_id, new_active_stage_id)
+        await update_matches_in_activated_stage(conn, tournament_id, new_active_stage_id)
     else:
         if deactivated_stage:
-            await update_matches_in_deactivated_stage(tournament_id, deactivated_stage)
+            await update_matches_in_deactivated_stage(conn, tournament_id, deactivated_stage)
 
-    await sql_activate_next_stage(new_active_stage_id, tournament_id)
+    await sql_activate_next_stage(conn, new_active_stage_id, tournament_id)
     return SuccessResponse()
 
 
@@ -157,27 +167,29 @@ async def activate_next_stage(
     response_model=StageItemInputOptionsResponse,
 )
 async def get_available_inputs(
+    conn: DbConnection,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> StageItemInputOptionsResponse:
-    stages = await get_full_tournament_details(tournament_id)
-    teams = await get_teams_with_members(tournament_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
+    teams = await get_teams_with_members(conn, tournament_id)
     return StageItemInputOptionsResponse(data=determine_available_inputs(teams, stages))
 
 
 @router.get("/tournaments/{tournament_id}/next_stage_rankings")
 async def get_next_stage_rankings(
+    conn: DbConnection,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> StageRankingResponse:
     """
     Get the rankings for the stage items in this stage.
     """
-    next_stage_id = await get_next_stage_in_tournament(tournament_id, "next")
+    next_stage_id = await get_next_stage_in_tournament(conn, tournament_id, "next")
 
     if next_stage_id is None:
         return StageRankingResponse(data={})
 
     return StageRankingResponse(
-        data=await get_updates_to_inputs_in_activated_stage(tournament_id, next_stage_id)
+        data=await get_updates_to_inputs_in_activated_stage(conn, tournament_id, next_stage_id)
     )

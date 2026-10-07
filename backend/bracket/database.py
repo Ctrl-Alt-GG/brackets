@@ -1,27 +1,20 @@
-from typing import Any
+from collections.abc import AsyncIterator
+from typing import Annotated
 
-import sqlalchemy
-from databases import Database
-from heliclockter import datetime_utc
+from fastapi import Depends
+from sqlalchemy import make_url
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from bracket.config import config
 
-
-def datetime_decoder(value: str) -> datetime_utc:
-    value = value.split(".")[0].replace("+00", "+00:00")
-    return datetime_utc.fromisoformat(value)
+engine = create_async_engine(make_url(str(config.pg_dsn)).set(drivername="postgresql+asyncpg"))
 
 
-async def asyncpg_init(connection: Any) -> None:
-    for timestamp_type in ("timestamp", "timestamptz"):
-        await connection.set_type_codec(
-            timestamp_type,
-            encoder=datetime_utc.isoformat,
-            decoder=datetime_decoder,
-            schema="pg_catalog",
-        )
+async def get_connection() -> AsyncIterator[AsyncConnection]:
+    async with engine.begin() as connection:
+        yield connection
 
 
-database = Database(str(config.pg_dsn), init=asyncpg_init)
-
-engine = sqlalchemy.create_engine(str(config.pg_dsn))
+# A request's changes are committed together, before its response is sent, so a client that
+# refetches right after a change always sees it.
+DbConnection = Annotated[AsyncConnection, Depends(get_connection, scope="function")]

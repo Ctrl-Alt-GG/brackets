@@ -6,15 +6,21 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from heliclockter import datetime_utc, timedelta
 from jwt import DecodeError, ExpiredSignatureError
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette.requests import Request
 
 from bracket.config import config
-from bracket.database import database
+from bracket.database import DbConnection
 from bracket.models.db.tournament import Tournament, TournamentStatus
 from bracket.models.db.user import UserInDB, UserPublic
 from bracket.schema import tournaments
 from bracket.sql.tournaments import sql_get_tournament_by_endpoint_name
-from bracket.sql.users import get_user, get_user_access_to_club, get_user_access_to_tournament
+from bracket.sql.users import (
+    get_user,
+    get_user_access_to_club,
+    get_user_access_to_tournament,
+    update_user_password,
+)
 from bracket.utils.db import fetch_all_parsed
 from bracket.utils.id_types import ClubId, TournamentId, UserId
 from bracket.utils.rate_limit import (
@@ -48,16 +54,22 @@ class TokenData(BaseModel):
     email: str | None = None
 
 
-async def authenticate_user(email: str, password: str) -> UserInDB | None:
+async def authenticate_user(conn: AsyncConnection, email: str, password: str) -> UserInDB | None:
     try:
         normalized_email = normalize_email(email)
     except ValueError:
         return None
 
-    user = await get_user(normalized_email)
-
-    if not user or not verify_password(password, user.password_hash):
+    user = await get_user(conn, normalized_email)
+    if not user:
         return None
+
+    is_valid, updated_hash = verify_password(password, user.password_hash)
+    if not is_valid:
+        return None
+
+    if updated_hash is not None:
+        await update_user_password(conn, user.id, updated_hash)
 
     return user
 
@@ -81,7 +93,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta) -> str:
     return jwt.encode(to_encode, config.jwt_secret, algorithm=ALGORITHM)
 
 
-async def check_jwt_and_get_user(token: str) -> UserPublic | None:
+async def check_jwt_and_get_user(conn: AsyncConnection, token: str) -> UserPublic | None:
     try:
         payload = jwt.decode(
             token,
@@ -98,15 +110,15 @@ async def check_jwt_and_get_user(token: str) -> UserPublic | None:
     except (DecodeError, ExpiredSignatureError):
         return None
 
-    user = await get_user(email=assert_some(token_data.email))
+    user = await get_user(conn, email=assert_some(token_data.email))
     if user is None:
         return None
 
     return UserPublic.model_validate(user.model_dump())
 
 
-async def user_authenticated(token: str = Depends(oauth2_scheme)) -> UserPublic:
-    user = await check_jwt_and_get_user(token)
+async def user_authenticated(conn: DbConnection, token: str = Depends(oauth2_scheme)) -> UserPublic:
+    user = await check_jwt_and_get_user(conn, token)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -118,11 +130,11 @@ async def user_authenticated(token: str = Depends(oauth2_scheme)) -> UserPublic:
 
 
 async def user_authenticated_for_tournament(
-    tournament_id: TournamentId, token: str = Depends(oauth2_scheme)
+    tournament_id: TournamentId, conn: DbConnection, token: str = Depends(oauth2_scheme)
 ) -> UserPublic:
-    user = await check_jwt_and_get_user(token)
+    user = await check_jwt_and_get_user(conn, token)
 
-    if not user or not await get_user_access_to_tournament(tournament_id, user.id):
+    if not user or not await get_user_access_to_tournament(conn, tournament_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -133,11 +145,11 @@ async def user_authenticated_for_tournament(
 
 
 async def user_authenticated_for_club(
-    club_id: ClubId, token: str = Depends(oauth2_scheme)
+    club_id: ClubId, conn: DbConnection, token: str = Depends(oauth2_scheme)
 ) -> UserPublic:
-    user = await check_jwt_and_get_user(token)
+    user = await check_jwt_and_get_user(conn, token)
 
-    if not user or not await get_user_access_to_club(club_id, user.id):
+    if not user or not await get_user_access_to_club(conn, club_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -148,18 +160,18 @@ async def user_authenticated_for_club(
 
 
 async def user_authenticated_or_public_dashboard(
-    tournament_id: TournamentId, request: Request
+    tournament_id: TournamentId, request: Request, conn: DbConnection
 ) -> UserPublic | None:
     try:
         token: str = assert_some(await oauth2_scheme(request))
-        user = await check_jwt_and_get_user(token)
-        if user is not None and await get_user_access_to_tournament(tournament_id, user.id):
+        user = await check_jwt_and_get_user(conn, token)
+        if user is not None and await get_user_access_to_tournament(conn, tournament_id, user.id):
             return user
     except HTTPException:
         pass
 
     tournaments_fetched = await fetch_all_parsed(
-        database, Tournament, tournaments.select().where(tournaments.c.id == tournament_id)
+        conn, Tournament, tournaments.select().where(tournaments.c.id == tournament_id)
     )
     if len(tournaments_fetched) < 1:
         raise HTTPException(
@@ -181,10 +193,12 @@ async def user_authenticated_or_public_dashboard(
 
 
 async def user_authenticated_or_public_dashboard_by_endpoint_name(
-    token: str | None = Depends(oauth2_scheme_optional), endpoint_name: str | None = None
+    conn: DbConnection,
+    token: str | None = Depends(oauth2_scheme_optional),
+    endpoint_name: str | None = None,
 ) -> UserPublic | None:
     if endpoint_name is not None:
-        if await sql_get_tournament_by_endpoint_name(endpoint_name) is None:
+        if await sql_get_tournament_by_endpoint_name(conn, endpoint_name) is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
@@ -195,7 +209,7 @@ async def user_authenticated_or_public_dashboard_by_endpoint_name(
     if token is None:
         return None
 
-    return await user_authenticated(token)
+    return await user_authenticated(conn, token)
 
 
 @router.post("/token", response_model=Token)
@@ -203,6 +217,7 @@ async def user_authenticated_or_public_dashboard_by_endpoint_name(
 async def login_for_access_token(
     request: Request,
     response: Response,
+    conn: DbConnection,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Token:
     del request, response
@@ -220,7 +235,7 @@ async def login_for_access_token(
             headers={"Retry-After": str(retry_after)},
         )
 
-    user = await authenticate_user(form_data.username, form_data.password)
+    user = await authenticate_user(conn, form_data.username, form_data.password)
     if not user:
         retry_after = record_account_failure(normalized_email)
         raise HTTPException(

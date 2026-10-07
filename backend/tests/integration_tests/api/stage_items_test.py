@@ -1,4 +1,7 @@
+from http import HTTPMethod
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputCreateBodyFinal
@@ -10,7 +13,6 @@ from bracket.utils.dummy_records import (
     DUMMY_STAGE_ITEM1,
     DUMMY_TEAM1,
 )
-from bracket.utils.http import HTTPMethod
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_tournament_request,
@@ -90,7 +92,7 @@ async def test_delete_stage_item(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_stage_item(
-    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Optimus", "ranking_id": auth_context.ranking.id}
     async with (
@@ -112,6 +114,6 @@ async def test_update_stage_item(
 
         assert auth_context.tournament.id
         updated_stage_item = await get_stage_item(
-            auth_context.tournament.id, stage_item_inserted.id
+            conn, auth_context.tournament.id, stage_item_inserted.id
         )
         assert updated_stage_item.name == body["name"]

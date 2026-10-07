@@ -1,20 +1,26 @@
-import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from secure import (
+    ContentSecurityPolicy,
+    PermissionsPolicy,
+    ReferrerPolicy,
+    Secure,
+    StrictTransportSecurity,
+    XContentTypeOptions,
+    XFrameOptions,
+)
+from secure.middleware import SecureASGIMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from starlette.exceptions import HTTPException
-from starlette.middleware.base import RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.staticfiles import StaticFiles
 
 from bracket.config import Environment, config, environment
-from bracket.cronjobs.scheduling import start_cronjobs
-from bracket.database import database
-from bracket.models.metrics import RequestDefinition, get_request_metrics
+from bracket.database import engine
 from bracket.routes import (
     auth,
     clubs,
@@ -31,7 +37,6 @@ from bracket.routes import (
     users,
 )
 from bracket.utils.alembic import alembic_run_migrations
-from bracket.utils.asyncio import AsyncioTasksManager
 from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
 from bracket.utils.rate_limit import limiter
@@ -39,23 +44,18 @@ from bracket.utils.rate_limit import limiter
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    await database.connect()
-    await init_db_when_empty()
+    async with engine.begin() as conn:
+        await init_db_when_empty(conn)
 
-    if config.auto_run_migrations:
-        alembic_run_migrations()
-
-    if environment is Environment.PRODUCTION:
-        start_cronjobs()
+        if config.auto_run_migrations:
+            await conn.run_sync(alembic_run_migrations)
 
     if environment is Environment.PRODUCTION and not config.is_cors_enabled():
         logger.warning("It's advised to set the `CORS_ORIGINS` environment variable in production")
 
     yield
 
-    await database.disconnect()
-
-    await AsyncioTasksManager.gather()
+    await engine.dispose()
 
 
 routers = {
@@ -133,31 +133,28 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next: RequestResponseEndpoint) -> Response:
-    start_time = time.time()
-    request_metrics = get_request_metrics()
-    request_metrics.request_count[RequestDefinition.from_request(request)] += 1
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    request_metrics.response_time[RequestDefinition.from_request(request)] = process_time
-    response.headers.setdefault("Referrer-Policy", "no-referrer")
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
-    if environment is Environment.PRODUCTION:
-        response.headers.setdefault(
-            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-        )
-    content_type = response.headers.get("content-type", "")
-    if content_type.startswith("text/html"):
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; "
-            "form-action 'self'; img-src 'self' data: https:; "
-            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
-        )
-    return response
+app.add_middleware(
+    SecureASGIMiddleware,
+    secure=Secure(
+        csp=ContentSecurityPolicy()
+        .default_src("'self'")
+        .base_uri("'self'")
+        .frame_ancestors("'none'")
+        .form_action("'self'")
+        .img_src("'self'", "data:", "https:")
+        .style_src("'self'", "'unsafe-inline'")
+        .script_src("'self'", "'unsafe-inline'"),
+        hsts=(
+            StrictTransportSecurity().max_age(31536000).include_subdomains()
+            if environment is Environment.PRODUCTION
+            else None
+        ),
+        permissions=PermissionsPolicy().camera().geolocation().microphone(),
+        referrer=ReferrerPolicy().no_referrer(),
+        xcto=XContentTypeOptions().nosniff(),
+        xfo=XFrameOptions().deny(),
+    ),
+)
 
 
 @app.exception_handler(HTTPException)

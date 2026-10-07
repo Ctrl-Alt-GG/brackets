@@ -1,6 +1,8 @@
-from typing import Literal, cast
+from typing import Literal
 
-from bracket.database import database
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
 from bracket.models.db.stage import Stage
 from bracket.models.db.util import StageWithStageItems
 from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
@@ -8,6 +10,7 @@ from bracket.utils.types import dict_without_none
 
 
 async def get_full_tournament_details(
+    conn: AsyncConnection,
     tournament_id: TournamentId,
     round_id: RoundId | None = None,
     stage_id: StageId | None = None,
@@ -108,47 +111,45 @@ async def get_full_tournament_details(
             "stage_item_ids": stage_item_ids,
         }
     )
-    result = await database.fetch_all(query=query, values=values)
-    return [StageWithStageItems.model_validate(dict(x._mapping)) for x in result]
+    result = await conn.execute(text(query), values)
+    return [StageWithStageItems.model_validate(x._mapping) for x in result]
 
 
-async def sql_delete_stage(tournament_id: TournamentId, stage_id: StageId) -> None:
-    async with database.transaction():
-        query = """
-            DELETE FROM stage_items
-            WHERE stage_items.stage_id = :stage_id
-            """
-        await database.execute(query=query, values={"stage_id": stage_id})
+async def sql_delete_stage(
+    conn: AsyncConnection, tournament_id: TournamentId, stage_id: StageId
+) -> None:
+    query = """
+        DELETE FROM stage_items
+        WHERE stage_items.stage_id = :stage_id
+        """
+    await conn.execute(text(query), {"stage_id": stage_id})
 
-        query = """
-            DELETE FROM stages
-            WHERE stages.id = :stage_id
-            AND stages.tournament_id = :tournament_id
-            """
-        await database.execute(
-            query=query, values={"stage_id": stage_id, "tournament_id": tournament_id}
-        )
+    query = """
+        DELETE FROM stages
+        WHERE stages.id = :stage_id
+        AND stages.tournament_id = :tournament_id
+        """
+    await conn.execute(text(query), {"stage_id": stage_id, "tournament_id": tournament_id})
 
 
-async def sql_create_stage(tournament_id: TournamentId) -> Stage:
+async def sql_create_stage(conn: AsyncConnection, tournament_id: TournamentId) -> Stage:
     query = """
         INSERT INTO stages (created, is_active, name, tournament_id)
         VALUES (NOW(), false, :name, :tournament_id)
         RETURNING *
         """
-    result = await database.fetch_one(
-        query=query,
-        values={"tournament_id": tournament_id, "name": "Stage"},
-    )
+    result = (
+        await conn.execute(text(query), {"tournament_id": tournament_id, "name": "Stage"})
+    ).first()
 
     if result is None:
         raise ValueError("Could not create stage")
 
-    return Stage.model_validate(dict(result._mapping))
+    return Stage.model_validate(result._mapping)
 
 
 async def get_next_stage_in_tournament(
-    tournament_id: TournamentId, direction: Literal["next", "previous"]
+    conn: AsyncConnection, tournament_id: TournamentId, direction: Literal["next", "previous"]
 ) -> StageId | None:
     select_query = """
         SELECT id
@@ -186,17 +187,14 @@ async def get_next_stage_in_tournament(
             CASE WHEN :direction='next' THEN id END ASC,
             CASE WHEN NOT :direction='next' THEN id END DESC
     """
-    return cast(
-        "StageId | None",
-        await database.execute(
-            query=select_query,
-            values={"tournament_id": tournament_id, "direction": direction},
-        ),
+    stage_id = await conn.scalar(
+        text(select_query), {"tournament_id": tournament_id, "direction": direction}
     )
+    return StageId(stage_id) if stage_id is not None else None
 
 
 async def sql_activate_next_stage(
-    new_active_stage_id: StageId, tournament_id: TournamentId
+    conn: AsyncConnection, new_active_stage_id: StageId, tournament_id: TournamentId
 ) -> None:
     update_query = """
         UPDATE stages
@@ -204,7 +202,7 @@ async def sql_activate_next_stage(
         WHERE stages.tournament_id = :tournament_id
 
     """
-    await database.execute(
-        query=update_query,
-        values={"tournament_id": tournament_id, "new_active_stage_id": new_active_stage_id},
+    await conn.execute(
+        text(update_query),
+        {"tournament_id": tournament_id, "new_active_stage_id": new_active_stage_id},
     )
