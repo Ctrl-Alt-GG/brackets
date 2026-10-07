@@ -15,7 +15,7 @@ import {
   sortTeamsByName,
   stageItemStandings,
 } from '../utils';
-import { EmptyState, Surface, SurfaceHeading } from '../ui';
+import { EmptyState, SectionLabel, Surface, SurfaceHeading } from '../ui';
 import { stageItemPath } from './tournament-overview';
 
 function playerNames(team: OpenApi.FullTeamWithPlayers) {
@@ -122,8 +122,13 @@ export function TeamDetailSection({
 
   return (
     <div className="space-y-6">
-      <Link className="link text-sm" to={`${publicPath}/teams`}>
-        ← All teams
+      {/* An inline link ignores the vertical spacing of the list it sits in, so this is a flex row. */}
+      <Link
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-base-content/70 transition hover:text-base-content"
+        to={`${publicPath}/teams`}
+      >
+        <span aria-hidden="true">←</span>
+        All teams
       </Link>
 
       <Surface className={isMine ? 'border-accent/40' : undefined}>
@@ -143,7 +148,7 @@ export function TeamDetailSection({
 
         <div className="grid gap-6 md:grid-cols-2">
           <section className="space-y-2">
-            <h3 className="text-sm font-medium text-base-content/80">Players</h3>
+            <SectionLabel>Players</SectionLabel>
             {team.players.length === 0 ? (
               <p className="text-sm text-base-content/70">No players listed.</p>
             ) : (
@@ -156,7 +161,7 @@ export function TeamDetailSection({
           </section>
           {placements.length > 0 ? (
             <section className="space-y-2">
-              <h3 className="text-sm font-medium text-base-content/80">Standing</h3>
+              <SectionLabel>Standing</SectionLabel>
               <ul className="space-y-1 text-sm">
                 {placements.map(({ entry, position, size, stageItem }) => (
                   <li key={stageItem.id}>
@@ -179,7 +184,7 @@ export function TeamDetailSection({
         ) : null}
         {comingUp.length > 0 ? (
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-base-content/80">Coming up</h3>
+            <SectionLabel>Coming up</SectionLabel>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {comingUp.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
@@ -189,7 +194,7 @@ export function TeamDetailSection({
         ) : null}
         {played.length > 0 ? (
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-base-content/80">Results</h3>
+            <SectionLabel>Results</SectionLabel>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {played.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
