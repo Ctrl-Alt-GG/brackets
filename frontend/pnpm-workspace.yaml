@@ -4,6 +4,8 @@ allowBuilds:
   '@tailwindcss/oxide': true
   esbuild: false
 overrides:
-  js-yaml: 4.3.1
+  # @hey-api/json-schema-ref-parser pins js-yaml@4.2.0 (GHSA-2883-xcg3-v3hh). A range, so later
+  # 4.x fixes can be picked up without editing this.
+  js-yaml: ^4.3.2
   # brackets-manager pins uuid@9 (GHSA-w5hq-g745-h8pq).
   uuid: 11.1.1
