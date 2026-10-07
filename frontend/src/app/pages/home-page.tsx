@@ -55,9 +55,13 @@ function TournamentCard({
         </div>
         <div className="card-actions mt-auto">
           {/* The first button stretches over the card, so the whole card opens it. The second one
-              sits above that layer to stay clickable on its own. */}
+              sits above that layer to stay clickable on its own.
+              While pressed, daisyUI nudges a button with `translate`, which would make the button
+              the containing block of its own overlay: the overlay would shrink to the button on
+              mousedown, the mouseup would land on the card instead, and the click would be lost.
+              Keeping the button in place while it is pressed keeps the overlay over the card. */}
           <Link
-            className="btn btn-primary btn-sm after:absolute after:inset-0 after:rounded-box"
+            className="btn btn-primary btn-sm after:absolute after:inset-0 after:rounded-box active:translate-none"
             to={canManage ? `/tournaments/${tournament.id}` : detailsPath}
           >
             {canManage ? 'Manage' : 'Details'}
