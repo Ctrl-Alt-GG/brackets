@@ -13,7 +13,7 @@ node_modules
 coverage.xml
 coverage.json
 
-backend/static
+backend/uploads
 
 /process-compose.yml
 
