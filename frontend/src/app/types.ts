@@ -1,5 +1,5 @@
 import * as OpenApi from '../openapi';
-import type { BracketViewerData } from './bracket-adapter';
+import type { BracketViewerData, RoundNameInfo } from './bracket-adapter';
 
 declare global {
   interface Window {
@@ -11,15 +11,18 @@ declare global {
         data: BracketViewerData,
         config: {
           clear?: boolean;
-          customRoundName?: (info: { roundCount: number; roundNumber: number }) => string;
+          customRoundName?: (info: RoundNameInfo) => string;
+          highlightParticipantOnHover?: boolean;
           selector?: string;
+          showRankingTable?: boolean;
         },
       ) => Promise<void>;
     };
   }
 }
 
-export type Session = OpenApi.Token | null;
+/** Who is signed in. The session itself is an HttpOnly cookie, which the page can't read. */
+export type Session = Pick<OpenApi.Token, 'name' | 'user_id'> | null;
 
 export type TournamentSection =
   // The workspace, where organizers run the tournament.

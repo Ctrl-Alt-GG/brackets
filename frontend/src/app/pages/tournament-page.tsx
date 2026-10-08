@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, NavLink, useParams } from 'react-router';
 
@@ -13,6 +13,7 @@ import {
   cx,
   flattenMatches,
   getErrorMessage,
+  hasBracketView,
   isBracket,
   isScored,
   publicTournamentPath,
@@ -21,16 +22,32 @@ import {
 import { EmptyState, ErrorState, LoadingState, PageShell } from '../ui';
 import { OverviewSection } from '../sections/tournament-overview';
 import { BracketSection } from '../sections/tournament-bracket';
-import { PlayersSection, TeamsSection } from '../sections/tournament-roster';
+import { BigScreenSchedule, ScheduleSection } from '../sections/tournament-schedule';
+import { StandingsSection } from '../sections/tournament-standings';
 import { TeamDetailSection, TeamDirectorySection } from '../sections/tournament-teams';
-import {
-  BigScreenSchedule,
-  RankingsSection,
-  ScheduleSection,
-  SettingsSection,
-  StandingsSection,
-  StagesSection,
-} from '../sections/tournament-management';
+
+// Only organizers open the workspace, so visitors never download its forms.
+const PlayersSection = lazy(() =>
+  import('../sections/tournament-roster').then((module) => ({ default: module.PlayersSection })),
+);
+const TeamsSection = lazy(() =>
+  import('../sections/tournament-roster').then((module) => ({ default: module.TeamsSection })),
+);
+const RankingsSection = lazy(() =>
+  import('../sections/tournament-management').then((module) => ({
+    default: module.RankingsSection,
+  })),
+);
+const SettingsSection = lazy(() =>
+  import('../sections/tournament-management').then((module) => ({
+    default: module.SettingsSection,
+  })),
+);
+const StagesSection = lazy(() =>
+  import('../sections/tournament-management').then((module) => ({
+    default: module.StagesSection,
+  })),
+);
 
 const MANAGEMENT_SECTIONS: ReadonlySet<TournamentSection> = new Set([
   'players',
@@ -71,7 +88,7 @@ function detailsTabs(publicPath: string, stages: OpenApi.StageWithStageItems[]):
     ...(stageItems.some((stageItem) => !isBracket(stageItem))
       ? [{ label: 'Standings', to: `${publicPath}/standings` }]
       : []),
-    ...(stageItems.some(isBracket) ? [{ label: 'Bracket', to: `${publicPath}/bracket` }] : []),
+    ...(stageItems.some(hasBracketView) ? [{ label: 'Bracket', to: `${publicPath}/bracket` }] : []),
     { label: 'Teams', to: `${publicPath}/teams` },
   ];
 }
@@ -200,7 +217,7 @@ function TournamentView({
     : publicTournamentPath(tournament);
   const stageItems = bundle.stages.flatMap((stage) => stage.stage_items);
   const hasGroups = stageItems.some((stageItem) => !isBracket(stageItem));
-  const hasBrackets = stageItems.some(isBracket);
+  const hasBrackets = stageItems.some(hasBracketView);
   const team = teamMap.get(teamId ?? -1);
   const pageTitle = section === 'dashboard-team' ? team?.name : SECTION_TITLES[section];
   const context = {
@@ -364,7 +381,7 @@ function TournamentView({
             teamCount={bundle.teams.length}
             tournament={tournament}
           />
-          {content}
+          <Suspense fallback={<LoadingState title="Loading…" />}>{content}</Suspense>
         </section>
       )}
     </TournamentContext.Provider>
@@ -387,7 +404,7 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
   const workspace = useQuery({
     enabled: Boolean(tournamentKey) && !isLockedOut && !sendVisitorToDetails,
     queryFn: () => fetchTournamentBundle(tournamentKey, dashboardMode, isAuthenticated),
-    queryKey: [...TOURNAMENT_BUNDLE_QUERY_KEY, tournamentKey, dashboardMode, session?.access_token],
+    queryKey: [...TOURNAMENT_BUNDLE_QUERY_KEY, tournamentKey, dashboardMode, session?.user_id],
     // The Details pages follow a live event, and the big screens run unattended.
     refetchInterval: dashboardMode ? 30_000 : false,
   });

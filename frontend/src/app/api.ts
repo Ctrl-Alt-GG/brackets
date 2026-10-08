@@ -1,7 +1,7 @@
 import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
 import { readSession } from './hooks';
-import type { Session, TournamentBundle } from './types';
+import type { TournamentBundle } from './types';
 import { getApiBaseUrl, isNumericIdentifier } from './utils';
 
 function getResponseStatus(error: unknown) {
@@ -16,34 +16,31 @@ function isAuthorizationError(error: unknown) {
 export const TOURNAMENT_BUNDLE_QUERY_KEY = ['tournament-bundle'];
 
 let unauthorizedHandler: (() => void) | null = null;
-let unauthorizedInterceptorAttached = false;
 
 export function setUnauthorizedHandler(handler: () => void) {
   unauthorizedHandler = handler;
 }
 
-export function configureApiClient(session: Session) {
+export function configureApiClient() {
   client.setConfig({
-    auth: session?.access_token,
     baseURL: getApiBaseUrl(),
-    // Endpoints whose auth dependency is resolved manually are not marked as
-    // secured in the OpenAPI schema, so the generated `auth` option never
-    // reaches them. Sending the header here covers every request.
-    headers: { Authorization: session ? `Bearer ${session.access_token}` : null },
+    // The session is an HttpOnly cookie. Requests to the page's own origin always carry it; this
+    // also sends it to an API on another origin of the same site.
+    withCredentials: true,
+    // The API refuses changes signed in with the cookie unless they carry this header, which other
+    // sites can't add (CSRF protection).
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
   });
 
-  if (!unauthorizedInterceptorAttached) {
-    unauthorizedInterceptorAttached = true;
-    client.instance.interceptors.response.use(
-      (response) => response,
-      (error: unknown) => {
-        if (getResponseStatus(error) === 401 && readSession()) {
-          unauthorizedHandler?.();
-        }
-        return Promise.reject(error);
-      },
-    );
-  }
+  client.instance.interceptors.response.use(
+    (response) => response,
+    (error: unknown) => {
+      if (getResponseStatus(error) === 401 && readSession()) {
+        unauthorizedHandler?.();
+      }
+      return Promise.reject(error);
+    },
+  );
 }
 
 export async function fetchTournament(tournamentKey: string, dashboardMode: boolean) {
@@ -114,17 +111,15 @@ export async function fetchTournamentBundle(
     stages = data.data;
   }
 
+  // The API's largest page, which holds more players and teams than a tournament can have.
+  const all = { limit: 500, offset: 0, sort_by: 'name', sort_direction: 'asc' } as const;
   const [players, teams, rankings, standings] = await Promise.all([
     OpenApi.getPlayersApiTournamentsTournamentIdPlayersGet({
       path,
-      query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
+      query: all,
       throwOnError: true,
     }),
-    OpenApi.getTeamsApiTournamentsTournamentIdTeamsGet({
-      path,
-      query: { limit: 100, offset: 0, sort_by: 'name', sort_direction: 'asc' },
-      throwOnError: true,
-    }),
+    OpenApi.getTeamsApiTournamentsTournamentIdTeamsGet({ path, query: all, throwOnError: true }),
     OpenApi.getRankingsApiTournamentsTournamentIdRankingsGet({ path, throwOnError: true }),
     OpenApi.getStandingsApiTournamentsTournamentIdStandingsGet({ path, throwOnError: true }),
   ]);

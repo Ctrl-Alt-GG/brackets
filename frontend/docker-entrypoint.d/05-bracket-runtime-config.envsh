@@ -1,0 +1,16 @@
+#!/bin/sh
+# Sourced by the nginx image's entrypoint before it fills in /etc/nginx/templates, so the variables
+# exported here are available there.
+
+# The page reads the API's address from this file, so one image works with any backend. Quotes and
+# backslashes are escaped so that the value stays a string.
+api_base_url_js=$(printf '%s' "${API_BASE_URL}" | sed 's/[\\"]/\\&/g')
+cat >/usr/share/nginx/html/runtime-config.js <<EOF
+window.__BRACKET_RUNTIME_CONFIG__ = {
+  apiBaseUrl: "${api_base_url_js}"
+};
+EOF
+
+# The scheme, host and port of the API, which the Content-Security-Policy lets the page connect to.
+API_ORIGIN=$(printf '%s' "${API_BASE_URL}" | sed -E 's|^([A-Za-z][A-Za-z0-9+.-]*://[^/?#]+).*|\1|')
+export API_ORIGIN

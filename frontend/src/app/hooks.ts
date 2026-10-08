@@ -2,12 +2,12 @@ import { readLocalStorageValue, useLocalStorage } from '@mantine/hooks';
 
 import type { Session } from './types';
 
-const SESSION_KEY = 'login';
+const SESSION_KEY = 'bracket:session';
 
 export function useSession() {
   return useLocalStorage<Session>({
     defaultValue: null,
-    // The API client needs the token before the first request.
+    // Pages decide what to load from it in their first render.
     getInitialValueInEffect: false,
     key: SESSION_KEY,
   });

@@ -4,7 +4,7 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { teamPath, useTournamentContext } from '../tournament-context';
-import { hasTeam, isBracket } from '../utils';
+import { hasBracketView, hasTeam, isBracket } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 export function BracketSection({
@@ -21,7 +21,7 @@ export function BracketSection({
   const navigate = useNavigate();
   const { publicPath } = useTournamentContext();
   const brackets = stages.flatMap((stage) =>
-    stage.stage_items.filter(isBracket).map((stageItem) => ({ stage, stageItem })),
+    stage.stage_items.filter(hasBracketView).map((stageItem) => ({ stage, stageItem })),
   );
 
   if (brackets.length === 0) return null;
@@ -53,7 +53,7 @@ export function BracketSection({
             <div>
               <h3 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h3>
               <p className="text-sm text-base-content/70">
-                {stage.name} · {stageItem.team_count} teams
+                {stage.name} · {stageItem.type_name} · {stageItem.team_count} teams
               </p>
             </div>
             {data ? (
@@ -64,7 +64,9 @@ export function BracketSection({
               />
             ) : (
               <p className="text-sm text-base-content/70">
-                The bracket appears here once the matches have been drawn.
+                {isBracket(stageItem)
+                  ? 'The bracket appears here once the matches have been drawn.'
+                  : 'The rounds appear here once the first one has been drawn.'}
               </p>
             )}
           </section>

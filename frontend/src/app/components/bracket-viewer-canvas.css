@@ -1,0 +1,84 @@
+/* Brand theme for brackets-viewer. It loads with the viewer, after the library's own stylesheet,
+   so that its values win. */
+.brackets-viewer {
+  --primary-background: transparent;
+  --secondary-background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+  --match-background: var(--color-base-100);
+  --font-color: var(--color-base-content);
+  --win-color: var(--color-success);
+  --loss-color: #a1a1aa;
+  --label-color: #a1a1aa;
+  --hint-color: #a1a1aa;
+  --connector-color: color-mix(in oklab, var(--color-base-content) 28%, transparent);
+  --border-color: var(--color-base-300);
+  /* Matches can't be clicked, so their border doesn't react to the pointer. */
+  --border-hover-color: var(--border-color);
+  --border-selected-color: var(--color-primary);
+
+  --text-size: 14px;
+  --round-margin: 48px;
+  --match-width: 210px;
+  --match-border-radius: 0.75rem;
+
+  font-family: var(--font-sans);
+  padding: 0;
+  margin: 0;
+}
+
+.brackets-viewer h1 {
+  display: none;
+}
+
+/* Swiss stage items are drawn as one round-robin group (see bracket-adapter.ts). Their rounds go
+   side by side like the columns of a bracket, and the section already names the group. */
+.brackets-viewer .round-robin {
+  justify-content: flex-start;
+}
+
+.brackets-viewer .round-robin .group {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--round-margin);
+}
+
+.brackets-viewer .round-robin .group > h2 {
+  display: none;
+}
+
+.brackets-viewer .round-robin .round {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.brackets-viewer h3 {
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+
+.brackets-viewer .participant.win .name {
+  color: #ffffff;
+}
+
+.brackets-viewer .participant.loss .name {
+  color: #a1a1aa;
+}
+
+/* Teams in a bracket open their page; BracketViewer marks them once they are known. */
+.brackets-viewer .participant.team-link {
+  cursor: pointer;
+}
+
+.brackets-viewer .participant.team-link:hover .name {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* An undecided slot renders with an empty name. */
+.brackets-viewer .participant .name:empty::before {
+  content: 'TBD';
+  color: var(--hint-color);
+}

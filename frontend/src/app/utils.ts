@@ -2,7 +2,6 @@ import type { AxiosError } from 'axios';
 import { clsx, type ClassValue } from 'clsx';
 import { format, isThisYear, isToday, isValid, parseISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
-import { z } from 'zod';
 
 import * as OpenApi from '../openapi';
 import type { FlattenedMatch } from './types';
@@ -20,9 +19,8 @@ export function getApiBaseUrl() {
     typeof window !== 'undefined' ? window.__BRACKET_RUNTIME_CONFIG__ : undefined;
   const runtimeValue = runtimeConfig?.apiBaseUrl?.trim();
 
-  return normalizeApiBaseUrl(
-    runtimeValue || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8400',
-  );
+  // Without one, the API is on the page's own origin, as behind the Vite dev server's proxy.
+  return normalizeApiBaseUrl(runtimeValue || import.meta.env.VITE_API_BASE_URL || '');
 }
 
 // Callers append `/api/...` themselves, so a configured value ending in `/api` would double it.
@@ -67,12 +65,6 @@ export function formatMatchTime(value: string | null) {
 export function toDateTimeLocal(value: string) {
   return format(parseISO(value), "yyyy-MM-dd'T'HH:mm");
 }
-
-/** A `datetime-local` value, sent as the UTC timestamp the API expects. */
-export const zLocalDateTime = z
-  .string()
-  .min(1, 'Pick a date and time')
-  .transform((value) => new Date(value).toISOString());
 
 export function normalizeDashboardEndpoint(value: unknown) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -138,6 +130,11 @@ export function involvesTeam(
 
 export function isBracket(stageItem: OpenApi.StageItemWithRounds) {
   return stageItem.type === 'SINGLE_ELIMINATION';
+}
+
+/** Whether the Bracket page draws the stage item: its knockout bracket, or its Swiss rounds. */
+export function hasBracketView(stageItem: OpenApi.StageItemWithRounds) {
+  return isBracket(stageItem) || stageItem.type === 'SWISS';
 }
 
 export function sortTeamsByName<T extends { name: string }>(teams: T[]) {

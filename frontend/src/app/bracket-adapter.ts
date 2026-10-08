@@ -31,8 +31,15 @@ export type BracketViewerData = {
     number: number;
     settings: { size: number };
     tournament_id: number;
-    type: 'single_elimination';
+    type: 'round_robin' | 'single_elimination';
   }>;
+};
+
+/** What brackets-viewer tells `customRoundName` about the round it names. */
+export type RoundNameInfo = {
+  groupType: 'final-group' | 'loser-bracket' | 'round-robin' | 'single-bracket' | 'winner-bracket';
+  roundCount: number;
+  roundNumber: number;
 };
 
 // brackets-model Status enum.
@@ -160,13 +167,18 @@ export function toBracketViewerData(
         number: 1,
         settings: { size: stageItem.team_count },
         tournament_id: tournamentId,
-        type: 'single_elimination',
+        // brackets-viewer has no Swiss layout. A round-robin group shows the same thing: a column
+        // of pairings for each round, without the connectors of a knockout bracket.
+        type: stageItem.type === 'SWISS' ? 'round_robin' : 'single_elimination',
       },
     ],
   };
 }
 
-export function roundLabel(roundNumber: number, roundCount: number) {
+export function roundLabel({ groupType, roundCount, roundNumber }: RoundNameInfo) {
+  // A Swiss stage item, drawn as a round-robin group.
+  if (groupType === 'round-robin') return `Round ${roundNumber}`;
+
   const fromFinal = roundCount - roundNumber;
   if (fromFinal === 0) return 'Final';
   if (fromFinal === 1) return 'Semi-finals';

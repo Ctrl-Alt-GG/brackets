@@ -29,8 +29,8 @@ export function LoginPage() {
   const login = useMutation({
     ...loginForAccessTokenApiTokenPostMutation(),
     meta: { successMessage: 'Logged in successfully.' },
-    onSuccess: (token) => {
-      setSession(token);
+    onSuccess: ({ name, user_id }) => {
+      setSession({ name, user_id });
       navigate('/');
     },
   });
@@ -110,8 +110,8 @@ export function RegisterPage() {
   const register = useMutation({
     ...registerUserApiUsersRegisterPostMutation(),
     meta: { successMessage: 'Account created successfully.' },
-    onSuccess: (response) => {
-      setSession(response.data);
+    onSuccess: ({ data: { name, user_id } }) => {
+      setSession({ name, user_id });
       navigate('/');
     },
   });
