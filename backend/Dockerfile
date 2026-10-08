@@ -19,14 +19,15 @@ RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirement
     && python -m pip uninstall --yes uv \
     && rm -rf /root/.cache /tmp/requirements.txt
 
-COPY --chown=10001:10001 alembic.ini ./
-COPY --chown=10001:10001 cli.py ./
-COPY --chown=10001:10001 alembic ./alembic
-COPY --chown=10001:10001 bracket ./bracket
-COPY --chown=10001:10001 openapi ./openapi
-COPY --chown=10001:10001 static ./static
+# The code stays owned by root, so the app can't modify it. Uploaded logos are its only writes.
+COPY alembic.ini cli.py ./
+COPY alembic ./alembic
+COPY bracket ./bracket
+COPY openapi ./openapi
+RUN install --directory --owner=10001 --group=10001 uploads
 
 USER 10001:10001
 EXPOSE 8400
 
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "bracket.app:app", "--bind", "0.0.0.0:8400", "--workers", "1", "--no-control-socket"]
+# uvicorn trusts the `X-Forwarded-For` of the proxies listed in `FORWARDED_ALLOW_IPS`.
+CMD ["uvicorn", "bracket.app:app", "--host", "0.0.0.0", "--port", "8400", "--no-server-header"]

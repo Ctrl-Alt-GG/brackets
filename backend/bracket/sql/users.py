@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bracket.logic.tournaments import sql_delete_tournament_completely
@@ -16,13 +16,17 @@ async def get_user_access_to_tournament(
     conn: AsyncConnection, tournament_id: TournamentId, user_id: UserId
 ) -> bool:
     query = """
-        SELECT DISTINCT t.id
-        FROM users_x_clubs
-        JOIN tournaments t ON t.club_id = users_x_clubs.club_id
-        WHERE user_id = :user_id
+        SELECT EXISTS (
+            SELECT 1
+            FROM users_x_clubs
+            JOIN tournaments ON tournaments.club_id = users_x_clubs.club_id
+            WHERE users_x_clubs.user_id = :user_id
+            AND tournaments.id = :tournament_id
+        )
         """
-    result = await conn.execute(text(query), {"user_id": user_id})
-    return tournament_id in {tournament.id for tournament in result}
+    return bool(
+        await conn.scalar(text(query), {"user_id": user_id, "tournament_id": tournament_id})
+    )
 
 
 async def get_which_clubs_has_user_access_to(conn: AsyncConnection, user_id: UserId) -> set[ClubId]:
@@ -36,7 +40,15 @@ async def get_which_clubs_has_user_access_to(conn: AsyncConnection, user_id: Use
 
 
 async def get_user_access_to_club(conn: AsyncConnection, club_id: ClubId, user_id: UserId) -> bool:
-    return club_id in await get_which_clubs_has_user_access_to(conn, user_id)
+    query = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM users_x_clubs
+            WHERE user_id = :user_id
+            AND club_id = :club_id
+        )
+        """
+    return bool(await conn.scalar(text(query), {"user_id": user_id, "club_id": club_id}))
 
 
 async def update_user(conn: AsyncConnection, user_id: UserId, user: UserToUpdate) -> None:
@@ -119,10 +131,17 @@ async def check_whether_email_is_in_use(conn: AsyncConnection, email: str) -> bo
 
 
 async def get_user(conn: AsyncConnection, email: str) -> UserInDB | None:
-    normalized_email = normalize_email(email)
+    # An exact match on the unique `ix_users_email_lower` index. Never a pattern match such as
+    # `ILIKE`: `%` and `_` are valid in emails, so `%@example.org` would match other accounts.
     return await fetch_one_parsed(
-        conn, UserInDB, users.select().where(users.c.email.ilike(normalized_email))
+        conn,
+        UserInDB,
+        users.select().where(func.lower(users.c.email) == normalize_email(email)),
     )
+
+
+async def get_user_in_db(conn: AsyncConnection, user_id: UserId) -> UserInDB | None:
+    return await fetch_one_parsed(conn, UserInDB, users.select().where(users.c.id == user_id))
 
 
 async def delete_user_and_owned_clubs(conn: AsyncConnection, user_id: UserId) -> list[str]:

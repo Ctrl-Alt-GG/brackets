@@ -3,18 +3,27 @@ from starlette import status
 
 from bracket.database import DbConnection
 from bracket.models.db.match import Match
+from bracket.models.db.ranking import Ranking
 from bracket.models.db.round import Round
 from bracket.models.db.team import FullTeamWithPlayers, Team
 from bracket.models.db.tournament import Tournament, TournamentStatus
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.schema import matches, rounds, stage_items, stages, teams
+from bracket.schema import matches, rankings, rounds, stage_items, stages, teams
 from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_teams_with_members
 from bracket.sql.tournaments import sql_get_tournament
 from bracket.utils.db import fetch_one_parsed
-from bracket.utils.id_types import MatchId, RoundId, StageId, StageItemId, TeamId, TournamentId
+from bracket.utils.id_types import (
+    MatchId,
+    RankingId,
+    RoundId,
+    StageId,
+    StageItemId,
+    TeamId,
+    TournamentId,
+)
 
 
 async def round_dependency(
@@ -123,6 +132,26 @@ async def team_with_players_dependency(
     return teams_with_members[0]
 
 
+async def ranking_dependency(
+    tournament_id: TournamentId, ranking_id: RankingId, conn: DbConnection
+) -> Ranking:
+    ranking = await fetch_one_parsed(
+        conn,
+        Ranking,
+        rankings.select().where(
+            (rankings.c.id == ranking_id) & (rankings.c.tournament_id == tournament_id)
+        ),
+    )
+
+    if ranking is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Could not find ranking with id {ranking_id}",
+        )
+
+    return ranking
+
+
 async def disallow_archived_tournament(
     tournament_id: TournamentId, conn: DbConnection
 ) -> Tournament:
@@ -131,7 +160,6 @@ async def disallow_archived_tournament(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can't update archived tournament",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return tournament

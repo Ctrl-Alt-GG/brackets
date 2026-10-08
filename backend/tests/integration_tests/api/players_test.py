@@ -1,8 +1,10 @@
 from http import HTTPMethod
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from bracket.database import engine
 from bracket.models.db.player import Player
 from bracket.schema import players
 from bracket.utils.db import fetch_one_parsed_certain
@@ -57,12 +59,31 @@ async def test_create_player(
 async def test_create_players(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    body = {"names": "Player x\nPlayer y", "active": True}
+    body = {"names": "Player x\n  Player y  \n\n", "active": True}
     response = await send_tournament_request(
         HTTPMethod.POST, "players_multi", auth_context, json=body
     )
     assert response["success"] is True
+
+    async with engine.begin() as conn:
+        names = (await conn.scalars(select(players.c.name).order_by(players.c.name))).all()
+    assert names == ["Player x", "Player y"]
     await assert_row_count_and_clear(players, 2)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_create_players_with_too_long_name(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    body = {"names": f"Player x\n{'y' * 31}", "active": True}
+    response = await send_tournament_request(
+        HTTPMethod.POST, "players_multi", auth_context, json=body
+    )
+
+    assert response["detail"][0]["msg"] == (
+        f'Value error, "{"y" * 31}" is longer than the 30 characters a name can have'
+    )
+    await assert_row_count_and_clear(players, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")

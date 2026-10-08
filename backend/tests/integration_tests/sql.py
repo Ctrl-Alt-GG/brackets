@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from typing import cast
 
 from pydantic import BaseModel
-from sqlalchemy import Table
+from sqlalchemy import Table, func, select
 
 from bracket.database import engine
 from bracket.models.db.club import Club, ClubInsertable
@@ -49,7 +49,10 @@ from tests.integration_tests.models import AuthContext
 
 async def assert_row_count_and_clear(table: Table, expected_rows: int) -> None:
     async with engine.begin() as conn:
+        row_count = await conn.scalar(select(func.count()).select_from(table))
         await conn.execute(table.delete())
+
+    assert row_count == expected_rows
 
 
 @asynccontextmanager
@@ -187,7 +190,7 @@ async def inserted_auth_context() -> AsyncIterator[AuthContext]:
         ) as user_x_club_inserted,
     ):
         yield AuthContext(
-            headers={"Authorization": f"Bearer {get_mock_token(mock_user.email)}"},
+            headers={"Authorization": f"Bearer {get_mock_token(user_inserted)}"},
             user=user_inserted,
             club=club_inserted,
             tournament=tournament_inserted,

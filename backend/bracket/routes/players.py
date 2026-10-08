@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from starlette import status
 
 from bracket.config import config
 from bracket.database import DbConnection
@@ -26,10 +27,8 @@ from bracket.sql.players import (
     insert_player,
     sql_delete_player,
 )
-from bracket.utils.db import fetch_one_parsed
 from bracket.utils.id_types import PlayerId, TournamentId
 from bracket.utils.pagination import PaginationPlayers
-from bracket.utils.types import assert_some
 
 router = APIRouter(prefix=config.api_prefix)
 
@@ -86,22 +85,21 @@ async def update_player_by_id(
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SinglePlayerResponse:
-    await conn.execute(
-        players.update()
-        .where((players.c.id == player_id) & (players.c.tournament_id == tournament_id))
-        .values(**player_body.model_dump())
-    )
-    return SinglePlayerResponse(
-        data=assert_some(
-            await fetch_one_parsed(
-                conn,
-                Player,
-                players.select().where(
-                    (players.c.id == player_id) & (players.c.tournament_id == tournament_id)
-                ),
-            )
+    player = (
+        await conn.execute(
+            players.update()
+            .where((players.c.id == player_id) & (players.c.tournament_id == tournament_id))
+            .values(**player_body.model_dump())
+            .returning(players)
         )
-    )
+    ).first()
+    if player is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Could not find player with id {player_id}",
+        )
+
+    return SinglePlayerResponse(data=Player.model_validate(player._mapping))
 
 
 @router.delete("/tournaments/{tournament_id}/players/{player_id}", response_model=SuccessResponse)
@@ -138,7 +136,7 @@ async def create_multiple_players(
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    player_names = [player.strip() for player in player_body.names.split("\n") if len(player) > 0]
+    player_names = player_body.player_names
     existing_players = await get_all_players_in_tournament(conn, tournament_id)
     check_requirement(existing_players, user, "max_players", additions=len(player_names))
 

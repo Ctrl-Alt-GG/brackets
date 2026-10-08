@@ -1,7 +1,4 @@
-import csv
-
-import aiofiles.os
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from heliclockter import datetime_utc
 from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
@@ -48,10 +45,13 @@ from bracket.sql.validation import check_foreign_keys_belong_to_tournament
 from bracket.utils.db import fetch_one_parsed
 from bracket.utils.errors import ForeignKey, check_foreign_key_violation
 from bracket.utils.id_types import PlayerId, TeamId, TournamentId
-from bracket.utils.logging import logger
 from bracket.utils.pagination import PaginationTeams
 from bracket.utils.types import assert_some
-from bracket.utils.uploads import get_image_media_type, store_validated_image_upload
+from bracket.utils.uploads import (
+    get_image_media_type,
+    remove_existing_upload,
+    store_validated_image_upload,
+)
 
 router = APIRouter(prefix=config.api_prefix)
 
@@ -127,24 +127,16 @@ async def update_team_by_id(
 async def update_team_logo(
     conn: DbConnection,
     tournament_id: TournamentId,
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = None,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     team: Team = Depends(team_dependency),
 ) -> SingleTeamResponse:
-    old_logo_path = await get_team_logo_path(conn, tournament_id, team.id)
-    filename: str | None = None
-
-    if file:
-        filename = await store_validated_image_upload(file, "team-logos")
-
-    if old_logo_path is not None and old_logo_path != filename:
-        try:
-            await aiofiles.os.remove(old_logo_path)
-        except OSError as exc:
-            logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
-
+    filename = await store_validated_image_upload(file, "team-logos") if file else None
     await conn.execute(teams.update().where(teams.c.id == team.id).values(logo_path=filename))
+    # Background tasks run after the response, so the new logo is committed by then.
+    background_tasks.add_task(remove_existing_upload, "team-logos", team.logo_path)
     return SingleTeamResponse(data=assert_some(await get_team_by_id(conn, team.id, tournament_id)))
 
 
@@ -152,11 +144,10 @@ async def update_team_logo(
 async def get_team_logo(
     conn: DbConnection,
     tournament_id: TournamentId,
-    team_id: TeamId,
     _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+    team: Team = Depends(team_dependency),
 ) -> FileResponse:
-    team = assert_some(await get_team_by_id(conn, team_id, tournament_id))
-    logo_path = await get_team_logo_path(conn, tournament_id, team_id)
+    logo_path = await get_team_logo_path(conn, tournament_id, team.id)
     if team.logo_path is None or logo_path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
 
@@ -224,23 +215,19 @@ async def create_multiple_teams(
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    reader = list(csv.reader(team_body.names.split("\n"), delimiter=","))
-    teams_and_players = [
-        (row[0], [p for p in row[1:] if len(p) > 0] if len(row) > 1 else [])
-        for row in reader
-        if len(row) > 0
-    ]
-    players = [player for row in teams_and_players for player in row[1]]
+    teams_with_players = team_body.teams_with_players
+    player_count = sum(len(player_names) for _, player_names in teams_with_players)
 
     existing_teams = await get_teams_with_members(conn, tournament_id)
     existing_players = await get_all_players_in_tournament(conn, tournament_id)
 
-    check_requirement(existing_teams, user, "max_teams", additions=len(reader))
-    check_requirement(existing_players, user, "max_players", additions=len(players))
+    check_requirement(existing_teams, user, "max_teams", additions=len(teams_with_players))
+    check_requirement(existing_players, user, "max_players", additions=player_count)
 
-    for team_name, players in teams_and_players:
-        await conn.execute(
-            teams.insert().values(
+    for team_name, player_names in teams_with_players:
+        team_id = await conn.scalar(
+            teams.insert()
+            .values(
                 **TeamInsertable(
                     name=team_name,
                     active=team_body.active,
@@ -248,9 +235,14 @@ async def create_multiple_teams(
                     tournament_id=tournament_id,
                 ).model_dump()
             )
+            .returning(teams.c.id)
         )
-        for player in players:
-            player_body = PlayerBody(name=player, active=team_body.active)
-            await insert_player(conn, player_body, tournament_id)
+        for player_name in player_names:
+            player_id = await insert_player(
+                conn, PlayerBody(name=player_name, active=team_body.active), tournament_id
+            )
+            await conn.execute(
+                players_x_teams.insert().values(team_id=team_id, player_id=player_id)
+            )
 
     return SuccessResponse()

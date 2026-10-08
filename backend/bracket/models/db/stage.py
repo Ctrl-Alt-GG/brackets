@@ -5,6 +5,7 @@ from pydantic import Field
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import StageId, TournamentId
+from bracket.utils.pydantic import Name
 
 
 class StageInsertable(BaseModelORM):
@@ -20,7 +21,7 @@ class Stage(StageInsertable):
 
 
 class StageUpdateBody(BaseModelORM):
-    name: str
+    name: Name
     custom_duration_minutes: int | None = Field(default=None, ge=1)
 
 

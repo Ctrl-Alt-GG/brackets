@@ -164,6 +164,8 @@
       "ClubCreateBody": {
         "properties": {
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -196,6 +198,8 @@
       "ClubUpdateBody": {
         "properties": {
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -501,6 +505,7 @@
           "custom_duration_minutes": {
             "anyOf": [
               {
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -512,6 +517,7 @@
           "custom_margin_minutes": {
             "anyOf": [
               {
+                "minimum": 0.0,
                 "type": "integer"
               },
               {
@@ -526,11 +532,13 @@
           },
           "stage_item_input1_score": {
             "default": 0,
+            "minimum": 0.0,
             "title": "Stage Item Input1 Score",
             "type": "integer"
           },
           "stage_item_input2_score": {
             "default": 0,
+            "minimum": 0.0,
             "title": "Stage Item Input2 Score",
             "type": "integer"
           }
@@ -1296,6 +1304,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 100,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -1323,6 +1333,8 @@
             "type": "boolean"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -1442,6 +1454,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 100,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -1920,6 +1934,8 @@
       "StageItemUpdateBody": {
         "properties": {
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -2061,6 +2077,8 @@
             "title": "Custom Duration Minutes"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -2174,71 +2192,6 @@
           "success"
         ],
         "title": "SuccessResponse",
-        "type": "object"
-      },
-      "SuggestedMatch": {
-        "properties": {
-          "elo_diff": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Elo Diff",
-            "type": "string"
-          },
-          "is_recommended": {
-            "title": "Is Recommended",
-            "type": "boolean"
-          },
-          "player_behind_schedule_count": {
-            "title": "Player Behind Schedule Count",
-            "type": "integer"
-          },
-          "stage_item_input1": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StageItemInputTentative"
-              },
-              {
-                "$ref": "#/components/schemas/StageItemInputFinal"
-              },
-              {
-                "$ref": "#/components/schemas/StageItemInputEmpty"
-              }
-            ],
-            "title": "Stage Item Input1"
-          },
-          "stage_item_input2": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StageItemInputTentative"
-              },
-              {
-                "$ref": "#/components/schemas/StageItemInputFinal"
-              },
-              {
-                "$ref": "#/components/schemas/StageItemInputEmpty"
-              }
-            ],
-            "title": "Stage Item Input2"
-          },
-          "swiss_diff": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Swiss Diff",
-            "type": "string"
-          },
-          "times_played_sum": {
-            "title": "Times Played Sum",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "stage_item_input1",
-          "stage_item_input2",
-          "elo_diff",
-          "swiss_diff",
-          "is_recommended",
-          "times_played_sum",
-          "player_behind_schedule_count"
-        ],
-        "title": "SuggestedMatch",
         "type": "object"
       },
       "Team": {
@@ -2513,9 +2466,11 @@
           },
           "dashboard_endpoint": {
             "anyOf": [
-              {},
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
             "title": "Dashboard Endpoint"
@@ -2535,6 +2490,8 @@
             "type": "integer"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -2597,9 +2554,11 @@
         "properties": {
           "dashboard_endpoint": {
             "anyOf": [
-              {},
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
             "title": "Dashboard Endpoint"
@@ -2619,6 +2578,8 @@
             "type": "integer"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -2660,22 +2621,6 @@
         "title": "TournamentsResponse",
         "type": "object"
       },
-      "UpcomingMatchesResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/SuggestedMatch"
-            },
-            "title": "Data",
-            "type": "array"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "UpcomingMatchesResponse",
-        "type": "object"
-      },
       "UserAccountType": {
         "enum": [
           "REGULAR"
@@ -2685,6 +2630,10 @@
       },
       "UserPasswordToUpdate": {
         "properties": {
+          "current_password": {
+            "title": "Current Password",
+            "type": "string"
+          },
           "password": {
             "maxLength": 72,
             "minLength": 12,
@@ -2693,6 +2642,7 @@
           }
         },
         "required": [
+          "current_password",
           "password"
         ],
         "title": "UserPasswordToUpdate",
@@ -2752,6 +2702,8 @@
             "type": "string"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -2776,6 +2728,8 @@
             "type": "string"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -2829,6 +2783,11 @@
       }
     },
     "securitySchemes": {
+      "APIKeyCookie": {
+        "in": "cookie",
+        "name": "bracket_session",
+        "type": "apiKey"
+      },
       "OAuth2PasswordBearer": {
         "flows": {
           "password": {
@@ -2841,12 +2800,12 @@
     }
   },
   "info": {
-    "description": "\n### Description\nThis API allows you to do everything the frontend of [Bracket](https://github.com/evroon/bracket)\nallows you to do (the frontend uses this API as well).\n\nFore more information, see the [documentation](https://docs.bracketapp.nl).\n\n### Table of Contents\n*(links only work for [ReDoc](https://api.bracketapp.nl/redoc), not for Swagger UI)*\n\n- [Auth](#tag/Auth)\n\n- [Clubs](#tag/Clubs)\n\n- [Internals](#tag/Internals)\n\n- [Matches](#tag/Matches)\n\n- [Players](#tag/Players)\n\n- [Rankings](#tag/Rankings)\n\n- [Rounds](#tag/Rounds)\n\n- [Stage Items](#tag/Stage-Items)\n\n- [Stage Item Inputs](#tag/Stage-Item-Inputs)\n\n- [Stages](#tag/Stages)\n\n- [Teams](#tag/Teams)\n\n- [Tournaments](#tag/Tournaments)\n\n- [Users](#tag/Users)\n\n### Links\nGitHub: <https://github.com/evroon/bracket>\n\nDocs: <https://docs.bracketapp.nl>\n\nAPI docs (Redoc): <https://api.bracketapp.nl/redoc>\n\nAPI docs (Swagger UI): <https://api.bracketapp.nl/docs>\n",
+    "description": "Everything the Bracket frontend does, it does through this API.",
     "license": {
       "name": "AGPL-3.0",
       "url": "https://www.gnu.org/licenses/agpl-3.0.en.html"
     },
-    "summary": "API for Bracket, an open source tournament system.",
+    "summary": "API of the Ctrl-Alt-GG fork of Bracket, an open source tournament system.",
     "title": "Bracket API",
     "version": "1.0.0"
   },
@@ -2891,6 +2850,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get Clubs",
@@ -2935,6 +2897,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create New Club",
@@ -2982,6 +2947,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Club",
@@ -3037,11 +3005,29 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Club",
         "tags": [
           "Clubs"
+        ]
+      }
+    },
+    "/logout": {
+      "post": {
+        "description": "Ends the session in this browser by removing its cookie.",
+        "operationId": "logout_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "Auth"
         ]
       }
     },
@@ -3169,6 +3155,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get Tournaments",
@@ -3213,6 +3202,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Tournament",
@@ -3260,6 +3252,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Tournament",
@@ -3302,6 +3297,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Tournament",
         "tags": [
           "Tournaments"
@@ -3355,6 +3358,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Tournament By Id",
@@ -3402,6 +3408,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get Available Inputs",
@@ -3460,6 +3469,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Change Status",
@@ -3502,6 +3514,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Tournament Logo",
         "tags": [
           "Tournaments"
@@ -3554,6 +3574,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Upload Logo",
@@ -3611,6 +3634,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Match",
@@ -3667,6 +3693,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Match",
@@ -3731,6 +3760,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Match By Id",
@@ -3779,6 +3811,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get Next Stage Rankings",
@@ -3818,7 +3853,7 @@
             "schema": {
               "default": 25,
               "description": "Max number of results in a single page.",
-              "maximum": 100,
+              "maximum": 500,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
@@ -3894,6 +3929,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Players",
         "tags": [
           "Players"
@@ -3947,6 +3990,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Single Player",
@@ -4003,6 +4049,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Player",
@@ -4067,6 +4116,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Player By Id",
@@ -4124,6 +4176,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Multiple Players",
@@ -4168,6 +4223,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Rankings",
         "tags": [
           "Rankings"
@@ -4221,6 +4284,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Ranking",
@@ -4277,6 +4343,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Ranking",
@@ -4341,6 +4410,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Ranking By Id",
@@ -4399,6 +4471,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Round",
@@ -4455,6 +4530,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Round",
@@ -4519,6 +4597,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Round By Id",
@@ -4566,6 +4647,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Schedule Matches",
@@ -4623,6 +4707,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Stage Item",
@@ -4679,6 +4766,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Stage Item",
@@ -4743,6 +4833,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Stage Item",
@@ -4829,107 +4922,14 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Stage Item Input",
         "tags": [
           "Stage Item Inputs"
-        ]
-      }
-    },
-    "/tournaments/{tournament_id}/stage_items/{stage_item_id}/upcoming_matches": {
-      "get": {
-        "operationId": "get_matches_to_schedule_tournaments__tournament_id__stage_items__stage_item_id__upcoming_matches_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "stage_item_id",
-            "required": true,
-            "schema": {
-              "title": "Stage Item Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "elo_diff_threshold",
-            "required": false,
-            "schema": {
-              "default": 200,
-              "title": "Elo Diff Threshold",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "iterations",
-            "required": false,
-            "schema": {
-              "default": 2000,
-              "title": "Iterations",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "only_recommended",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Only Recommended",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpcomingMatchesResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Get Matches To Schedule",
-        "tags": [
-          "Matches"
         ]
       }
     },
@@ -4979,6 +4979,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Stages",
         "tags": [
           "Stages"
@@ -5022,6 +5030,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Stage",
@@ -5079,6 +5090,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Activate Next Stage",
@@ -5135,6 +5149,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Stage",
@@ -5199,6 +5216,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Stage",
@@ -5244,6 +5264,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Standings",
         "tags": [
           "Rankings"
@@ -5271,7 +5299,7 @@
             "schema": {
               "default": 25,
               "description": "Max number of results in a single page.",
-              "maximum": 100,
+              "maximum": 500,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
@@ -5347,6 +5375,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Teams",
         "tags": [
           "Teams"
@@ -5400,6 +5436,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Team",
@@ -5456,6 +5495,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Delete Team",
@@ -5520,6 +5562,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Team By Id",
@@ -5571,6 +5616,14 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Get Team Logo",
         "tags": [
           "Teams"
@@ -5632,6 +5685,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update Team Logo",
@@ -5689,6 +5745,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Create Multiple Teams",
@@ -5715,6 +5774,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get User",
@@ -5803,6 +5865,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Get Me",
@@ -5858,6 +5923,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Update User Details",
@@ -5868,6 +5936,7 @@
     },
     "/users/{user_id}/password": {
       "put": {
+        "description": "Asks for the current password as well, so that a stolen session can't lock the owner out.\n\nSigns out every other session. This one gets a new session cookie.",
         "operationId": "put_user_password_users__user_id__password_put",
         "parameters": [
           {
@@ -5915,6 +5984,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
           }
         ],
         "summary": "Put User Password",

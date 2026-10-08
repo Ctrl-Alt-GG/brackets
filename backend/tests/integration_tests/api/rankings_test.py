@@ -12,10 +12,10 @@ from bracket.sql.rankings import (
     sql_delete_ranking,
 )
 from bracket.utils.db import fetch_one_parsed_certain
-from bracket.utils.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1
+from bracket.utils.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
-from tests.integration_tests.sql import inserted_ranking, inserted_team
+from tests.integration_tests.sql import inserted_ranking, inserted_team, inserted_tournament
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -99,3 +99,35 @@ async def test_update_ranking(
             )
             assert response["success"] is True
             assert updated_ranking.win_points == Decimal("7.5")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_ranking_of_other_tournament_is_not_found(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    async with (
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
+            )
+        ) as other_tournament,
+        inserted_ranking(
+            DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})
+        ) as other_ranking,
+    ):
+        body = {
+            "win_points": "3",
+            "draw_points": "1",
+            "loss_points": "0",
+            "add_score_points": False,
+            "position": 0,
+        }
+        updated = await send_tournament_request(
+            HTTPMethod.PUT, f"rankings/{other_ranking.id}", auth_context, json=body
+        )
+        deleted = await send_tournament_request(
+            HTTPMethod.DELETE, f"rankings/{other_ranking.id}", auth_context
+        )
+
+    expected = {"detail": f"Could not find ranking with id {other_ranking.id}"}
+    assert updated == deleted == expected

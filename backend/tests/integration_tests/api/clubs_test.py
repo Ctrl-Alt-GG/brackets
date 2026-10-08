@@ -1,14 +1,21 @@
 from http import HTTPMethod
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from bracket.models.db.club import ClubInsertable
 from bracket.models.db.user_x_club import UserXClubInsertable, UserXClubRelation
 from bracket.sql.clubs import get_clubs_for_user_id, sql_delete_club
 from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME
 from tests.integration_tests.api.shared import send_auth_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_club, inserted_user_x_club
+
+
+def unique_club() -> ClubInsertable:
+    # Club names are unique, and the auth context already has a club named like `DUMMY_CLUB`.
+    return DUMMY_CLUB.model_copy(update={"name": f"Club {uuid4()}"})
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -30,7 +37,7 @@ async def test_clubs_endpoint(
 async def test_create_club(
     conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    payload = {"name": "Some Cool Club"}
+    payload = {"name": f"New club {uuid4()}"}
     response = await send_auth_request(HTTPMethod.POST, "clubs", auth_context, json=payload)
 
     clubs = await get_clubs_for_user_id(conn, auth_context.user.id)
@@ -46,8 +53,8 @@ async def test_create_club(
 async def test_update_club(
     conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    payload = {"name": "Some Cool Club"}
-    async with inserted_club(DUMMY_CLUB) as club_inserted:
+    payload = {"name": f"Renamed club {uuid4()}"}
+    async with inserted_club(unique_club()) as club_inserted:
         async with inserted_user_x_club(
             UserXClubInsertable(
                 user_id=auth_context.user.id,
@@ -70,7 +77,7 @@ async def test_update_club(
 async def test_delete_club(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    async with inserted_club(DUMMY_CLUB) as club_inserted:
+    async with inserted_club(unique_club()) as club_inserted:
         async with inserted_user_x_club(
             UserXClubInsertable(
                 user_id=auth_context.user.id,

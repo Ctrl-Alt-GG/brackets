@@ -4,7 +4,7 @@ from decimal import Decimal
 from bracket.logic.scheduling.swiss import get_swiss_pairing
 from bracket.models.db.match import Match, MatchWithDetailsDefinitive
 from bracket.models.db.stage_item import StageType
-from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.stage_item_inputs import StageItemInput, StageItemInputFinal
 from bracket.models.db.team import Team
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds
 from bracket.utils.dummy_records import DUMMY_MATCH1, DUMMY_MOCK_TIME, DUMMY_TEAM1
@@ -69,7 +69,7 @@ def get_stage_item(
         type_name="Swiss",
         team_count=len(teams),
         ranking_id=None,
-        inputs=teams,
+        inputs=list[StageItemInput](teams),
         rounds=rounds,
     )
 

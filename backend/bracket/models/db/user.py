@@ -8,7 +8,13 @@ from pydantic import BaseModel, EmailStr, StringConstraints, field_validator, mo
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import UserId
-from bracket.utils.security import normalize_email, validate_password_strength
+from bracket.utils.pydantic import Name
+from bracket.utils.security import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    normalize_email,
+    validate_password_strength,
+)
 
 if TYPE_CHECKING:
     from bracket.logic.subscriptions import Subscription
@@ -47,7 +53,7 @@ class UserPublic(UserBase):
 
 class UserToUpdate(BaseModel):
     email: EmailStr
-    name: str
+    name: Name
 
     @field_validator("email")
     @classmethod
@@ -56,17 +62,16 @@ class UserToUpdate(BaseModel):
 
 
 class UserPasswordToUpdate(BaseModel):
-    password: Annotated[str, StringConstraints(min_length=12, max_length=72)]
-
-    @field_validator("password")
-    @classmethod
-    def validate_updated_password(cls, value: str) -> str:
-        return validate_password_strength(value)
+    current_password: str
+    # The strength is checked by the route, which knows the user's details a password mustn't use.
+    password: Annotated[
+        str, StringConstraints(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+    ]
 
 
 class UserToRegister(BaseModelORM):
     email: EmailStr
-    name: str
+    name: Name
     password: str
 
     @field_validator("email")
