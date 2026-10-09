@@ -13,6 +13,7 @@ from bracket.sql.tournaments import sql_delete_tournament, sql_get_tournament_by
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 from bracket.utils.types import assert_some
+from bracket.utils.uploads import build_upload_path
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -21,6 +22,7 @@ from tests.integration_tests.api.shared import (
 )
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_tournament
+from tests.integration_tests.uploads import wait_until_removed
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -141,6 +143,55 @@ async def test_update_tournament(
 
 
 @pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.parametrize(
+    ("dashboard_endpoint", "valid"),
+    [
+        ("summer-cup_2026", True),
+        ("  padded  ", True),
+        ("", True),
+        ("2026", False),
+        ("with space", False),
+        ("a/b", False),
+        ("x" * 65, False),
+    ],
+)
+async def test_update_tournament_details_link(
+    conn: AsyncConnection,
+    startup_and_shutdown_uvicorn_server: None,
+    auth_context: AuthContext,
+    dashboard_endpoint: str,
+    valid: bool,
+) -> None:
+    body = {
+        "name": "  Some new name  ",
+        "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
+        "dashboard_public": True,
+        "dashboard_endpoint": dashboard_endpoint,
+        "players_can_be_in_multiple_teams": True,
+        "duration_minutes": 12,
+        "margin_minutes": 3,
+    }
+    response = await send_tournament_request(HTTPMethod.PUT, "", auth_context, json=body)
+    updated_tournament = await fetch_one_parsed_certain(
+        conn,
+        Tournament,
+        query=tournaments.select().where(tournaments.c.id == auth_context.tournament.id),
+    )
+    await conn.execute(
+        tournaments.update()
+        .where(tournaments.c.id == auth_context.tournament.id)
+        .values(dashboard_endpoint=auth_context.tournament.dashboard_endpoint)
+    )
+
+    if valid:
+        assert response == SUCCESS_RESPONSE
+        assert updated_tournament.name == "Some new name"
+        assert updated_tournament.dashboard_endpoint == (dashboard_endpoint.strip() or None)
+    else:
+        assert [error["loc"] for error in response["detail"]] == [["body", "dashboard_endpoint"]]
+
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_archive_and_unarchive_tournament(
     conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
@@ -224,16 +275,15 @@ async def test_tournament_upload_and_remove_logo(
     )
 
     assert response.get("data", {}).get("logo_path"), f"Response: {response}"
-    assert await aiofiles.os.path.exists(f"static/tournament-logos/{response['data']['logo_path']}")
+    logo_path = build_upload_path("tournament-logos", response["data"]["logo_path"])
+    assert await aiofiles.os.path.exists(logo_path)
 
     response = await send_tournament_request(
         method=HTTPMethod.POST, endpoint="logo", auth_context=auth_context, body=aiohttp.FormData()
     )
 
     assert response["data"]["logo_path"] is None, f"Response: {response}"
-    assert not await aiofiles.os.path.exists(
-        f"static/tournament-logos/{response['data']['logo_path']}"
-    )
+    await wait_until_removed(logo_path)
 
 
 UNAUTHORIZED_RESPONSE = {

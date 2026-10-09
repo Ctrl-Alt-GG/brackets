@@ -1233,40 +1233,6 @@ export type SuccessResponse = {
 };
 
 /**
- * SuggestedMatch
- */
-export type SuggestedMatch = {
-  /**
-   * Elo Diff
-   */
-  elo_diff: string;
-  /**
-   * Is Recommended
-   */
-  is_recommended: boolean;
-  /**
-   * Player Behind Schedule Count
-   */
-  player_behind_schedule_count: number;
-  /**
-   * Stage Item Input1
-   */
-  stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
-  /**
-   * Stage Item Input2
-   */
-  stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
-  /**
-   * Swiss Diff
-   */
-  swiss_diff: string;
-  /**
-   * Times Played Sum
-   */
-  times_played_sum: number;
-};
-
-/**
  * Team
  */
 export type Team = {
@@ -1446,7 +1412,7 @@ export type TournamentBody = {
   /**
    * Dashboard Endpoint
    */
-  dashboard_endpoint: unknown | string;
+  dashboard_endpoint: string | null;
   /**
    * Dashboard Public
    */
@@ -1499,7 +1465,7 @@ export type TournamentUpdateBody = {
   /**
    * Dashboard Endpoint
    */
-  dashboard_endpoint: unknown | string;
+  dashboard_endpoint: string | null;
   /**
    * Dashboard Public
    */
@@ -1537,16 +1503,6 @@ export type TournamentsResponse = {
 };
 
 /**
- * UpcomingMatchesResponse
- */
-export type UpcomingMatchesResponse = {
-  /**
-   * Data
-   */
-  data: Array<SuggestedMatch>;
-};
-
-/**
  * UserAccountType
  */
 export type UserAccountType = 'REGULAR';
@@ -1555,6 +1511,10 @@ export type UserAccountType = 'REGULAR';
  * UserPasswordToUpdate
  */
 export type UserPasswordToUpdate = {
+  /**
+   * Current Password
+   */
+  current_password: string;
   /**
    * Password
    */
@@ -1775,6 +1735,23 @@ export type UpdateClubApiClubsClubIdPutResponses = {
 
 export type UpdateClubApiClubsClubIdPutResponse =
   UpdateClubApiClubsClubIdPutResponses[keyof UpdateClubApiClubsClubIdPutResponses];
+
+export type LogoutApiLogoutPostData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/logout';
+};
+
+export type LogoutApiLogoutPostResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type LogoutApiLogoutPostResponse =
+  LogoutApiLogoutPostResponses[keyof LogoutApiLogoutPostResponses];
 
 export type PingApiPingGetData = {
   body?: never;
@@ -2866,62 +2843,6 @@ export type UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdI
 
 export type UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponse =
   UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponses[keyof UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponses];
-
-export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData =
-  {
-    body?: never;
-    path: {
-      /**
-       * Tournament Id
-       */
-      tournament_id: number;
-      /**
-       * Stage Item Id
-       */
-      stage_item_id: number;
-    };
-    query?: {
-      /**
-       * Elo Diff Threshold
-       */
-      elo_diff_threshold?: number;
-      /**
-       * Iterations
-       */
-      iterations?: number;
-      /**
-       * Only Recommended
-       */
-      only_recommended?: boolean;
-      /**
-       * Limit
-       */
-      limit?: number;
-    };
-    url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/upcoming_matches';
-  };
-
-export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors =
-  {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-  };
-
-export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetError =
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors[keyof GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors];
-
-export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses =
-  {
-    /**
-     * Successful Response
-     */
-    200: UpcomingMatchesResponse;
-  };
-
-export type GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponse =
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses[keyof GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses];
 
 export type GetStagesApiTournamentsTournamentIdStagesGetData = {
   body?: never;

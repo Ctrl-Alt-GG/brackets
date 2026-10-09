@@ -47,10 +47,8 @@ async def validate_stage_item_update(
 
     if isinstance(stage_item_input_body, StageItemInputUpdateBodyTentative):
         input_id = stage_item_input_body.winner_from_stage_item_id
-        winner_from_stage = await get_full_tournament_details(
-            conn, tournament_id, stage_item_ids={input_id}
-        )
-        if winner_from_stage is None:
+        # Empty unless the stage item is part of this tournament.
+        if not await get_full_tournament_details(conn, tournament_id, stage_item_ids={input_id}):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Could not find stage item with id {input_id}",

@@ -3,12 +3,15 @@ from http import HTTPMethod
 import aiofiles.os
 import aiohttp
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from bracket.database import engine
 from bracket.models.db.team import Team
-from bracket.schema import players, teams
+from bracket.schema import players, players_x_teams, teams
 from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT
+from bracket.utils.uploads import build_upload_path
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -20,6 +23,7 @@ from tests.integration_tests.sql import (
     inserted_team,
     inserted_tournament,
 )
+from tests.integration_tests.uploads import wait_until_removed
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -66,13 +70,49 @@ async def test_create_team(
 async def test_create_teams(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    body = {"names": "Team -1,Player 42,Player 43\nTeam -2,", "active": True}
+    body = {"names": "Team -1,Player 42, Player 43\n\nTeam -2,", "active": True}
     response = await send_tournament_request(
         HTTPMethod.POST, "teams_multi", auth_context, None, body
     )
     assert response["success"] is True
+
+    async with engine.begin() as conn:
+        members = (
+            await conn.execute(
+                select(teams.c.name, players.c.name)
+                .join(players_x_teams, players_x_teams.c.team_id == teams.c.id)
+                .join(players, players.c.id == players_x_teams.c.player_id)
+                .order_by(players.c.name)
+            )
+        ).all()
+    assert [tuple(member) for member in members] == [
+        ("Team -1", "Player 42"),
+        ("Team -1", "Player 43"),
+    ]
+
+    await assert_row_count_and_clear(players_x_teams, 2)
     await assert_row_count_and_clear(teams, 2)
-    await assert_row_count_and_clear(players, 3)
+    await assert_row_count_and_clear(players, 2)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.parametrize(
+    ("names", "error"),
+    [
+        (" \n ", "Enter at least one team"),
+        (",Player without a team", "Every line needs a team name before its players"),
+        (f"Team,{'x' * 31}", f'"{"x" * 31}" is longer than the 30 characters a name can have'),
+    ],
+)
+async def test_create_teams_invalid_names(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext, names: str, error: str
+) -> None:
+    response = await send_tournament_request(
+        HTTPMethod.POST, "teams_multi", auth_context, None, {"names": names, "active": True}
+    )
+
+    assert [detail["msg"] for detail in response["detail"]] == [f"Value error, {error}"]
+    await assert_row_count_and_clear(teams, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -149,19 +189,18 @@ async def test_team_upload_and_remove_logo(
         )
 
         assert response["data"]["logo_path"], f"Response: {response}"
-        assert await aiofiles.os.path.exists(f"static/team-logos/{response['data']['logo_path']}")
+        logo_path = build_upload_path("team-logos", response["data"]["logo_path"])
+        assert await aiofiles.os.path.exists(logo_path)
 
         response = await send_tournament_request(
             method=HTTPMethod.POST,
-            endpoint="logo",
+            endpoint=f"teams/{team_inserted.id}/logo",
             auth_context=auth_context,
             body=aiohttp.FormData(),
         )
 
         assert response["data"]["logo_path"] is None, f"Response: {response}"
-        assert not await aiofiles.os.path.exists(
-            f"static/team-logos/{response['data']['logo_path']}"
-        )
+        await wait_until_removed(logo_path)
 
 
 @pytest.mark.asyncio(loop_scope="session")

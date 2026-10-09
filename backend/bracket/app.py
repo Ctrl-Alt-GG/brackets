@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from secure import (
     ContentSecurityPolicy,
     PermissionsPolicy,
@@ -14,10 +14,8 @@ from secure import (
 from secure.middleware import SecureASGIMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
-from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
-from starlette.staticfiles import StaticFiles
 
 from bracket.config import Environment, config, environment
 from bracket.database import engine
@@ -74,44 +72,22 @@ routers = {
     "Users": users.router,
 }
 
-table_of_contents = "\n\n".join(
-    [f"- [{tag}](#tag/{tag.replace(' ', '-')})" for tag in routers.keys()]
-)
-
-
-description = f"""
-### Description
-This API allows you to do everything the frontend of [Bracket](https://github.com/evroon/bracket)
-allows you to do (the frontend uses this API as well).
-
-Fore more information, see the [documentation](https://docs.bracketapp.nl).
-
-### Table of Contents
-*(links only work for [ReDoc](https://api.bracketapp.nl/redoc), not for Swagger UI)*
-
-{table_of_contents}
-
-### Links
-GitHub: <https://github.com/evroon/bracket>
-
-Docs: <https://docs.bracketapp.nl>
-
-API docs (Redoc): <https://api.bracketapp.nl/redoc>
-
-API docs (Swagger UI): <https://api.bracketapp.nl/docs>
-"""
+is_development = environment is Environment.DEVELOPMENT
 
 app = FastAPI(
     title="Bracket API",
-    docs_url="/docs",
     version="1.0.0",
     lifespan=lifespan,
-    summary="API for Bracket, an open source tournament system.",
-    description=description,
+    summary="API of the Ctrl-Alt-GG fork of Bracket, an open source tournament system.",
+    description="Everything the Bracket frontend does, it does through this API.",
     license_info={
         "name": "AGPL-3.0",
         "url": "https://www.gnu.org/licenses/agpl-3.0.en.html",
     },
+    # The interactive docs load Swagger UI and ReDoc from a CDN, which the production security
+    # headers don't allow, so only development serves them.
+    openapi_url="/openapi.json" if is_development else None,
+    dependencies=[Depends(auth.protect_session_from_csrf)],
 )
 
 
@@ -136,18 +112,17 @@ app.add_middleware(
 app.add_middleware(
     SecureASGIMiddleware,
     secure=Secure(
-        csp=ContentSecurityPolicy()
-        .default_src("'self'")
-        .base_uri("'self'")
-        .frame_ancestors("'none'")
-        .form_action("'self'")
-        .img_src("'self'", "data:", "https:")
-        .style_src("'self'", "'unsafe-inline'")
-        .script_src("'self'", "'unsafe-inline'"),
+        # The API only answers with JSON and uploaded images, so nothing may load or frame it.
+        # Development leaves it out, so that the interactive docs work.
+        csp=(
+            None
+            if is_development
+            else ContentSecurityPolicy().default_src("'none'").frame_ancestors("'none'")
+        ),
         hsts=(
-            StrictTransportSecurity().max_age(31536000).include_subdomains()
-            if environment is Environment.PRODUCTION
-            else None
+            None
+            if is_development
+            else StrictTransportSecurity().max_age(31536000).include_subdomains()
         ),
         permissions=PermissionsPolicy().camera().geolocation().microphone(),
         referrer=ReferrerPolicy().no_referrer(),
@@ -157,11 +132,6 @@ app.add_middleware(
 )
 
 
-@app.exception_handler(HTTPException)
-async def validation_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
-
-
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception(
@@ -169,8 +139,6 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
     return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
-
-app.mount(f"{config.api_prefix}/static", StaticFiles(directory="static"), name="static")
 
 for tag, router in routers.items():
     assert router.prefix == config.api_prefix, f"Prefix not set on router with tag `{tag}`"

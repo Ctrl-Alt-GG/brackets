@@ -29,7 +29,6 @@ class Config(BaseSettings):
 
     admin_email: str | None = None
     admin_password: str | None = None
-    allow_insecure_http_sso: bool = False
     allow_user_registration: bool = True
     base_url: str = "http://localhost:8400"
     cors_origin_regex: str = ""
@@ -96,7 +95,6 @@ class Config(BaseSettings):
 
 class DevelopmentConfig(Config):
     admin_email: Annotated[str | None, Field("test@example.org")]
-    allow_insecure_http_sso: Annotated[bool, Field(True)]
     cors_origin_regex: Annotated[str, Field(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")]
 
     model_config = SettingsConfigDict(env_file="dev.env")

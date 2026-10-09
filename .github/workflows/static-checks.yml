@@ -14,6 +14,24 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: bracket
+          POSTGRES_PASSWORD: bracket
+          POSTGRES_DB: bracket_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username bracket"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: DEVELOPMENT
+      JWT_SECRET: only-for-the-tests-and-at-least-32-characters-long
+      PG_DSN: postgresql://bracket:bracket@localhost:5432/bracket_test
     steps:
       - uses: actions/checkout@v7
 
@@ -34,8 +52,18 @@ jobs:
       - name: Check Ruff formatting
         run: uv run ruff format --check .
 
+      - name: Run Ruff
+        run: uv run ruff check .
+
       - name: Run mypy
-        run: uv run python -m mypy bracket
+        run: uv run python -m mypy bracket tests
+
+      - name: Run tests
+        # The tests create the tables from the metadata. Stamping the empty database at the latest
+        # migration first keeps the app from replaying every migration on top of them at startup.
+        run: |
+          uv run alembic stamp head
+          uv run pytest
 
   frontend:
     name: Frontend
@@ -49,7 +77,8 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 11
+          # Its `packageManager` field pins the version.
+          package_json_file: frontend/package.json
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -63,3 +92,6 @@ jobs:
 
       - name: Run static checks
         run: pnpm run typecheck && pnpm run format:check
+
+      - name: Build
+        run: pnpm run build

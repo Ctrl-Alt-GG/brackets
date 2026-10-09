@@ -277,7 +277,7 @@ function BulkTeamsForm({ tournamentId }: { tournamentId: number }) {
       <Field error={form.formState.errors.names?.message} label="Team names">
         <textarea
           className="textarea min-h-28 w-full"
-          placeholder="One team per line"
+          placeholder={'One team per line, with its players after commas:\nRed Rockets, Anna, Ben'}
           {...form.register('names')}
         />
       </Field>

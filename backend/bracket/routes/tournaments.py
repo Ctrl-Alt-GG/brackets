@@ -1,6 +1,5 @@
 from typing import Literal
 
-import aiofiles.os
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from starlette import status
 from starlette.responses import FileResponse
@@ -45,7 +44,6 @@ from bracket.utils.errors import (
     check_unique_constraint_violation,
 )
 from bracket.utils.id_types import TournamentId
-from bracket.utils.logging import logger
 from bracket.utils.uploads import (
     get_image_media_type,
     remove_existing_upload,
@@ -158,16 +156,11 @@ async def create_tournament(
     tournament_to_insert: TournamentBody,
     user: UserPublic = Depends(user_authenticated),
 ) -> SuccessResponse:
+    if not await get_user_access_to_club(conn, tournament_to_insert.club_id, user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Club ID is invalid")
+
     existing_tournaments = await sql_get_tournaments(conn, (tournament_to_insert.club_id,))
     check_requirement(existing_tournaments, user, "max_tournaments")
-
-    has_access_to_club = await get_user_access_to_club(conn, tournament_to_insert.club_id, user.id)
-    if not has_access_to_club:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Club ID is invalid",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
     with check_unique_constraint_violation({UniqueIndex.ix_tournaments_dashboard_endpoint}):
         tournament_id = await sql_create_tournament(conn, tournament_to_insert)
@@ -182,25 +175,17 @@ async def create_tournament(
 async def upload_logo(
     conn: DbConnection,
     tournament_id: TournamentId,
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = None,
     _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    tournament: Tournament = Depends(disallow_archived_tournament),
 ) -> TournamentResponse:
-    old_logo_path = await get_tournament_logo_path(conn, tournament_id)
-    filename: str | None = None
-
-    if file:
-        filename = await store_validated_image_upload(file, "tournament-logos")
-
-    if old_logo_path is not None and old_logo_path != filename:
-        try:
-            await aiofiles.os.remove(old_logo_path)
-        except OSError as exc:
-            logger.error(f"Could not remove logo that should still exist: {old_logo_path}\n{exc}")
-
+    filename = await store_validated_image_upload(file, "tournament-logos") if file else None
     await conn.execute(
         tournaments.update().where(tournaments.c.id == tournament_id).values(logo_path=filename)
     )
+    # Background tasks run after the response, so the new logo is committed by then.
+    background_tasks.add_task(remove_existing_upload, "tournament-logos", tournament.logo_path)
     return TournamentResponse(data=await sql_get_tournament(conn, tournament_id))
 
 

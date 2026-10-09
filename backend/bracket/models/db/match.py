@@ -1,7 +1,5 @@
-from decimal import Decimal
-
 from heliclockter import datetime_utc, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInput
@@ -82,10 +80,10 @@ class MatchWithDetailsDefinitive(Match):
 
 class MatchBody(BaseModelORM):
     round_id: RoundId
-    stage_item_input1_score: int = 0
-    stage_item_input2_score: int = 0
-    custom_duration_minutes: int | None = None
-    custom_margin_minutes: int | None = None
+    stage_item_input1_score: int = Field(0, ge=0)
+    stage_item_input2_score: int = Field(0, ge=0)
+    custom_duration_minutes: int | None = Field(None, ge=1)
+    custom_margin_minutes: int | None = Field(None, ge=0)
 
 
 class MatchCreateBodyFrontend(BaseModelORM):
@@ -108,24 +106,3 @@ class MatchTiming(BaseModel):
     start_time: datetime_utc
     duration_minutes: int
     margin_minutes: int
-
-
-class MatchFilter(BaseModel):
-    elo_diff_threshold: int
-    only_recommended: bool
-    limit: int
-    iterations: int
-
-
-class SuggestedMatch(BaseModel):
-    stage_item_input1: StageItemInput
-    stage_item_input2: StageItemInput
-    elo_diff: Decimal
-    swiss_diff: Decimal
-    is_recommended: bool
-    times_played_sum: int
-    player_behind_schedule_count: int
-
-    @property
-    def stage_item_input_ids(self) -> list[int]:
-        return [self.stage_item_input1.id, self.stage_item_input2.id]

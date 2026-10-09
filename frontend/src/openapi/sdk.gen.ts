@@ -84,9 +84,6 @@ import type {
   GetAvailableInputsApiTournamentsTournamentIdAvailableInputsGetResponses,
   GetClubsApiClubsGetData,
   GetClubsApiClubsGetResponses,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses,
   GetMeApiUsersUserIdGetData,
   GetMeApiUsersUserIdGetErrors,
   GetMeApiUsersUserIdGetResponses,
@@ -125,6 +122,8 @@ import type {
   LoginForAccessTokenApiTokenPostData,
   LoginForAccessTokenApiTokenPostErrors,
   LoginForAccessTokenApiTokenPostResponses,
+  LogoutApiLogoutPostData,
+  LogoutApiLogoutPostResponses,
   PingApiPingGetData,
   PingApiPingGetResponses,
   PutUserPasswordApiUsersUserIdPasswordPutData,
@@ -219,7 +218,14 @@ export const getClubsApiClubsGet = <ThrowOnError extends boolean = false>(
 ): RequestResult<GetClubsApiClubsGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<GetClubsApiClubsGetResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/clubs',
     ...options,
   });
@@ -240,7 +246,14 @@ export const createNewClubApiClubsPost = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/clubs',
     ...options,
     headers: {
@@ -265,7 +278,14 @@ export const deleteClubApiClubsClubIdDelete = <ThrowOnError extends boolean = fa
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/clubs/{club_id}',
     ...options,
   });
@@ -286,13 +306,33 @@ export const updateClubApiClubsClubIdPut = <ThrowOnError extends boolean = false
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/clubs/{club_id}',
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Logout
+ *
+ * Ends the session in this browser by removing its cookie.
+ */
+export const logoutApiLogoutPost = <ThrowOnError extends boolean = false>(
+  options?: Options<LogoutApiLogoutPostData, ThrowOnError>,
+): RequestResult<LogoutApiLogoutPostResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).post<LogoutApiLogoutPostResponses, unknown, ThrowOnError>({
+    url: '/api/logout',
+    ...options,
   });
 
 /**
@@ -348,7 +388,14 @@ export const getTournamentsApiTournamentsGet = <ThrowOnError extends boolean = f
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments',
     ...options,
   });
@@ -369,7 +416,14 @@ export const createTournamentApiTournamentsPost = <ThrowOnError extends boolean 
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments',
     ...options,
     headers: {
@@ -396,7 +450,14 @@ export const deleteTournamentApiTournamentsTournamentIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}',
     ...options,
   });
@@ -417,6 +478,14 @@ export const getTournamentApiTournamentsTournamentIdGet = <ThrowOnError extends 
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}',
     ...options,
   });
@@ -439,7 +508,14 @@ export const updateTournamentByIdApiTournamentsTournamentIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}',
     ...options,
     headers: {
@@ -469,7 +545,14 @@ export const getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/available_inputs',
     ...options,
   });
@@ -494,7 +577,14 @@ export const changeStatusApiTournamentsTournamentIdChangeStatusPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/change-status',
     ...options,
     headers: {
@@ -521,6 +611,14 @@ export const getTournamentLogoApiTournamentsTournamentIdLogoGet = <
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/logo',
     ...options,
   });
@@ -542,7 +640,14 @@ export const uploadLogoApiTournamentsTournamentIdLogoPost = <ThrowOnError extend
   >({
     ...formDataBodySerializer,
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/logo',
     ...options,
     headers: {
@@ -569,7 +674,14 @@ export const createMatchApiTournamentsTournamentIdMatchesPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/matches',
     ...options,
     headers: {
@@ -596,7 +708,14 @@ export const deleteMatchApiTournamentsTournamentIdMatchesMatchIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/matches/{match_id}',
     ...options,
   });
@@ -619,7 +738,14 @@ export const updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/matches/{match_id}',
     ...options,
     headers: {
@@ -651,7 +777,14 @@ export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet 
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/next_stage_rankings',
     ...options,
   });
@@ -674,6 +807,14 @@ export const getPlayersApiTournamentsTournamentIdPlayersGet = <
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/players',
     ...options,
   });
@@ -696,7 +837,14 @@ export const createSinglePlayerApiTournamentsTournamentIdPlayersPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/players',
     ...options,
     headers: {
@@ -723,7 +871,14 @@ export const deletePlayerApiTournamentsTournamentIdPlayersPlayerIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/players/{player_id}',
     ...options,
   });
@@ -746,7 +901,14 @@ export const updatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/players/{player_id}',
     ...options,
     headers: {
@@ -776,7 +938,14 @@ export const createMultiplePlayersApiTournamentsTournamentIdPlayersMultiPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/players_multi',
     ...options,
     headers: {
@@ -803,6 +972,14 @@ export const getRankingsApiTournamentsTournamentIdRankingsGet = <
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rankings',
     ...options,
   });
@@ -825,7 +1002,14 @@ export const createRankingApiTournamentsTournamentIdRankingsPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rankings',
     ...options,
     headers: {
@@ -855,7 +1039,14 @@ export const deleteRankingApiTournamentsTournamentIdRankingsRankingIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rankings/{ranking_id}',
     ...options,
   });
@@ -881,7 +1072,14 @@ export const updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rankings/{ranking_id}',
     ...options,
     headers: {
@@ -913,7 +1111,14 @@ export const createRoundApiTournamentsTournamentIdRoundsPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rounds',
     ...options,
     headers: {
@@ -940,7 +1145,14 @@ export const deleteRoundApiTournamentsTournamentIdRoundsRoundIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rounds/{round_id}',
     ...options,
   });
@@ -963,7 +1175,14 @@ export const updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/rounds/{round_id}',
     ...options,
     headers: {
@@ -990,7 +1209,14 @@ export const scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/schedule_matches',
     ...options,
   });
@@ -1013,7 +1239,14 @@ export const createStageItemApiTournamentsTournamentIdStageItemsPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stage_items',
     ...options,
     headers: {
@@ -1043,7 +1276,14 @@ export const deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDelet
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}',
     ...options,
   });
@@ -1069,7 +1309,14 @@ export const updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPut =
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}',
     ...options,
     headers: {
@@ -1098,38 +1345,20 @@ export const updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemId
       ThrowOnError
     >({
       responseType: 'json',
-      security: [{ scheme: 'bearer', type: 'http' }],
+      security: [
+        { scheme: 'bearer', type: 'http' },
+        {
+          in: 'cookie',
+          name: 'bracket_session',
+          type: 'apiKey',
+        },
+      ],
       url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/inputs/{stage_item_input_id}',
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-    });
-
-/**
- * Get Matches To Schedule
- */
-export const getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGet =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData,
-      ThrowOnError
-    >,
-  ): RequestResult<
-    GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses,
-    GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).get<
-      GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponses,
-      GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetErrors,
-      ThrowOnError
-    >({
-      responseType: 'json',
-      security: [{ scheme: 'bearer', type: 'http' }],
-      url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/upcoming_matches',
-      ...options,
     });
 
 /**
@@ -1148,6 +1377,14 @@ export const getStagesApiTournamentsTournamentIdStagesGet = <ThrowOnError extend
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stages',
     ...options,
   });
@@ -1170,7 +1407,14 @@ export const createStageApiTournamentsTournamentIdStagesPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stages',
     ...options,
   });
@@ -1193,7 +1437,14 @@ export const activateNextStageApiTournamentsTournamentIdStagesActivatePost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stages/activate',
     ...options,
     headers: {
@@ -1220,7 +1471,14 @@ export const deleteStageApiTournamentsTournamentIdStagesStageIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stages/{stage_id}',
     ...options,
   });
@@ -1243,7 +1501,14 @@ export const updateStageApiTournamentsTournamentIdStagesStageIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/stages/{stage_id}',
     ...options,
     headers: {
@@ -1272,6 +1537,14 @@ export const getStandingsApiTournamentsTournamentIdStandingsGet = <
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/standings',
     ...options,
   });
@@ -1292,6 +1565,14 @@ export const getTeamsApiTournamentsTournamentIdTeamsGet = <ThrowOnError extends 
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams',
     ...options,
   });
@@ -1312,7 +1593,14 @@ export const createTeamApiTournamentsTournamentIdTeamsPost = <ThrowOnError exten
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams',
     ...options,
     headers: {
@@ -1339,7 +1627,14 @@ export const deleteTeamApiTournamentsTournamentIdTeamsTeamIdDelete = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams/{team_id}',
     ...options,
   });
@@ -1362,7 +1657,14 @@ export const updateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPut = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams/{team_id}',
     ...options,
     headers: {
@@ -1389,6 +1691,14 @@ export const getTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGet = <
     ThrowOnError
   >({
     responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams/{team_id}/logo',
     ...options,
   });
@@ -1412,7 +1722,14 @@ export const updateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = <
   >({
     ...formDataBodySerializer,
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams/{team_id}/logo',
     ...options,
     headers: {
@@ -1439,7 +1756,14 @@ export const createMultipleTeamsApiTournamentsTournamentIdTeamsMultiPost = <
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/tournaments/{tournament_id}/teams_multi',
     ...options,
     headers: {
@@ -1456,7 +1780,14 @@ export const getUserApiUsersMeGet = <ThrowOnError extends boolean = false>(
 ): RequestResult<GetUserApiUsersMeGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<GetUserApiUsersMeGetResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/users/me',
     ...options,
   });
@@ -1497,7 +1828,14 @@ export const getMeApiUsersUserIdGet = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/users/{user_id}',
     ...options,
   });
@@ -1518,7 +1856,14 @@ export const updateUserDetailsApiUsersUserIdPut = <ThrowOnError extends boolean 
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/users/{user_id}',
     ...options,
     headers: {
@@ -1529,6 +1874,10 @@ export const updateUserDetailsApiUsersUserIdPut = <ThrowOnError extends boolean 
 
 /**
  * Put User Password
+ *
+ * Asks for the current password as well, so that a stolen session can't lock the owner out.
+ *
+ * Signs out every other session. This one gets a new session cookie.
  */
 export const putUserPasswordApiUsersUserIdPasswordPut = <ThrowOnError extends boolean = false>(
   options: Options<PutUserPasswordApiUsersUserIdPasswordPutData, ThrowOnError>,
@@ -1543,7 +1892,14 @@ export const putUserPasswordApiUsersUserIdPasswordPut = <ThrowOnError extends bo
     ThrowOnError
   >({
     responseType: 'json',
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/users/{user_id}/password',
     ...options,
     headers: {

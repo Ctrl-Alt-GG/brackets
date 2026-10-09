@@ -1,11 +1,12 @@
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from heliclockter import datetime_utc, timedelta
+from heliclockter import datetime_utc
 
 from bracket.models.db.account import UserAccountType
-from bracket.models.db.user import UserInsertable
-from bracket.routes.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+from bracket.models.db.user import User, UserInDB, UserInsertable
+from bracket.routes.auth import create_access_token
+from bracket.utils.types import assert_some
 
 MOCK_NOW = datetime_utc(
     year=2200, month=1, day=1, hour=0, minute=0, microsecond=0, second=0, tzinfo=ZoneInfo("UTC")
@@ -27,8 +28,5 @@ def get_mock_user() -> UserInsertable:
     )
 
 
-def get_mock_token(mock_user_email: str) -> str:
-    return create_access_token(
-        data={"user": mock_user_email},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
+def get_mock_token(user: User | UserInDB) -> str:
+    return create_access_token(user.id, assert_some(user.password_hash))

@@ -106,8 +106,9 @@ async def test_create_stage(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(rounds, 1)
-        await assert_row_count_and_clear(stage_items, 1)
+        # A new stage starts out empty.
+        await assert_row_count_and_clear(rounds, 0)
+        await assert_row_count_and_clear(stage_items, 0)
         await assert_row_count_and_clear(stages, 1)
 
 
@@ -187,8 +188,8 @@ async def test_activate_stage(
             == SUCCESS_RESPONSE
         )
 
-        await assert_row_count_and_clear(stage_items, 1)
-        await assert_row_count_and_clear(stages, 1)
+        await assert_row_count_and_clear(stage_items, 0)
+        await assert_row_count_and_clear(stages, 2)
 
 
 @pytest.mark.asyncio(loop_scope="session")

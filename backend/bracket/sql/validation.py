@@ -8,11 +8,13 @@ from starlette import status
 
 from bracket.models.db.util import StageWithStageItems
 from bracket.sql.players import get_all_players_in_tournament, get_player_by_id
+from bracket.sql.rankings import get_all_rankings_in_tournament
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_team_by_id
 from bracket.utils.id_types import (
     MatchId,
     PlayerId,
+    RankingId,
     RoundId,
     StageId,
     StageItemId,
@@ -98,6 +100,18 @@ async def check_player_belongs_to_tournament(
     return await get_player_by_id(conn, player_id, tournament_id) is not None
 
 
+async def check_ranking_belongs_to_tournament(
+    conn: AsyncConnection,
+    ranking_id: RankingId,
+    _: list[StageWithStageItems],
+    tournament_id: TournamentId,
+) -> bool:
+    return any(
+        ranking.id == ranking_id
+        for ranking in await get_all_rankings_in_tournament(conn, tournament_id)
+    )
+
+
 async def check_players_belong_to_tournament(
     conn: AsyncConnection, player_ids: set[PlayerId], tournament_id: TournamentId
 ) -> bool:
@@ -130,6 +144,7 @@ async def check_foreign_keys_belong_to_tournament(
         RoundId: check_round_belongs_to_tournament,
         PlayerId: check_player_belongs_to_tournament,
         MatchId: check_match_belongs_to_tournament,
+        RankingId: check_ranking_belongs_to_tournament,
     }
 
     for field_key, field_info in type(some_body).model_fields.items():

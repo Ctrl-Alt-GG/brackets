@@ -59,7 +59,7 @@ export const zClub = z.object({
  * ClubCreateBody
  */
 export const zClubCreateBody = z.object({
-  name: z.string(),
+  name: z.string().min(1).max(100),
 });
 
 /**
@@ -73,7 +73,7 @@ export const zClubResponse = z.object({
  * ClubUpdateBody
  */
 export const zClubUpdateBody = z.object({
-  name: z.string(),
+  name: z.string().min(1).max(100),
 });
 
 /**
@@ -87,11 +87,11 @@ export const zClubsResponse = z.object({
  * MatchBody
  */
 export const zMatchBody = z.object({
-  custom_duration_minutes: z.int().nullable(),
-  custom_margin_minutes: z.int().nullable(),
+  custom_duration_minutes: z.int().gte(1).nullable(),
+  custom_margin_minutes: z.int().gte(0).nullable(),
   round_id: z.int(),
-  stage_item_input1_score: z.int().default(0),
-  stage_item_input2_score: z.int().default(0),
+  stage_item_input1_score: z.int().gte(0).default(0),
+  stage_item_input2_score: z.int().gte(0).default(0),
 });
 
 /**
@@ -242,7 +242,7 @@ export const zRankingsResponse = z.object({
  * RoundCreateBody
  */
 export const zRoundCreateBody = z.object({
-  name: z.string().nullable(),
+  name: z.string().min(1).max(100).nullable(),
   stage_item_id: z.int(),
 });
 
@@ -251,7 +251,7 @@ export const zRoundCreateBody = z.object({
  */
 export const zRoundUpdateBody = z.object({
   is_draft: z.boolean(),
-  name: z.string(),
+  name: z.string().min(1).max(100),
 });
 
 /**
@@ -379,7 +379,7 @@ export const zStageItemInputUpdateBodyTentative = z.object({
  * StageItemUpdateBody
  */
 export const zStageItemUpdateBody = z.object({
-  name: z.string(),
+  name: z.string().min(1).max(100),
   ranking_id: z.int(),
 });
 
@@ -392,7 +392,7 @@ export const zStageType = z.enum(['ROUND_ROBIN', 'SINGLE_ELIMINATION', 'SWISS'])
  * StageItemCreateBody
  */
 export const zStageItemCreateBody = z.object({
-  name: z.string().nullable(),
+  name: z.string().min(1).max(100).nullable(),
   ranking_id: z.int().nullable(),
   stage_id: z.int(),
   team_count: z.int().gte(2).lte(64),
@@ -404,7 +404,7 @@ export const zStageItemCreateBody = z.object({
  */
 export const zStageUpdateBody = z.object({
   custom_duration_minutes: z.int().gte(1).nullable(),
-  name: z.string(),
+  name: z.string().min(1).max(100),
 });
 
 /**
@@ -633,27 +633,6 @@ export const zStagesWithStageItemsResponse = z.object({
 });
 
 /**
- * SuggestedMatch
- */
-export const zSuggestedMatch = z.object({
-  elo_diff: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
-  is_recommended: z.boolean(),
-  player_behind_schedule_count: z.int(),
-  stage_item_input1: z.union([
-    zStageItemInputTentative,
-    zStageItemInputFinal,
-    zStageItemInputEmpty,
-  ]),
-  stage_item_input2: z.union([
-    zStageItemInputTentative,
-    zStageItemInputFinal,
-    zStageItemInputEmpty,
-  ]),
-  swiss_diff: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
-  times_played_sum: z.int(),
-});
-
-/**
  * TeamBody
  */
 export const zTeamBody = z.object({
@@ -699,11 +678,11 @@ export const zTokenResponse = z.object({
  */
 export const zTournamentBody = z.object({
   club_id: z.int(),
-  dashboard_endpoint: z.union([z.unknown(), z.string()]),
+  dashboard_endpoint: z.string().nullable(),
   dashboard_public: z.boolean(),
   duration_minutes: z.int().gte(1),
   margin_minutes: z.int().gte(0),
-  name: z.string(),
+  name: z.string().min(1).max(100),
   players_can_be_in_multiple_teams: z.boolean(),
   start_time: z.iso.datetime(),
 });
@@ -749,11 +728,11 @@ export const zTournamentResponse = z.object({
  * TournamentUpdateBody
  */
 export const zTournamentUpdateBody = z.object({
-  dashboard_endpoint: z.union([z.unknown(), z.string()]),
+  dashboard_endpoint: z.string().nullable(),
   dashboard_public: z.boolean(),
   duration_minutes: z.int().gte(1),
   margin_minutes: z.int().gte(0),
-  name: z.string(),
+  name: z.string().min(1).max(100),
   players_can_be_in_multiple_teams: z.boolean(),
   start_time: z.iso.datetime(),
 });
@@ -766,13 +745,6 @@ export const zTournamentsResponse = z.object({
 });
 
 /**
- * UpcomingMatchesResponse
- */
-export const zUpcomingMatchesResponse = z.object({
-  data: z.array(zSuggestedMatch),
-});
-
-/**
  * UserAccountType
  */
 export const zUserAccountType = z.enum(['REGULAR']);
@@ -781,6 +753,7 @@ export const zUserAccountType = z.enum(['REGULAR']);
  * UserPasswordToUpdate
  */
 export const zUserPasswordToUpdate = z.object({
+  current_password: z.string(),
   password: z.string().min(12).max(72),
 });
 
@@ -807,7 +780,7 @@ export const zUserPublicResponse = z.object({
  */
 export const zUserToRegister = z.object({
   email: z.email(),
-  name: z.string(),
+  name: z.string().min(1).max(100),
   password: z.string(),
 });
 
@@ -816,7 +789,7 @@ export const zUserToRegister = z.object({
  */
 export const zUserToUpdate = z.object({
   email: z.email(),
-  name: z.string(),
+  name: z.string().min(1).max(100),
 });
 
 /**
@@ -873,6 +846,11 @@ export const zUpdateClubApiClubsClubIdPutPath = z.object({
  * Successful Response
  */
 export const zUpdateClubApiClubsClubIdPutResponse = zClubResponse;
+
+/**
+ * Successful Response
+ */
+export const zLogoutApiLogoutPostResponse = z.void();
 
 /**
  * Response Ping Api Ping Get
@@ -1021,7 +999,7 @@ export const zGetPlayersApiTournamentsTournamentIdPlayersGetPath = z.object({
 
 export const zGetPlayersApiTournamentsTournamentIdPlayersGetQuery = z.object({
   not_in_team: z.boolean().optional().default(false),
-  limit: z.int().gte(1).lte(100).optional().default(25),
+  limit: z.int().gte(1).lte(500).optional().default(25),
   offset: z.int().gte(0).optional().default(0),
   sort_direction: z.enum(['asc', 'desc']).optional().default('asc'),
   sort_by: z
@@ -1229,26 +1207,6 @@ export const zUpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemI
 export const zUpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutResponse =
   zSuccessResponse;
 
-export const zGetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetPath =
-  z.object({
-    tournament_id: z.int(),
-    stage_item_id: z.int(),
-  });
-
-export const zGetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetQuery =
-  z.object({
-    elo_diff_threshold: z.int().optional().default(200),
-    iterations: z.int().optional().default(2000),
-    only_recommended: z.boolean().optional().default(false),
-    limit: z.int().optional().default(50),
-  });
-
-/**
- * Successful Response
- */
-export const zGetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponse =
-  zUpcomingMatchesResponse;
-
 export const zGetStagesApiTournamentsTournamentIdStagesGetPath = z.object({
   tournament_id: z.int(),
 });
@@ -1320,7 +1278,7 @@ export const zGetTeamsApiTournamentsTournamentIdTeamsGetPath = z.object({
 });
 
 export const zGetTeamsApiTournamentsTournamentIdTeamsGetQuery = z.object({
-  limit: z.int().gte(1).lte(100).optional().default(25),
+  limit: z.int().gte(1).lte(500).optional().default(25),
   offset: z.int().gte(0).optional().default(0),
   sort_direction: z.enum(['asc', 'desc']).optional().default('asc'),
   sort_by: z

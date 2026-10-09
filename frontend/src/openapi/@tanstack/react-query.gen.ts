@@ -36,7 +36,6 @@ import {
   getAuthFeaturesApiAuthFeaturesGet,
   getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet,
   getClubsApiClubsGet,
-  getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGet,
   getMeApiUsersUserIdGet,
   getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet,
   getPlayersApiTournamentsTournamentIdPlayersGet,
@@ -50,6 +49,7 @@ import {
   getTournamentsApiTournamentsGet,
   getUserApiUsersMeGet,
   loginForAccessTokenApiTokenPost,
+  logoutApiLogoutPost,
   type Options,
   pingApiPingGet,
   putUserPasswordApiUsersUserIdPasswordPut,
@@ -143,9 +143,6 @@ import type {
   GetAvailableInputsApiTournamentsTournamentIdAvailableInputsGetResponse,
   GetClubsApiClubsGetData,
   GetClubsApiClubsGetResponse,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetError,
-  GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponse,
   GetMeApiUsersUserIdGetData,
   GetMeApiUsersUserIdGetError,
   GetMeApiUsersUserIdGetResponse,
@@ -182,6 +179,8 @@ import type {
   LoginForAccessTokenApiTokenPostData,
   LoginForAccessTokenApiTokenPostError,
   LoginForAccessTokenApiTokenPostResponse,
+  LogoutApiLogoutPostData,
+  LogoutApiLogoutPostResponse,
   PingApiPingGetData,
   PingApiPingGetResponse,
   PutUserPasswordApiUsersUserIdPasswordPutData,
@@ -397,6 +396,35 @@ export const updateClubApiClubsClubIdPutMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateClubApiClubsClubIdPut({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Logout
+ *
+ * Ends the session in this browser by removing its cookie.
+ */
+export const logoutApiLogoutPostMutation = (
+  options?: Partial<Options<LogoutApiLogoutPostData>>,
+): UseMutationOptions<
+  LogoutApiLogoutPostResponse,
+  AxiosError<DefaultError>,
+  Options<LogoutApiLogoutPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    LogoutApiLogoutPostResponse,
+    AxiosError<DefaultError>,
+    Options<LogoutApiLogoutPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await logoutApiLogoutPost({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -1379,48 +1407,6 @@ export const updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemId
     return mutationOptions;
   };
 
-export const getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetQueryKey =
-  (
-    options: Options<GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData>,
-  ) =>
-    createQueryKey(
-      'getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGet',
-      options,
-    );
-
-/**
- * Get Matches To Schedule
- */
-export const getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetOptions =
-  (
-    options: Options<GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetData>,
-  ) =>
-    queryOptions<
-      GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponse,
-      AxiosError<GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetError>,
-      GetMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetResponse,
-      ReturnType<
-        typeof getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetQueryKey
-      >
-    >({
-      queryFn: async ({ queryKey, signal }) => {
-        const { data } =
-          await getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGet(
-            {
-              ...options,
-              ...queryKey[0],
-              signal,
-              throwOnError: true,
-            },
-          );
-        return data;
-      },
-      queryKey:
-        getMatchesToScheduleApiTournamentsTournamentIdStageItemsStageItemIdUpcomingMatchesGetQueryKey(
-          options,
-        ),
-    });
-
 export const getStagesApiTournamentsTournamentIdStagesGetQueryKey = (
   options: Options<GetStagesApiTournamentsTournamentIdStagesGetData>,
 ) => createQueryKey('getStagesApiTournamentsTournamentIdStagesGet', options);
@@ -1936,6 +1922,10 @@ export const updateUserDetailsApiUsersUserIdPutMutation = (
 
 /**
  * Put User Password
+ *
+ * Asks for the current password as well, so that a stolen session can't lock the owner out.
+ *
+ * Signs out every other session. This one gets a new session cookie.
  */
 export const putUserPasswordApiUsersUserIdPasswordPutMutation = (
   options?: Partial<Options<PutUserPasswordApiUsersUserIdPasswordPutData>>,

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import csv
 from decimal import Decimal
-from typing import Annotated
 
 from heliclockter import datetime_utc
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from bracket.logic.ranking.statistics import START_ELO
 from bracket.models.db.player import Player
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import PlayerId, TeamId, TournamentId
+from bracket.utils.pydantic import ParticipantName, check_participant_names
 
 
 class TeamInsertable(BaseModelORM):
@@ -56,11 +57,35 @@ class FullTeamWithPlayers(TeamWithPlayers, Team):
 
 
 class TeamBody(BaseModelORM):
-    name: Annotated[str, StringConstraints(min_length=1, max_length=30)]
+    name: ParticipantName
     active: bool
     player_ids: set[PlayerId]
+
+
+def parse_teams_with_players(names: str) -> list[tuple[str, list[str]]]:
+    """Every line is a team's name, optionally followed by its players, separated by commas."""
+    return [
+        (row[0].strip(), [player.strip() for player in row[1:] if player.strip()])
+        for row in csv.reader(names.splitlines())
+        if any(cell.strip() for cell in row)
+    ]
 
 
 class TeamMultiBody(BaseModelORM):
     names: str = Field(..., min_length=1)
     active: bool
+
+    @field_validator("names")
+    @classmethod
+    def validate_names(cls, value: str) -> str:
+        teams = parse_teams_with_players(value)
+        if not teams:
+            raise ValueError("Enter at least one team")
+        if any(not team_name for team_name, _ in teams):
+            raise ValueError("Every line needs a team name before its players")
+        check_participant_names([name for team in teams for name in (team[0], *team[1])])
+        return value
+
+    @property
+    def teams_with_players(self) -> list[tuple[str, list[str]]]:
+        return parse_teams_with_players(self.names)

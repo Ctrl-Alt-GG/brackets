@@ -41,74 +41,12 @@
 }
 
 @theme {
-  --font-sans: 'Outfit', 'Segoe UI', sans-serif;
-  --font-display: 'Sora', 'Outfit', 'Segoe UI', sans-serif;
+  --font-sans: 'Outfit Variable', 'Segoe UI', sans-serif;
+  --font-display: 'Sora Variable', 'Outfit Variable', 'Segoe UI', sans-serif;
 }
 
 @layer base {
   body {
     @apply min-h-screen bg-[radial-gradient(circle_at_top,_rgba(221,37,37,0.18),_transparent_28%),linear-gradient(180deg,#171114_0%,#0c090b_100%)] antialiased;
   }
-}
-
-/* Brand theme for brackets-viewer (its own stylesheet is imported by the React wrapper). */
-.brackets-viewer {
-  --primary-background: transparent;
-  --secondary-background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
-  --match-background: var(--color-base-100);
-  --font-color: var(--color-base-content);
-  --win-color: var(--color-success);
-  --loss-color: #a1a1aa;
-  --label-color: #a1a1aa;
-  --hint-color: #a1a1aa;
-  --connector-color: color-mix(in oklab, var(--color-base-content) 28%, transparent);
-  --border-color: var(--color-base-300);
-  --border-hover-color: var(--color-primary);
-  --border-selected-color: var(--color-primary);
-
-  --text-size: 14px;
-  --round-margin: 48px;
-  --match-width: 210px;
-  --match-border-radius: 0.75rem;
-
-  font-family: var(--font-sans);
-  padding: 0;
-  margin: 0;
-}
-
-.brackets-viewer h1 {
-  display: none;
-}
-
-.brackets-viewer h3 {
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #a1a1aa;
-}
-
-.brackets-viewer .participant.win .name {
-  color: #ffffff;
-}
-
-.brackets-viewer .participant.loss .name {
-  color: #a1a1aa;
-}
-
-/* Teams in a bracket open their page; BracketViewer marks them once they are known. */
-.brackets-viewer .participant.team-link {
-  cursor: pointer;
-}
-
-.brackets-viewer .participant.team-link:hover .name {
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
-/* An undecided slot renders with an empty name. */
-.brackets-viewer .participant .name:empty::before {
-  content: 'TBD';
-  color: var(--hint-color);
 }

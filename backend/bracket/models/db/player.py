@@ -1,10 +1,11 @@
 from decimal import Decimal
 
 from heliclockter import datetime_utc
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import PlayerId, TournamentId
+from bracket.utils.pydantic import ParticipantName, check_participant_names
 
 
 class PlayerInsertable(BaseModelORM):
@@ -27,13 +28,31 @@ class Player(PlayerInsertable):
 
 
 class PlayerBody(BaseModelORM):
-    name: str = Field(..., min_length=1, max_length=30)
+    name: ParticipantName
     active: bool
+
+
+def parse_player_names(names: str) -> list[str]:
+    """One player per line."""
+    return [name.strip() for name in names.splitlines() if name.strip()]
 
 
 class PlayerMultiBody(BaseModelORM):
     names: str = Field(..., min_length=1)
     active: bool
+
+    @field_validator("names")
+    @classmethod
+    def validate_names(cls, value: str) -> str:
+        names = parse_player_names(value)
+        if not names:
+            raise ValueError("Enter at least one player")
+        check_participant_names(names)
+        return value
+
+    @property
+    def player_names(self) -> list[str]:
+        return parse_player_names(self.names)
 
 
 class PlayerToInsert(PlayerBody):

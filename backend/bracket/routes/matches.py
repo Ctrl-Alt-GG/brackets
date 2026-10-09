@@ -8,22 +8,17 @@ from bracket.logic.ranking.calculation import (
     recalculate_ranking_for_stage_item,
 )
 from bracket.logic.ranking.elimination import update_inputs_in_subsequent_elimination_rounds
-from bracket.logic.scheduling.upcoming_matches import (
-    get_draft_round_in_stage_item,
-    get_upcoming_matches_for_swiss,
-)
 from bracket.models.db.match import (
     Match,
     MatchBody,
     MatchCreateBody,
     MatchCreateBodyFrontend,
-    MatchFilter,
 )
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
 from bracket.routes.auth import user_authenticated_for_tournament
-from bracket.routes.models import SingleMatchResponse, SuccessResponse, UpcomingMatchesResponse
+from bracket.routes.models import SingleMatchResponse, SuccessResponse
 from bracket.routes.util import disallow_archived_tournament, match_dependency
 from bracket.sql.matches import (
     sql_create_match,
@@ -35,38 +30,9 @@ from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.tournaments import sql_get_tournament
 from bracket.sql.validation import check_foreign_keys_belong_to_tournament
-from bracket.utils.id_types import MatchId, StageItemId, TournamentId
+from bracket.utils.id_types import MatchId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
-
-
-@router.get(
-    "/tournaments/{tournament_id}/stage_items/{stage_item_id}/upcoming_matches",
-    response_model=UpcomingMatchesResponse,
-)
-async def get_matches_to_schedule(
-    conn: DbConnection,
-    tournament_id: TournamentId,
-    stage_item_id: StageItemId,
-    elo_diff_threshold: int = 200,
-    iterations: int = 2_000,
-    only_recommended: bool = False,
-    limit: int = 50,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-) -> UpcomingMatchesResponse:
-    match_filter = MatchFilter(
-        elo_diff_threshold=elo_diff_threshold,
-        only_recommended=only_recommended,
-        limit=limit,
-        iterations=iterations,
-    )
-
-    draft_round, stage_item = await get_draft_round_in_stage_item(
-        conn, tournament_id, stage_item_id
-    )
-    return UpcomingMatchesResponse(
-        data=get_upcoming_matches_for_swiss(match_filter, stage_item, draft_round)
-    )
 
 
 @router.delete("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)

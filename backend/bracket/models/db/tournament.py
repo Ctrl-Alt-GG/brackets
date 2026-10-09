@@ -5,7 +5,7 @@ from pydantic import Field
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import ClubId, TournamentId
-from bracket.utils.pydantic import EmptyStrToNone
+from bracket.utils.pydantic import DashboardEndpoint, Name
 from bracket.utils.types import EnumAutoStr
 
 
@@ -34,9 +34,9 @@ class Tournament(TournamentInsertable):
 
 class TournamentUpdateBody(BaseModelORM):
     start_time: datetime_utc
-    name: str
+    name: Name
     dashboard_public: bool
-    dashboard_endpoint: EmptyStrToNone | str = None
+    dashboard_endpoint: DashboardEndpoint = None
     players_can_be_in_multiple_teams: bool
     duration_minutes: int = Field(..., ge=1)
     margin_minutes: int = Field(..., ge=0)

@@ -40,15 +40,19 @@ async def get_stage_item_input_by_id(
     return TypeAdapter(StageItemInput).validate_python(dict(result._mapping))
 
 
-async def get_stage_item_input_ids_by_ranking_id(
-    conn: AsyncConnection, ranking_id: RankingId
+async def get_stage_item_ids_by_ranking_id(
+    conn: AsyncConnection, tournament_id: TournamentId, ranking_id: RankingId
 ) -> list[StageItemId]:
     query = """
-        SELECT id
+        SELECT stage_items.id
         FROM stage_items
-        WHERE ranking_id = :ranking_id
+        JOIN stages ON stages.id = stage_items.stage_id
+        WHERE stage_items.ranking_id = :ranking_id
+        AND stages.tournament_id = :tournament_id
     """
-    results = await conn.execute(text(query), {"ranking_id": ranking_id})
+    results = await conn.execute(
+        text(query), {"ranking_id": ranking_id, "tournament_id": tournament_id}
+    )
     return [StageItemId(result.id) for result in results]
 
 

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
@@ -10,17 +11,34 @@ import {
 } from 'react-router';
 import { Toaster, toast } from 'sonner';
 
-import { configureApiClient, setUnauthorizedHandler } from './app/api';
+import { setUnauthorizedHandler } from './app/api';
 import { useSession } from './app/hooks';
-import { LoginPage, PasswordResetStatusPage, RegisterPage } from './app/pages/auth-pages';
-import { ClubsPage } from './app/pages/clubs-page';
 import { HomePage } from './app/pages/home-page';
 import { NotFoundPage, TournamentPage } from './app/pages/tournament-page';
-import { UserPage } from './app/pages/user-page';
 import { queryClient } from './app/query-client';
+import { logoutApiLogoutPostMutation } from './openapi/@tanstack/react-query.gen';
 import type { TournamentSection } from './app/types';
-import { ErrorState, TopNav } from './app/ui';
+import { ErrorState, LoadingState, TopNav } from './app/ui';
 import { cx } from './app/utils';
+
+// Visitors only need the tournament pages, so the account pages load when someone opens them.
+const LoginPage = lazy(() =>
+  import('./app/pages/auth-pages').then((module) => ({ default: module.LoginPage })),
+);
+const RegisterPage = lazy(() =>
+  import('./app/pages/auth-pages').then((module) => ({ default: module.RegisterPage })),
+);
+const PasswordResetStatusPage = lazy(() =>
+  import('./app/pages/auth-pages').then((module) => ({
+    default: module.PasswordResetStatusPage,
+  })),
+);
+const ClubsPage = lazy(() =>
+  import('./app/pages/clubs-page').then((module) => ({ default: module.ClubsPage })),
+);
+const UserPage = lazy(() =>
+  import('./app/pages/user-page').then((module) => ({ default: module.UserPage })),
+);
 
 const TOURNAMENT_ROUTES: Array<[path: string, section: TournamentSection]> = [
   ['', 'overview'],
@@ -46,9 +64,12 @@ function RootLayout() {
   const location = useLocation();
   // A big screen at the venue shows the tournament only, without the site's navigation.
   const isBigScreen = location.pathname.includes('/dashboard/present/');
-
-  // Configure the generated API client before child components fire requests.
-  useMemo(() => configureApiClient(session), [session]);
+  // Only the API can remove the session cookie. This browser is signed out even if it fails.
+  const logout = useMutation({
+    ...logoutApiLogoutPostMutation(),
+    meta: { invalidates: [], successMessage: 'Logged out successfully.' },
+    onSettled: () => setSession(null),
+  });
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -71,10 +92,7 @@ function RootLayout() {
       {isBigScreen ? null : (
         <TopNav
           currentUserName={session?.name ?? null}
-          onLogout={() => {
-            setSession(null);
-            toast.success('Logged out successfully.');
-          }}
+          onLogout={() => logout.mutate({})}
           session={session}
         />
       )}
@@ -84,7 +102,9 @@ function RootLayout() {
           isBigScreen ? 'max-w-[110rem]' : 'max-w-7xl',
         )}
       >
-        <Outlet />
+        <Suspense fallback={<LoadingState title="Loading…" />}>
+          <Outlet />
+        </Suspense>
       </main>
       {/* Also scrolls to the element a link's hash names, such as a group in the standings. */}
       <ScrollRestoration />

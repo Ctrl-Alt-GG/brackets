@@ -2,6 +2,7 @@ from heliclockter import datetime_utc
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import RoundId, StageItemId
+from bracket.utils.pydantic import Name
 
 
 class RoundInsertable(BaseModelORM):
@@ -16,10 +17,10 @@ class Round(RoundInsertable):
 
 
 class RoundUpdateBody(BaseModelORM):
-    name: str
+    name: Name
     is_draft: bool
 
 
 class RoundCreateBody(BaseModelORM):
-    name: str | None = None
+    name: Name | None = None
     stage_item_id: StageItemId

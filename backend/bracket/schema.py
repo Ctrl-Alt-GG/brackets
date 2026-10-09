@@ -1,4 +1,14 @@
-from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, UniqueConstraint, func
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.sql.sqltypes import BigInteger, Boolean, DateTime, Enum, Float, Text
 
 metadata = MetaData()
@@ -230,6 +240,8 @@ users = Table(
         nullable=False,
     ),
 )
+# Created by the `6d5f2a8ec1b1` migration. Logins look users up by it.
+Index("ix_users_email_lower", func.lower(users.c.email), unique=True)
 
 users_x_clubs = Table(
     "users_x_clubs",

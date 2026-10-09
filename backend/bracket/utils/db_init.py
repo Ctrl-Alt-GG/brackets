@@ -117,9 +117,6 @@ async def init_db_when_empty(conn: AsyncConnection) -> UserId | None:
     if table_count is not None and table_count <= 1:
         logger.warning("Empty db detected, creating tables...")
         await conn.run_sync(metadata.create_all)
-        await conn.exec_driver_sql(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_lower ON users (LOWER(email));"
-        )
         await conn.run_sync(alembic_stamp_head)
 
         if config.admin_email and config.admin_password:

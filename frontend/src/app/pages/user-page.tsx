@@ -57,7 +57,7 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
 
 function PasswordForm({ userId }: { userId: number }) {
   const form = useForm({
-    defaultValues: { password: '' },
+    defaultValues: { current_password: '', password: '' },
     resolver: zodResolver(zUserPasswordToUpdate),
   });
   const update = useMutation({
@@ -71,6 +71,15 @@ function PasswordForm({ userId }: { userId: number }) {
         update.mutate({ body, path: { user_id: userId } }, { onSuccess: () => form.reset() }),
       )}
     >
+      <Field error={form.formState.errors.current_password?.message} label="Current password">
+        <input
+          autoComplete="current-password"
+          className="input w-full"
+          required
+          type="password"
+          {...form.register('current_password')}
+        />
+      </Field>
       <Field error={form.formState.errors.password?.message} label="New password">
         <input
           autoComplete="new-password"

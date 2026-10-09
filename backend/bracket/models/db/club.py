@@ -2,6 +2,7 @@ from heliclockter import datetime_utc
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import ClubId
+from bracket.utils.pydantic import Name
 
 
 class ClubInsertable(BaseModelORM):
@@ -14,8 +15,8 @@ class Club(ClubInsertable):
 
 
 class ClubCreateBody(BaseModelORM):
-    name: str
+    name: Name
 
 
 class ClubUpdateBody(BaseModelORM):
-    name: str
+    name: Name
