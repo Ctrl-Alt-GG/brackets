@@ -119,17 +119,11 @@ export const zPlayer = z.object({
   active: z.boolean(),
   created: z.iso.datetime(),
   draws: z.int().default(0),
-  elo_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  elo_score: z.string().default('0.0'),
   id: z.int(),
   losses: z.int().default(0),
   name: z.string(),
-  swiss_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  swiss_score: z.string().default('0.0'),
   tournament_id: z.int(),
   wins: z.int().default(0),
 });
@@ -141,19 +135,13 @@ export const zFullTeamWithPlayers = z.object({
   active: z.boolean(),
   created: z.iso.datetime(),
   draws: z.int().default(0),
-  elo_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('1200'),
+  elo_score: z.string().default('1200'),
   id: z.int(),
   logo_path: z.string().nullable(),
   losses: z.int().default(0),
   name: z.string(),
   players: z.array(zPlayer),
-  swiss_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  swiss_score: z.string().default('0.0'),
   tournament_id: z.int(),
   wins: z.int().default(0),
 });
@@ -203,12 +191,12 @@ export const zPlayersResponse = z.object({
 export const zRanking = z.object({
   add_score_points: z.boolean(),
   created: z.iso.datetime(),
-  draw_points: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  draw_points: z.string(),
   id: z.int(),
-  loss_points: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  loss_points: z.string(),
   position: z.int(),
   tournament_id: z.int(),
-  win_points: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  win_points: z.string(),
 });
 
 /**
@@ -216,10 +204,10 @@ export const zRanking = z.object({
  */
 export const zRankingBody = z.object({
   add_score_points: z.boolean(),
-  draw_points: z.union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)]),
-  loss_points: z.union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)]),
+  draw_points: z.union([z.number(), z.string()]),
+  loss_points: z.union([z.number(), z.string()]),
   position: z.int(),
-  win_points: z.union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)]),
+  win_points: z.union([z.number(), z.string()]),
 });
 
 /**
@@ -227,15 +215,9 @@ export const zRankingBody = z.object({
  */
 export const zRankingCreateBody = z.object({
   add_score_points: z.boolean().default(false),
-  draw_points: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .default('0.5'),
-  loss_points: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .default('0.0'),
-  win_points: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .default('1.0'),
+  draw_points: z.union([z.number(), z.string()]).default('0.5'),
+  loss_points: z.union([z.number(), z.string()]).default('0.0'),
+  win_points: z.union([z.number(), z.string()]).default('1.0'),
 });
 
 /**
@@ -290,10 +272,7 @@ export const zStageItemInputEmpty = z.object({
   draws: z.int().default(0),
   id: z.int(),
   losses: z.int().default(0),
-  points: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  points: z.string().default('0.0'),
   slot: z.int(),
   stage_item_id: z.int().nullable(),
   team_id: z.null(),
@@ -336,10 +315,7 @@ export const zStageItemInputOptionsResponse = z.object({
 export const zStageItemInputStanding = z.object({
   draws: z.int().default(0),
   losses: z.int().default(0),
-  points: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.00'),
+  points: z.string().default('0.00'),
   score_against: z.int().default(0),
   score_for: z.int().default(0),
   stage_item_input_id: z.int(),
@@ -353,10 +329,7 @@ export const zStageItemInputTentative = z.object({
   draws: z.int().default(0),
   id: z.int(),
   losses: z.int().default(0),
-  points: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  points: z.string().default('0.0'),
   slot: z.int(),
   stage_item_id: z.int().nullable(),
   team_id: z.null(),
@@ -442,18 +415,12 @@ export const zTeam = z.object({
   active: z.boolean(),
   created: z.iso.datetime(),
   draws: z.int().default(0),
-  elo_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('1200'),
+  elo_score: z.string().default('1200'),
   id: z.int(),
   logo_path: z.string().nullable(),
   losses: z.int().default(0),
   name: z.string(),
-  swiss_score: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  swiss_score: z.string().default('0.0'),
   tournament_id: z.int(),
   wins: z.int().default(0),
 });
@@ -472,10 +439,7 @@ export const zStageItemInputFinal = z.object({
   draws: z.int().default(0),
   id: z.int(),
   losses: z.int().default(0),
-  points: z
-    .string()
-    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .default('0.0'),
+  points: z.string().default('0.0'),
   slot: z.int(),
   stage_item_id: z.int().nullable(),
   team: zTeam,

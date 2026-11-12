@@ -302,7 +302,6 @@
           },
           "elo_score": {
             "default": "1200",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Elo Score",
             "type": "string"
           },
@@ -339,7 +338,6 @@
           },
           "swiss_score": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Swiss Score",
             "type": "string"
           },
@@ -1121,7 +1119,6 @@
           },
           "elo_score": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Elo Score",
             "type": "string"
           },
@@ -1140,7 +1137,6 @@
           },
           "swiss_score": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Swiss Score",
             "type": "string"
           },
@@ -1232,7 +1228,6 @@
             "type": "string"
           },
           "draw_points": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Draw Points",
             "type": "string"
           },
@@ -1241,7 +1236,6 @@
             "type": "integer"
           },
           "loss_points": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Loss Points",
             "type": "string"
           },
@@ -1254,7 +1248,6 @@
             "type": "integer"
           },
           "win_points": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Win Points",
             "type": "string"
           }
@@ -1284,7 +1277,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1296,7 +1288,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1312,7 +1303,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1342,7 +1332,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1355,7 +1344,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1368,7 +1356,6 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -1640,7 +1627,6 @@
           },
           "points": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Points",
             "type": "string"
           },
@@ -1715,7 +1701,6 @@
           },
           "points": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Points",
             "type": "string"
           },
@@ -1871,7 +1856,6 @@
           },
           "points": {
             "default": "0.00",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Points",
             "type": "string"
           },
@@ -1925,7 +1909,6 @@
           },
           "points": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Points",
             "type": "string"
           },
@@ -2332,7 +2315,6 @@
           },
           "elo_score": {
             "default": "1200",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Elo Score",
             "type": "string"
           },
@@ -2362,7 +2344,6 @@
           },
           "swiss_score": {
             "default": "0.0",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Swiss Score",
             "type": "string"
           },

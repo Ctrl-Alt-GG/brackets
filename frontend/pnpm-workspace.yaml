@@ -1,5 +1,8 @@
 ignoredOptionalDependencies:
   - esbuild
+minimumReleaseAgeExclude:
+  - '@hookform/resolvers@7.0.6'
+  - daisyui@5.8.0
 allowBuilds:
   '@tailwindcss/oxide': true
   esbuild: false
