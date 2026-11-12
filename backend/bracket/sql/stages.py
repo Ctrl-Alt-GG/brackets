@@ -3,7 +3,10 @@ from typing import Literal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from bracket.logic.ranking.statistics import TeamTotals
+from bracket.logic.ranking.team_totals import get_team_totals
 from bracket.models.db.stage import Stage
+from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.util import StageWithStageItems
 from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
 from bracket.utils.types import dict_without_none
@@ -24,8 +27,12 @@ async def get_full_tournament_details(
     stage_item_filter = (
         "AND stage_items.id = any(:stage_item_ids)" if stage_item_ids is not None else ""
     )
-    stage_item_filter_join = (
-        "LEFT JOIN stage_items on stages.id = stage_items.stage_id"
+    stage_has_items_filter = (
+        """AND EXISTS (
+            SELECT 1 FROM stage_items selected_item
+            WHERE selected_item.stage_id = stages.id
+            AND selected_item.id = any(:stage_item_ids)
+        )"""
         if stage_item_ids is not None
         else ""
     )
@@ -96,10 +103,9 @@ async def get_full_tournament_details(
         SELECT stages.*, to_json(array_agg(r.* ORDER BY r.name, r.id)) AS stage_items
         FROM stages
         LEFT JOIN stage_items_with_rounds_and_inputs r on stages.id = r.stage_id
-        {stage_item_filter_join}
         WHERE stages.tournament_id = :tournament_id
         {stage_filter}
-        {stage_item_filter}
+        {stage_has_items_filter}
         GROUP BY stages.id
         ORDER BY stages.id
     """
@@ -112,7 +118,27 @@ async def get_full_tournament_details(
         }
     )
     result = await conn.execute(text(query), values)
-    return [StageWithStageItems.model_validate(x._mapping) for x in result]
+    parsed = [StageWithStageItems.model_validate(x._mapping) for x in result]
+    totals = None
+    for stage in parsed:
+        for stage_item in stage.stage_items:
+            inputs = [
+                *stage_item.inputs,
+                *(
+                    input_
+                    for round_ in stage_item.rounds
+                    for match in round_.matches
+                    for input_ in (match.stage_item_input1, match.stage_item_input2)
+                ),
+            ]
+            for input_ in inputs:
+                if isinstance(input_, StageItemInputFinal):
+                    if totals is None:
+                        totals = await get_team_totals(conn, tournament_id)
+                    input_.team = input_.team.model_copy(
+                        update=totals.get(input_.team_id, TeamTotals()).model_dump()
+                    )
+    return parsed
 
 
 async def sql_delete_stage(

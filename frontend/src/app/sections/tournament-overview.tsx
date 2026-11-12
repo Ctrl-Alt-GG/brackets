@@ -5,6 +5,7 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
+import { MatchScoreEditor } from '../components/match-score-editor';
 import { TeamLink } from '../components/team-link';
 import { teamPath, useTournamentContext } from '../tournament-context';
 import {
@@ -13,6 +14,7 @@ import {
   inputTeamId,
   involvesTeam,
   isBracket,
+  isInProgress,
   isScored,
   isStageHappeningNow,
   matchStatus,
@@ -93,7 +95,7 @@ function MyTeamPanel({
       {next ? (
         <div className="max-w-xl space-y-2">
           <p className="text-sm font-medium text-base-content/80">
-            {matchStatus(next.match) === 'live' ? 'Playing now' : 'Next match'}
+            {isInProgress(matchStatus(next.match)) ? 'Playing now' : 'Next match'}
           </p>
           <MatchCard entry={next} stageItemsById={stageItemsById} />
         </div>
@@ -115,33 +117,78 @@ export function OverviewSection({
   bundle,
   matches,
   stageItemsById,
+  workspace = false,
 }: {
   bundle: TournamentBundle;
   matches: FlattenedMatch[];
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+  /** The organizer's overview, where results are entered. Otherwise the Details page. */
+  workspace?: boolean;
 }) {
   const { publicPath } = useTournamentContext();
-  const live = matches.filter((entry) => matchStatus(entry.match) === 'live');
-  const upcoming = matches.filter((entry) => matchStatus(entry.match) === 'scheduled').slice(0, 6);
+  // A match that has started is in progress until its result is in, however long it runs over.
+  const inProgress = matches.filter((entry) => isInProgress(matchStatus(entry.match)));
+  // What is planned next, including matches that say who will play them ("Group A #1") before
+  // the teams are known. A match with nothing to show yet, such as a final, is left out.
+  const upcoming = matches
+    .filter(({ match }) => {
+      const status = matchStatus(match);
+      return (
+        status === 'scheduled' ||
+        (status === 'waiting' &&
+          (match.stage_item_input1 != null || match.stage_item_input2 != null))
+      );
+    })
+    .slice(0, 6);
   const finished = matches.filter((entry) => matchStatus(entry.match) === 'finished').slice(-6);
+  const editor = (entry: FlattenedMatch) =>
+    workspace ? (
+      <MatchScoreEditor
+        entry={entry}
+        stageItemsById={stageItemsById}
+        tournamentId={bundle.tournament.id}
+      />
+    ) : undefined;
 
   return (
     <div className="space-y-6">
-      <MyTeamPanel matches={matches} stageItemsById={stageItemsById} teams={bundle.teams} />
+      {/* Organizers aren't looking for their own team. */}
+      {workspace ? null : (
+        <MyTeamPanel matches={matches} stageItemsById={stageItemsById} teams={bundle.teams} />
+      )}
 
       <Surface>
-        <SurfaceHeading title={live.length > 0 ? 'Playing now' : 'Coming up next'} />
-        {live.length === 0 && upcoming.length === 0 ? (
+        <SurfaceHeading
+          title={
+            inProgress.length === 0
+              ? 'Coming up next'
+              : workspace
+                ? 'Waiting for results'
+                : 'Playing now'
+          }
+        />
+        {workspace && inProgress.length > 0 ? (
+          <p className="text-sm text-base-content/70">
+            These matches have started. Enter each result as soon as the match is over: the
+            standings, the bracket and the next matches follow from it.
+          </p>
+        ) : null}
+        {inProgress.length === 0 && upcoming.length === 0 ? (
           <p className="text-sm text-base-content/70">
             No matches are running or scheduled at the moment.
           </p>
         ) : null}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {(live.length > 0 ? live : upcoming).map((entry) => (
-            <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
+          {(inProgress.length > 0 ? inProgress : upcoming).map((entry) => (
+            <MatchCard
+              editor={inProgress.length > 0 ? editor(entry) : undefined}
+              entry={entry}
+              key={entry.match.id}
+              stageItemsById={stageItemsById}
+            />
           ))}
         </div>
-        {live.length > 0 && upcoming.length > 0 ? (
+        {inProgress.length > 0 && upcoming.length > 0 ? (
           <>
             <h3 className="pt-2 text-sm font-medium text-base-content/80">Coming up next</h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

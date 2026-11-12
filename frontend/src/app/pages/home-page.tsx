@@ -10,7 +10,16 @@ import {
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { useSession } from '../hooks';
 import { EmptyState, ErrorState, LoadingState, PageShell, Surface, SurfaceHeading } from '../ui';
-import { getErrorMessage, publicTournamentPath, tournamentDateLabel } from '../utils';
+import {
+  getErrorMessage,
+  publicTournamentPath,
+  tournamentDateLabel,
+  tournamentPhase,
+} from '../utils';
+
+function byStartTime(left: OpenApi.Tournament, right: OpenApi.Tournament) {
+  return new Date(left.start_time).getTime() - new Date(right.start_time).getTime();
+}
 
 function TournamentCard({
   canManage,
@@ -97,13 +106,14 @@ export function HomePage() {
   );
   const clubs = useQuery({ ...getClubsApiClubsGetOptions(), enabled: canManage });
 
-  const byStartTime = (left: OpenApi.Tournament, right: OpenApi.Tournament) =>
-    new Date(left.start_time).getTime() - new Date(right.start_time).getTime();
   const all = tournaments.data?.data ?? [];
   // Running and upcoming tournaments in the order they start, then the most recent finished ones.
-  const active = all.filter((tournament) => tournament.status === 'OPEN').toSorted(byStartTime);
+  // A tournament that is over belongs with the finished ones whether or not it was archived.
+  const active = all
+    .filter((tournament) => tournamentPhase(tournament) !== 'finished')
+    .toSorted(byStartTime);
   const finished = all
-    .filter((tournament) => tournament.status !== 'OPEN')
+    .filter((tournament) => tournamentPhase(tournament) === 'finished')
     .toSorted(byStartTime)
     .toReversed();
 
@@ -137,7 +147,19 @@ export function HomePage() {
           {tournamentList}
           <Surface>
             <SurfaceHeading title="New tournament" />
-            {clubs.data && clubs.data.data.length > 0 ? (
+            {clubs.isPending ? (
+              <LoadingState title="Loading events…" />
+            ) : clubs.error ? (
+              <ErrorState
+                action={
+                  <button className="btn btn-sm" onClick={() => void clubs.refetch()} type="button">
+                    Retry loading events
+                  </button>
+                }
+                error={getErrorMessage(clubs.error)}
+                title="Unable to load events"
+              />
+            ) : clubs.data && clubs.data.data.length > 0 ? (
               <Suspense fallback={<LoadingState title="Loading…" />}>
                 <NewTournamentForm clubs={clubs.data.data} />
               </Suspense>

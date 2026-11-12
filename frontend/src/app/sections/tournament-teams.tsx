@@ -14,9 +14,18 @@ import {
   pointsPhrase,
   sortTeamsByName,
   stageItemStandings,
+  teamLogoUrl,
 } from '../utils';
 import { EmptyState, SectionLabel, Surface, SurfaceHeading } from '../ui';
 import { stageItemPath } from './tournament-overview';
+
+/** A team's logo, when it has one. Decorative: the name is always next to it. */
+function TeamLogo({ className, team }: { className: string; team: OpenApi.FullTeamWithPlayers }) {
+  const url = teamLogoUrl(team);
+  return url ? (
+    <img alt="" className={`${className} shrink-0 rounded-field object-contain`} src={url} />
+  ) : null;
+}
 
 function playerNames(team: OpenApi.FullTeamWithPlayers) {
   return team.players.map((player) => player.name).join(', ');
@@ -59,7 +68,10 @@ export function TeamDirectorySection({ teams }: { teams: OpenApi.FullTeamWithPla
             to={teamPath(publicPath, team.id)}
           >
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold">{team.name}</h3>
+              <h3 className="flex items-center gap-2 font-semibold">
+                <TeamLogo className="size-6" team={team} />
+                {team.name}
+              </h3>
               {team.id === myTeamId ? (
                 <span className="badge badge-soft badge-accent badge-sm">Your team</span>
               ) : null}
@@ -134,7 +146,10 @@ export function TeamDetailSection({
       <Surface className={isMine ? 'border-accent/40' : undefined}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <h2 className="font-display text-3xl font-semibold">{team.name}</h2>
+            <h2 className="flex items-center gap-3 font-display text-3xl font-semibold">
+              <TeamLogo className="size-12" team={team} />
+              {team.name}
+            </h2>
             {isMine ? <span className="badge badge-soft badge-accent">Your team</span> : null}
           </div>
           <button

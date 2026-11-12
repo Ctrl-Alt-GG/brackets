@@ -11,6 +11,13 @@ from tests.unit_tests.mocks import (
     get_two_round_with_one_tentative_match_each,
 )
 
+# A match whose competitors change loses its result, which was between other teams.
+RESULT_DISCARDED = {
+    "stage_item_input1_score": 0,
+    "stage_item_input2_score": 0,
+    "scoreless_result": False,
+}
+
 
 def test_elimination_input_updates() -> None:
     tournament_id = TournamentId(-1)
@@ -34,14 +41,17 @@ def test_elimination_input_updates() -> None:
                 "stage_item_input2_id": stage_item_inputs[3].id,
                 "stage_item_input1": stage_item_inputs[0],
                 "stage_item_input2": stage_item_inputs[3],
+                **RESULT_DISCARDED,
             }
         ),
+        # Its second slot was fed by the match above, whose result is gone with its competitors.
         matches[3].id: matches[3].model_copy(
             update={
                 "stage_item_input1_id": stage_item_inputs[3].id,
-                "stage_item_input2_id": stage_item_inputs[0].id,
+                "stage_item_input2_id": None,
                 "stage_item_input1": stage_item_inputs[3],
-                "stage_item_input2": stage_item_inputs[0],
+                "stage_item_input2": None,
+                **RESULT_DISCARDED,
             }
         ),
     }

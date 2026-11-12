@@ -15,6 +15,7 @@ from bracket.routes.auth import SESSION_COOKIE
 from bracket.schema import users
 from bracket.sql.users import create_user, delete_user, get_user_by_id
 from bracket.utils.db import fetch_one_parsed_certain
+from bracket.utils.rate_limit import get_account_lockout_key, reset_account_failures
 from bracket.utils.security import hash_password, verify_password
 from bracket.utils.types import assert_some
 from tests.integration_tests.api.shared import (
@@ -90,7 +91,11 @@ async def test_update_user(
     conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
-        body = {"name": "Some new name", "email": "some_email@email.com"}
+        body = {
+            "name": "Some new name",
+            "email": "some_email@email.com",
+            "current_password": "some password",
+        }
         response = await send_auth_request(
             HTTPMethod.PUT,
             f"users/{user_created.id}",
@@ -111,10 +116,42 @@ async def test_update_user_email_already_taken(
             HTTPMethod.PUT,
             f"users/{user_created.id}",
             auth_context.model_copy(update={"user": user_created, "headers": headers}),
-            json={"name": "name", "email": auth_context.user.email.upper()},
+            json={
+                "name": "name",
+                "email": auth_context.user.email.upper(),
+                "current_password": "some password",
+            },
         )
 
     assert response == {"detail": "This email is already taken"}
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_update_user_email_needs_current_password(
+    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """
+    The email is what the account signs in with, so a session alone can't change it. The name
+    can change without the password.
+    """
+    async with temporary_user() as (user_created, headers):
+        user_context = auth_context.model_copy(update={"user": user_created, "headers": headers})
+        responses = [
+            await send_auth_request(
+                HTTPMethod.PUT, f"users/{user_created.id}", user_context, json=body
+            )
+            for body in (
+                {"name": "name", "email": "other@example.org"},
+                {"name": "name", "email": "other@example.org", "current_password": "wrong"},
+                {"name": "Renamed", "email": user_created.email},
+            )
+        ]
+        updated_user = assert_some(await get_user_by_id(conn, user_created.id))
+
+    assert responses[0] == {"detail": "Enter your current password to change your email"}
+    assert responses[1] == {"detail": "Enter your current password to change your email"}
+    assert responses[2]["data"]["name"] == "Renamed"
+    assert updated_user.email == user_created.email
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -238,3 +275,67 @@ async def test_update_user_password_signs_out_other_sessions(
     assert response.status == 200
     assert other_session == {"detail": "Could not validate credentials"}
     assert this_session["data"]["id"] == user_created.id
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_email_and_password_changes_share_the_login_guessing_budget(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    async with temporary_user() as (user, headers), aiohttp.ClientSession() as session:
+        key = get_account_lockout_key(user.email, address="127.0.0.1")
+        reset_account_failures(key)
+        root = get_root_uvicorn_url()
+        try:
+            guesses = []
+            for index in range(5):
+                path = f"users/{user.id}" if index % 2 == 0 else f"users/{user.id}/password"
+                body = (
+                    {"name": user.name, "email": "replacement@example.org"}
+                    if index % 2 == 0
+                    else {"password": "correct-horse-battery-staple"}
+                ) | {"current_password": "wrong password"}
+                response = await session.put(root + path, json=body, headers=headers)
+                guesses.append(response.status)
+                await response.read()
+
+            blocked = await session.put(
+                f"{root}users/{user.id}",
+                headers=headers,
+                json={
+                    "name": user.name,
+                    "email": "replacement@example.org",
+                    "current_password": "some password",
+                },
+            )
+            await blocked.read()
+            login = await session.post(
+                root + "token", data={"username": user.email, "password": "some password"}
+            )
+            await login.read()
+
+            # A metadata-only name save neither checks a password nor consumes that budget.
+            renamed = await session.put(
+                f"{root}users/{user.id}",
+                headers=headers,
+                json={"name": "Renamed", "email": user.email},
+            )
+            await renamed.read()
+
+            reset_account_failures(key)
+            recovered = await session.put(
+                f"{root}users/{user.id}",
+                headers=headers,
+                json={
+                    "name": user.name,
+                    "email": "replacement@example.org",
+                    "current_password": "some password",
+                },
+            )
+            await recovered.read()
+        finally:
+            reset_account_failures(key)
+
+    assert guesses == [400] * 5
+    assert blocked.status == login.status == 429
+    assert int(blocked.headers["Retry-After"]) > 0
+    assert renamed.status == recovered.status == 200

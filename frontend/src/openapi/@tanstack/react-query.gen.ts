@@ -12,6 +12,7 @@ import type { AxiosError } from 'axios';
 import { client } from '../client.gen';
 import {
   activateNextStageApiTournamentsTournamentIdStagesActivatePost,
+  addMemberApiClubsClubIdMembersPost,
   changeStatusApiTournamentsTournamentIdChangeStatusPost,
   createMatchApiTournamentsTournamentIdMatchesPost,
   createMultiplePlayersApiTournamentsTournamentIdPlayersMultiPost,
@@ -24,6 +25,7 @@ import {
   createStageItemApiTournamentsTournamentIdStageItemsPost,
   createTeamApiTournamentsTournamentIdTeamsPost,
   createTournamentApiTournamentsPost,
+  delayScheduleApiTournamentsTournamentIdDelaySchedulePost,
   deleteClubApiClubsClubIdDelete,
   deleteMatchApiTournamentsTournamentIdMatchesMatchIdDelete,
   deletePlayerApiTournamentsTournamentIdPlayersPlayerIdDelete,
@@ -37,6 +39,7 @@ import {
   getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet,
   getClubsApiClubsGet,
   getMeApiUsersUserIdGet,
+  getMembersApiClubsClubIdMembersGet,
   getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet,
   getPlayersApiTournamentsTournamentIdPlayersGet,
   getRankingsApiTournamentsTournamentIdRankingsGet,
@@ -44,7 +47,9 @@ import {
   getStandingsApiTournamentsTournamentIdStandingsGet,
   getTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGet,
   getTeamsApiTournamentsTournamentIdTeamsGet,
+  getTournamentAccessApiTournamentsTournamentIdAccessGet,
   getTournamentApiTournamentsTournamentIdGet,
+  getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet,
   getTournamentLogoApiTournamentsTournamentIdLogoGet,
   getTournamentsApiTournamentsGet,
   getUserApiUsersMeGet,
@@ -53,7 +58,9 @@ import {
   type Options,
   pingApiPingGet,
   putUserPasswordApiUsersUserIdPasswordPut,
+  regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePost,
   registerUserApiUsersRegisterPost,
+  removeMemberApiClubsClubIdMembersUserIdDelete,
   scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost,
   updateClubApiClubsClubIdPut,
   updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut,
@@ -73,6 +80,9 @@ import type {
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostData,
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostError,
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostResponse,
+  AddMemberApiClubsClubIdMembersPostData,
+  AddMemberApiClubsClubIdMembersPostError,
+  AddMemberApiClubsClubIdMembersPostResponse,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostData,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostError,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponse,
@@ -109,6 +119,9 @@ import type {
   CreateTournamentApiTournamentsPostData,
   CreateTournamentApiTournamentsPostError,
   CreateTournamentApiTournamentsPostResponse,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostError,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponse,
   DeleteClubApiClubsClubIdDeleteData,
   DeleteClubApiClubsClubIdDeleteError,
   DeleteClubApiClubsClubIdDeleteResponse,
@@ -146,6 +159,9 @@ import type {
   GetMeApiUsersUserIdGetData,
   GetMeApiUsersUserIdGetError,
   GetMeApiUsersUserIdGetResponse,
+  GetMembersApiClubsClubIdMembersGetData,
+  GetMembersApiClubsClubIdMembersGetError,
+  GetMembersApiClubsClubIdMembersGetResponse,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetError,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponse,
@@ -166,9 +182,15 @@ import type {
   GetTeamsApiTournamentsTournamentIdTeamsGetData,
   GetTeamsApiTournamentsTournamentIdTeamsGetError,
   GetTeamsApiTournamentsTournamentIdTeamsGetResponse,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetData,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetError,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetResponse,
   GetTournamentApiTournamentsTournamentIdGetData,
   GetTournamentApiTournamentsTournamentIdGetError,
   GetTournamentApiTournamentsTournamentIdGetResponse,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetError,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponse,
   GetTournamentLogoApiTournamentsTournamentIdLogoGetData,
   GetTournamentLogoApiTournamentsTournamentIdLogoGetError,
   GetTournamentsApiTournamentsGetData,
@@ -186,9 +208,15 @@ import type {
   PutUserPasswordApiUsersUserIdPasswordPutData,
   PutUserPasswordApiUsersUserIdPasswordPutError,
   PutUserPasswordApiUsersUserIdPasswordPutResponse,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostError,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponse,
   RegisterUserApiUsersRegisterPostData,
   RegisterUserApiUsersRegisterPostError,
   RegisterUserApiUsersRegisterPostResponse,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteData,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteError,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostError,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostResponse,
@@ -406,10 +434,100 @@ export const updateClubApiClubsClubIdPutMutation = (
   return mutationOptions;
 };
 
+export const getMembersApiClubsClubIdMembersGetQueryKey = (
+  options: Options<GetMembersApiClubsClubIdMembersGetData>,
+) => createQueryKey('getMembersApiClubsClubIdMembersGet', options);
+
+/**
+ * Get Members
+ *
+ * The organizers of an event: its owner and the people the owner added.
+ */
+export const getMembersApiClubsClubIdMembersGetOptions = (
+  options: Options<GetMembersApiClubsClubIdMembersGetData>,
+) =>
+  queryOptions<
+    GetMembersApiClubsClubIdMembersGetResponse,
+    AxiosError<GetMembersApiClubsClubIdMembersGetError>,
+    GetMembersApiClubsClubIdMembersGetResponse,
+    ReturnType<typeof getMembersApiClubsClubIdMembersGetQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getMembersApiClubsClubIdMembersGet({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getMembersApiClubsClubIdMembersGetQueryKey(options),
+  });
+
+/**
+ * Add Member
+ *
+ * Let another account help run this event and its tournaments, so that organizers don't have
+ * to share one login.
+ */
+export const addMemberApiClubsClubIdMembersPostMutation = (
+  options?: Partial<Options<AddMemberApiClubsClubIdMembersPostData>>,
+): UseMutationOptions<
+  AddMemberApiClubsClubIdMembersPostResponse,
+  AxiosError<AddMemberApiClubsClubIdMembersPostError>,
+  Options<AddMemberApiClubsClubIdMembersPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddMemberApiClubsClubIdMembersPostResponse,
+    AxiosError<AddMemberApiClubsClubIdMembersPostError>,
+    Options<AddMemberApiClubsClubIdMembersPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addMemberApiClubsClubIdMembersPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Member
+ *
+ * Remove an organizer from the event. The owner removes others; anyone can leave.
+ */
+export const removeMemberApiClubsClubIdMembersUserIdDeleteMutation = (
+  options?: Partial<Options<RemoveMemberApiClubsClubIdMembersUserIdDeleteData>>,
+): UseMutationOptions<
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse,
+  AxiosError<RemoveMemberApiClubsClubIdMembersUserIdDeleteError>,
+  Options<RemoveMemberApiClubsClubIdMembersUserIdDeleteData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse,
+    AxiosError<RemoveMemberApiClubsClubIdMembersUserIdDeleteError>,
+    Options<RemoveMemberApiClubsClubIdMembersUserIdDeleteData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeMemberApiClubsClubIdMembersUserIdDelete({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
 /**
  * Logout
  *
- * Ends the session in this browser by removing its cookie.
+ * Ends the session: its cookie is removed from this browser, and its tokens stop working, also
+ * for anyone who copied one.
  */
 export const logoutApiLogoutPostMutation = (
   options?: Partial<Options<LogoutApiLogoutPostData>>,
@@ -624,6 +742,36 @@ export const updateTournamentByIdApiTournamentsTournamentIdPutMutation = (
   return mutationOptions;
 };
 
+export const getTournamentAccessApiTournamentsTournamentIdAccessGetQueryKey = (
+  options: Options<GetTournamentAccessApiTournamentsTournamentIdAccessGetData>,
+) => createQueryKey('getTournamentAccessApiTournamentsTournamentIdAccessGet', options);
+
+/**
+ * Get Tournament Access
+ *
+ * Whether whoever asks can manage the tournament, or only follow it.
+ */
+export const getTournamentAccessApiTournamentsTournamentIdAccessGetOptions = (
+  options: Options<GetTournamentAccessApiTournamentsTournamentIdAccessGetData>,
+) =>
+  queryOptions<
+    GetTournamentAccessApiTournamentsTournamentIdAccessGetResponse,
+    AxiosError<GetTournamentAccessApiTournamentsTournamentIdAccessGetError>,
+    GetTournamentAccessApiTournamentsTournamentIdAccessGetResponse,
+    ReturnType<typeof getTournamentAccessApiTournamentsTournamentIdAccessGetQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getTournamentAccessApiTournamentsTournamentIdAccessGet({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getTournamentAccessApiTournamentsTournamentIdAccessGetQueryKey(options),
+  });
+
 export const getAvailableInputsApiTournamentsTournamentIdAvailableInputsGetQueryKey = (
   options: Options<GetAvailableInputsApiTournamentsTournamentIdAvailableInputsGetData>,
 ) => createQueryKey('getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet', options);
@@ -680,6 +828,69 @@ export const changeStatusApiTournamentsTournamentIdChangeStatusPostMutation = (
   };
   return mutationOptions;
 };
+
+/**
+ * Delay Schedule
+ *
+ * Move every round that hasn't been played yet, and everything after it, for an event that
+ * runs late. A negative number of minutes moves them earlier.
+ */
+export const delayScheduleApiTournamentsTournamentIdDelaySchedulePostMutation = (
+  options?: Partial<Options<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData>>,
+): UseMutationOptions<
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponse,
+  AxiosError<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostError>,
+  Options<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponse,
+    AxiosError<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostError>,
+    Options<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await delayScheduleApiTournamentsTournamentIdDelaySchedulePost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetQueryKey = (
+  options: Options<GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData>,
+) => createQueryKey('getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet', options);
+
+/**
+ * Get Tournament Details By Id
+ *
+ * Everything the Details pages of a tournament show, in one answer: the tournament, its stages
+ * without draft rounds, players, teams, rankings and standings.
+ *
+ * It can be a few seconds old.
+ */
+export const getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetOptions = (
+  options: Options<GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData>,
+) =>
+  queryOptions<
+    GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponse,
+    AxiosError<GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetError>,
+    GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponse,
+    ReturnType<typeof getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetQueryKey(options),
+  });
 
 export const getTournamentLogoApiTournamentsTournamentIdLogoGetQueryKey = (
   options: Options<GetTournamentLogoApiTournamentsTournamentIdLogoGetData>,
@@ -824,7 +1035,10 @@ export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetQ
 /**
  * Get Next Stage Rankings
  *
- * Get the rankings for the stage items in this stage.
+ * Get the teams that take the slots of the next stage once it is activated.
+ *
+ * A slot that can't be decided yet is left out: its source ranks fewer teams than the position
+ * the slot takes.
  */
 export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetOptions = (
   options: Options<GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData>,
@@ -1265,6 +1479,37 @@ export const updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation =
 };
 
 /**
+ * Regenerate Round
+ *
+ * Replace a Swiss draft in one transaction, retaining it if any replacement fails.
+ */
+export const regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostMutation = (
+  options?: Partial<
+    Options<RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData>
+  >,
+): UseMutationOptions<
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponse,
+  AxiosError<RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostError>,
+  Options<RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponse,
+    AxiosError<RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostError>,
+    Options<RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Schedule Matches
  */
 export const scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation = (
@@ -1320,6 +1565,11 @@ export const createStageItemApiTournamentsTournamentIdStageItemsPostMutation = (
 
 /**
  * Delete Stage Item
+ *
+ * Delete a stage item with its rounds and matches.
+ *
+ * Slots of later stage items that take a team from it become open again. That is refused
+ * once such a stage item has results, which belong to the teams that advanced.
  */
 export const deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDeleteMutation = (
   options?: Partial<

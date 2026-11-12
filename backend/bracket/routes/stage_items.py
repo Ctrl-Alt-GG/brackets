@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from starlette import status
 
 from bracket.config import config
 from bracket.database import DbConnection
@@ -11,6 +12,7 @@ from bracket.logic.scheduling.builder import (
     build_matches_for_stage_item,
 )
 from bracket.logic.subscriptions import check_requirement
+from bracket.models.db.match import is_played
 from bracket.models.db.stage_item import (
     StageItemCreateBody,
     StageItemUpdateBody,
@@ -31,10 +33,6 @@ from bracket.sql.stage_items import (
 )
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.validation import check_foreign_keys_belong_to_tournament
-from bracket.utils.errors import (
-    ForeignKey,
-    check_foreign_key_violation,
-)
 from bracket.utils.id_types import StageItemId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -51,10 +49,34 @@ async def delete_stage_item(
     __: StageItemWithRounds = Depends(stage_item_dependency),
     ___: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    with check_foreign_key_violation(
-        {ForeignKey.matches_stage_item_input1_id_fkey, ForeignKey.matches_stage_item_input2_id_fkey}
-    ):
-        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_id)
+    """
+    Delete a stage item with its rounds and matches.
+
+    Slots of later stage items that take a team from it become open again. That is refused
+    once such a stage item has results, which belong to the teams that advanced.
+    """
+    stages = await get_full_tournament_details(conn, tournament_id)
+    fed_with_results = sorted(
+        {
+            stage_item.name
+            for stage in stages
+            for stage_item in stage.stage_items
+            if any(
+                input_.winner_from_stage_item_id == stage_item_id for input_ in stage_item.inputs
+            )
+            and any(is_played(match) for round_ in stage_item.rounds for match in round_.matches)
+        }
+    )
+    if fed_with_results:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{', '.join(fed_with_results)} takes teams from this stage item and already "
+                "has results. Delete it first."
+            ),
+        )
+
+    await sql_delete_stage_item_with_foreign_keys(conn, stage_item_id)
     await schedule_all_matches(conn, tournament_id)
     return SuccessResponse()
 

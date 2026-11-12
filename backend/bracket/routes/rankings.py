@@ -4,13 +4,13 @@ from starlette import status
 from bracket.config import config
 from bracket.database import DbConnection
 from bracket.logic.ranking.calculation import (
-    get_team_rankings_lookup_for_tournament,
     recalculate_ranking_for_stage_item,
 )
 from bracket.logic.ranking.elimination import (
     update_inputs_in_complete_elimination_stage_item,
 )
 from bracket.logic.subscriptions import check_requirement
+from bracket.logic.tournaments import get_tournament_standings
 from bracket.models.db.ranking import Ranking, RankingBody, RankingCreateBody
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.tournament import Tournament
@@ -21,7 +21,6 @@ from bracket.routes.auth import (
 )
 from bracket.routes.models import (
     RankingsResponse,
-    StageItemInputStanding,
     StandingsResponse,
     SuccessResponse,
 )
@@ -34,7 +33,6 @@ from bracket.sql.rankings import (
 )
 from bracket.sql.stage_item_inputs import get_stage_item_ids_by_ranking_id
 from bracket.sql.stage_items import get_stage_item
-from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.id_types import RankingId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -58,17 +56,7 @@ async def get_standings(
     """
     Get the teams of every stage item, best first. Teams advance to the next stage in this order.
     """
-    stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
-    team_rankings = await get_team_rankings_lookup_for_tournament(conn, tournament_id, stages)
-    return StandingsResponse(
-        data={
-            stage_item_id: [
-                StageItemInputStanding(stage_item_input_id=input_id, **statistics.model_dump())
-                for input_id, statistics in team_ranking
-            ]
-            for stage_item_id, team_ranking in team_rankings.items()
-        }
-    )
+    return StandingsResponse(data=await get_tournament_standings(conn, tournament_id))
 
 
 @router.put("/tournaments/{tournament_id}/rankings/{ranking_id}")
@@ -113,6 +101,13 @@ async def delete_ranking(
             detail=(
                 f"Could not delete ranking since it's used by {len(stage_item_ids)} stage items"
             ),
+        )
+
+    # New stage items take the first ranking unless they name one.
+    if len(await get_all_rankings_in_tournament(conn, tournament_id)) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A tournament needs at least one ranking",
         )
 
     await sql_delete_ranking(conn, tournament_id, ranking_id)

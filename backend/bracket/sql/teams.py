@@ -1,7 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.logic.ranking.statistics import TeamStatistics
+from bracket.logic.ranking.statistics import TeamStatistics, TeamTotals
+from bracket.logic.ranking.team_totals import get_team_totals
 from bracket.models.db.team import FullTeamWithPlayers, Team
 from bracket.utils.id_types import StageItemInputId, TeamId, TournamentId
 from bracket.utils.pagination import PaginationTeams
@@ -23,7 +24,16 @@ async def get_teams_by_id(
     result = await conn.execute(
         text(query), {"team_ids": list(team_ids), "tournament_id": tournament_id}
     )
-    return [Team.model_validate(team._mapping) for team in result]
+    rows = result.all()
+    if not rows:
+        return []
+    totals = await get_team_totals(conn, tournament_id)
+    return [
+        Team.model_validate(team._mapping).model_copy(
+            update=totals.get(team.id, TeamTotals()).model_dump()
+        )
+        for team in rows
+    ]
 
 
 async def get_team_by_id(
@@ -43,19 +53,18 @@ async def get_teams_with_members(
 ) -> list[FullTeamWithPlayers]:
     active_team_filter = "AND teams.active IS TRUE" if only_active_teams else ""
     team_id_filter = "AND teams.id = :team_id" if team_id is not None else ""
-    limit_filter = "LIMIT :limit" if pagination is not None and pagination.limit is not None else ""
-    offset_filter = (
-        "OFFSET :offset" if pagination is not None and pagination.offset is not None else ""
-    )
+    totals_sort = pagination is None or pagination.sort_by in TeamTotals.model_fields
+    limit_filter = "LIMIT :limit" if pagination is not None and not totals_sort else ""
+    offset_filter = "OFFSET :offset" if pagination is not None and not totals_sort else ""
     sort = (
-        f"teams.{pagination.sort_by} {pagination.sort_direction}"
-        if pagination is not None
-        else "teams.elo_score DESC, teams.wins DESC, name ASC"
+        f"teams.{pagination.sort_by} {pagination.sort_direction}, teams.id ASC"
+        if pagination is not None and not totals_sort
+        else "teams.name ASC, teams.id ASC"
     )
     query = f"""
         SELECT
             teams.*,
-            to_json(array_agg(p.*)) AS players
+            to_json(array_agg(p.* ORDER BY p.name, p.id)) AS players
         FROM teams
         LEFT JOIN players_x_teams pt on pt.team_id = teams.id
         LEFT JOIN players p on pt.player_id = p.id
@@ -75,8 +84,25 @@ async def get_teams_with_members(
             "offset": pagination.offset if pagination is not None else None,
         }
     )
-    result = await conn.execute(text(query), values)
-    return [FullTeamWithPlayers.model_validate(x._mapping) for x in result]
+    result = (await conn.execute(text(query), values)).all()
+    if not result:
+        return []
+    totals = await get_team_totals(conn, tournament_id)
+    teams = [
+        FullTeamWithPlayers.model_validate(row._mapping).model_copy(
+            update=totals.get(row.id, TeamTotals()).model_dump()
+        )
+        for row in result
+    ]
+    if pagination is None:
+        teams.sort(key=lambda team: (-team.elo_score, -team.wins, team.name, team.id))
+    elif totals_sort:
+        teams.sort(
+            key=lambda team: getattr(team, pagination.sort_by),
+            reverse=pagination.sort_direction == "desc",
+        )
+        teams = teams[pagination.offset : pagination.offset + pagination.limit]
+    return teams
 
 
 async def get_team_count(

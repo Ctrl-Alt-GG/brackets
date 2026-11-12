@@ -36,7 +36,10 @@ class StageItem(StageItemInsertable):
 
 class StageItemUpdateBody(BaseModelORM):
     name: Name
-    ranking_id: RankingId
+
+
+# A knockout bracket halves every round, so it starts from a power of two.
+SINGLE_ELIMINATION_TEAM_COUNTS = (2, 4, 8, 16, 32)
 
 
 class StageItemCreateBody(BaseModelORM):
@@ -45,6 +48,16 @@ class StageItemCreateBody(BaseModelORM):
     type: StageType
     team_count: int = Field(ge=2, le=64)
     ranking_id: RankingId | None = None
+
+    @model_validator(mode="after")
+    def team_count_fits_type(self) -> "StageItemCreateBody":
+        if (
+            self.type is StageType.SINGLE_ELIMINATION
+            and self.team_count not in SINGLE_ELIMINATION_TEAM_COUNTS
+        ):
+            counts = ", ".join(str(count) for count in SINGLE_ELIMINATION_TEAM_COUNTS)
+            raise ValueError(f"A single elimination bracket has {counts} teams")
+        return self
 
     def get_name_or_default_name(self) -> str:
         return (

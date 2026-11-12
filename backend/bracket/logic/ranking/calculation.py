@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.logic.ranking.statistics import START_ELO, TeamStatistics
-from bracket.models.db.match import MatchWithDetailsDefinitive
+from bracket.logic.ranking.statistics import START_ELO, D, K, TeamStatistics
+from bracket.models.db.match import MatchWithDetailsDefinitive, is_played
 from bracket.models.db.ranking import Ranking
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.util import StageItemWithRounds, StageWithStageItems
@@ -13,9 +13,6 @@ from bracket.sql.rankings import get_ranking_for_stage_item
 from bracket.sql.teams import update_team_stats
 from bracket.utils.id_types import StageItemId, StageItemInputId, TournamentId
 from bracket.utils.types import assert_some
-
-K = 32
-D = 400
 
 StageItemXTeamRanking = dict[StageItemId, list[tuple[StageItemInputId, TeamStatistics]]]
 
@@ -42,25 +39,30 @@ def set_statistics_for_stage_item_input(
 
     if has_won:
         stats[stage_item_input_id].wins += 1
-        swiss_score_diff = ranking.win_points
+        ranking_points = ranking.win_points
+        result = Decimal(1)
     elif was_draw:
         stats[stage_item_input_id].draws += 1
-        swiss_score_diff = ranking.draw_points
+        ranking_points = ranking.draw_points
+        result = Decimal("0.5")
     else:
         stats[stage_item_input_id].losses += 1
-        swiss_score_diff = ranking.loss_points
-
-    if ranking.add_score_points:
-        swiss_score_diff += team_score
+        ranking_points = ranking.loss_points
+        result = Decimal(0)
 
     match stage_item.type:
         case StageType.ROUND_ROBIN | StageType.SINGLE_ELIMINATION:
-            stats[stage_item_input_id].points += swiss_score_diff
+            if ranking.add_score_points:
+                ranking_points += team_score
+            stats[stage_item_input_id].points += ranking_points
 
         case StageType.SWISS:
+            # A rating moves by how far the result is from the expected one, on a scale of 0 to
+            # 1. What the ranking awards for a win doesn't belong on that scale: 3 points for a
+            # win would raise the ratings of both teams of every match.
             rating_diff = (ratings_before[1] - ratings_before[0]) * (1 if is_team1 else -1)
             expected_score = Decimal(1.0 / (1.0 + math.pow(10.0, rating_diff / D)))
-            stats[stage_item_input_id].points += int(K * (swiss_score_diff - expected_score))
+            stats[stage_item_input_id].points += int(K * (result - expected_score))
 
         case _:
             raise ValueError(f"Unsupported stage type: {stage_item.type}")
@@ -91,7 +93,7 @@ def determine_ranking_for_stage_item(
         if not round_.is_draft
         for match in sorted(round_.matches, key=lambda match: match.id)
         if isinstance(match, MatchWithDetailsDefinitive)
-        if match.stage_item_input1_score != 0 or match.stage_item_input2_score != 0
+        if is_played(match)
     ]
     for match in matches:
         ratings_before = (
@@ -160,15 +162,12 @@ async def recalculate_ranking_for_stage_item(
     assert stage_item, "Stage item not found"
     assert ranking, "Ranking not found"
 
-    team_x_stage_item_input_lookup = {
-        stage_item_input.team_id: stage_item_input.id
-        for stage_item_input in stage_item.inputs
-        if stage_item_input.team_id is not None
-    }
-
     elo_per_input = determine_ranking_for_stage_item(stage_item, ranking)
 
-    for stage_item_input_id in team_x_stage_item_input_lookup.values():
+    # Empty slots need their initial statistics too. Rolling back a stage releases advanced
+    # teams before recalculating; skipping their slots would retain the old teams' ratings
+    # when another team advances into them later.
+    for stage_item_input in stage_item.inputs:
         await update_team_stats(
-            conn, tournament_id, stage_item_input_id, elo_per_input[stage_item_input_id]
+            conn, tournament_id, stage_item_input.id, elo_per_input[stage_item_input.id]
         )

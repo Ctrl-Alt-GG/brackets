@@ -1,5 +1,5 @@
 import * as OpenApi from '../openapi';
-import { inputLabel, isScored } from './utils';
+import { inputLabel, isEmptySlot, isScored } from './utils';
 
 // Subset of brackets-model that brackets-viewer's render() consumes.
 type ParticipantResult = {
@@ -61,7 +61,7 @@ function orderRounds(rounds: OpenApi.RoundWithMatches[]) {
   const positionByMatchId = new Map<number, number>();
 
   return rounds.map((round) => {
-    const ordered = [...round.matches].sort((left, right) => {
+    const ordered = round.matches.toSorted((left, right) => {
       const leftOrigin = originPosition(left, positionByMatchId);
       const rightOrigin = originPosition(right, positionByMatchId);
       if (leftOrigin !== rightOrigin) return leftOrigin - rightOrigin;
@@ -104,12 +104,12 @@ export function toBracketViewerData(
   tournamentId: number,
 ): BracketViewerData | null {
   const participants = stageItem.inputs
+    .filter((input) => !isEmptySlot(input))
     .map((input) => ({
       id: input.id,
       name: inputLabel(input, stageItemsById),
       tournament_id: tournamentId,
-    }))
-    .filter((participant) => participant.name !== 'TBD');
+    }));
   const known = new Set(participants.map((participant) => participant.id));
 
   const matches: ViewerMatch[] = [];

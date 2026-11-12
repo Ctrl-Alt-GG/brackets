@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -11,6 +11,7 @@ import {
 } from '../../openapi/@tanstack/react-query.gen';
 import { zUserPasswordToUpdate, zUserToUpdate } from '../../openapi/zod.gen';
 import { useSession } from '../hooks';
+import { useSavedForm } from '../saved-form';
 import {
   EmptyState,
   ErrorState,
@@ -23,20 +24,34 @@ import {
 import { formatDateTime, getErrorMessage } from '../utils';
 
 function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
+  const [session, setSession] = useSession();
+  const form = useSavedForm({
     resolver: zodResolver(zUserToUpdate),
-    values: { email: user.email, name: user.name },
+    values: { current_password: '', email: user.email, name: user.name },
   });
+  const email = useWatch({ control: form.control, name: 'email' });
+  const emailChanged = email.trim().toLowerCase() !== user.email;
   const update = useMutation({
+    ...form.saveCallbacks,
     ...updateUserDetailsApiUsersUserIdPutMutation(),
     meta: { successMessage: 'Account saved.' },
+    onSuccess: ({ data }) => {
+      form.saveCallbacks.onSuccess();
+      // The header shows the name the session remembers.
+      if (session) setSession({ ...session, name: data.name });
+      form.resetField('current_password', { defaultValue: '' });
+    },
   });
   const { errors } = form.formState;
 
   return (
     <form
-      onSubmit={form.handleSubmit((body) => update.mutate({ body, path: { user_id: user.id } }))}
+      onSubmit={form.handleSubmit((body) =>
+        update.mutate({
+          body: { ...body, current_password: emailChanged ? body.current_password : null },
+          path: { user_id: user.id },
+        }),
+      )}
     >
       <Field error={errors.name?.message} label="Display name">
         <input className="input w-full" required {...form.register('name')} />
@@ -44,10 +59,21 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
       <Field error={errors.email?.message} label="Email">
         <input className="input w-full" required type="email" {...form.register('email')} />
       </Field>
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-base-content/70">
-        <span className="badge badge-soft badge-sm">{user.account_type.toLowerCase()} account</span>
-        <span>Created {formatDateTime(user.created)}</span>
-      </div>
+      {emailChanged ? (
+        // The email is what the account signs in with, so changing it takes the password.
+        <Field error={errors.current_password?.message} label="Current password">
+          <input
+            autoComplete="current-password"
+            className="input w-full"
+            required
+            type="password"
+            {...form.register('current_password')}
+          />
+        </Field>
+      ) : null}
+      <p className="mt-3 text-sm text-base-content/70">
+        Account created {formatDateTime(user.created)}
+      </p>
       <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
         {update.isPending ? 'Saving…' : 'Save profile'}
       </button>

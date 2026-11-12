@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "jsx-a11y", "import", "typescript", "unicorn", "oxc", "promise", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "rules": {
+    // React 19 needs no `React` in scope for JSX.
+    "react/react-in-jsx-scope": "off",
+    // Styles, fonts and the Zod configuration are imported for their effect.
+    "import/no-unassigned-import": "off",
+    // `<output>` is for the result of a calculation. A loading message is a status.
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "no-underscore-dangle": ["error", { "allow": ["__BRACKET_RUNTIME_CONFIG__"] }]
+  },
+  "ignorePatterns": ["dist/**", "src/openapi/**"]
+}

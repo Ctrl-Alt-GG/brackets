@@ -79,11 +79,28 @@ async def sql_set_team_id_for_stage_item_input(
 
 
 async def sql_delete_stage_item_inputs(conn: AsyncConnection, stage_item_id: StageItemId) -> None:
-    query = """
-        DELETE FROM stage_item_inputs
-        WHERE stage_item_id = :stage_item_id OR winner_from_stage_item_id = :stage_item_id
-        """
-    await conn.execute(text(query), {"stage_item_id": stage_item_id})
+    """
+    Delete the slots of a stage item, and empty the slots of other stage items that it fed.
+
+    Those other slots stay: deleting them would leave a stage item with fewer slots than teams,
+    and there is no way to add one back.
+    """
+    await conn.execute(
+        text(
+            """
+            UPDATE stage_item_inputs
+            SET team_id = NULL,
+                winner_from_stage_item_id = NULL,
+                winner_position = NULL
+            WHERE winner_from_stage_item_id = :stage_item_id
+            """
+        ),
+        {"stage_item_id": stage_item_id},
+    )
+    await conn.execute(
+        text("DELETE FROM stage_item_inputs WHERE stage_item_id = :stage_item_id"),
+        {"stage_item_id": stage_item_id},
+    )
 
 
 async def sql_create_stage_item_input(

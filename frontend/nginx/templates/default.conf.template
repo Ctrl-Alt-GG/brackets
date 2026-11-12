@@ -18,11 +18,17 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The scripts and styles are text. Fonts and images are compressed already.
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
     # All headers are set here: a location that adds a header of its own drops all of these.
     # Styles may be inline because the toasts inject theirs at runtime. Scripts may not: the
     # session cookie is HttpOnly, but an injected script could still send requests with it and act
-    # as the signed-in organizer.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ${API_ORIGIN}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    # as the signed-in organizer. Images also come from the API, which serves the uploaded logos.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${API_ORIGIN}; font-src 'self'; connect-src 'self' ${API_ORIGIN}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
     add_header Cache-Control $bracket_cache_control always;
     add_header Permissions-Policy "camera=(), geolocation=(), microphone=()" always;
     add_header Referrer-Policy "no-referrer" always;

@@ -44,6 +44,9 @@ async def test_tournaments_endpoint(
                 "duration_minutes": 10,
                 "margin_minutes": 5,
                 "status": "OPEN",
+                "matches_total": 0,
+                "matches_played": 0,
+                "last_match_end": None,
             }
         ],
     }
@@ -69,6 +72,9 @@ async def test_tournament_endpoint(
             "duration_minutes": 10,
             "margin_minutes": 5,
             "status": "OPEN",
+            "matches_total": 0,
+            "matches_played": 0,
+            "last_match_end": None,
         },
     }
 
@@ -88,14 +94,15 @@ async def test_create_tournament(
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
-    assert (
-        await send_auth_request(HTTPMethod.POST, "tournaments", auth_context, json=body)
-        == SUCCESS_RESPONSE
-    )
+    response = await send_auth_request(HTTPMethod.POST, "tournaments", auth_context, json=body)
 
     # Cleanup
     tournament = assert_some(await sql_get_tournament_by_endpoint_name(conn, dashboard_endpoint))
     await sql_delete_tournament_completely(conn, tournament.id)
+
+    # The answer is the new tournament, so that the frontend can open it.
+    assert response["data"]["id"] == tournament.id
+    assert response["data"]["name"] == body["name"]
 
 
 @pytest.mark.asyncio(loop_scope="session")

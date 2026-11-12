@@ -33,3 +33,5 @@ npm-debug.log*
 .vercel
 *.tsbuildinfo
 __pycache__/
+playwright-report/
+test-results/

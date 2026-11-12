@@ -34,17 +34,24 @@ regular_subscription = Subscription(
 
 subscription_lookup = {"REGULAR": regular_subscription}
 
-# `clubs` is presented as "events" in the UI.
-subscription_attribute_labels = {"max_clubs": "events"}
+# What each limit counts, in the organizer's words. `clubs` are presented as "events" in the UI.
+limit_labels = {
+    "max_teams": "teams in a tournament",
+    "max_players": "players in a tournament",
+    "max_clubs": "events",
+    "max_tournaments": "tournaments in an event",
+    "max_stages": "stages in a tournament",
+    "max_stage_items": "stage items in a tournament",
+    "max_rounds": "rounds in a tournament",
+    "max_rankings": "rankings in a tournament",
+}
 
 
 def check_requirement(array: list[Any], user: UserBase, attribute: str, additions: int = 1) -> None:
     subscription = subscription_lookup[user.account_type.value]
     constraint: int = getattr(subscription, attribute)
     if len(array) + additions > constraint:
-        label = subscription_attribute_labels.get(attribute, attribute.replace("max_", ""))
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Your `{user.account_type.value}` subscription allows a maximum of "
-            f"{constraint} {label}.",
+            f"That would be more than the {constraint} {limit_labels[attribute]} that are allowed.",
         )

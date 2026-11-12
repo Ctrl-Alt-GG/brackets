@@ -1,6 +1,7 @@
+import { useSavedForm } from '../saved-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -29,6 +30,7 @@ import {
   zStageUpdateBody,
   zTournamentUpdateBody,
 } from '../../openapi/zod.gen';
+import { LogoField } from '../components/logo-field';
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { StageItemRounds, stageItemStatus } from './stage-item-rounds';
 import { StageItemSlots } from './stage-item-slots';
@@ -39,11 +41,13 @@ import {
   cx,
   DETAILS_PAGE_DESCRIPTION,
   formatPoints,
+  isScored,
   normalizeDashboardEndpoint,
   publicTournamentPath,
   toDateTimeLocal,
+  tournamentLogoUrl,
 } from '../utils';
-import { zLocalDateTime } from '../forms';
+import { zDetailsLink, zLocalDateTime } from '../forms';
 import { CheckboxField, Field, Surface, SurfaceHeading } from '../ui';
 
 const ADD_SCORE_POINTS_DESCRIPTION =
@@ -107,8 +111,7 @@ function RankingEditor({
   ranking: OpenApi.Ranking;
   tournamentId: number;
 }) {
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
+  const form = useSavedForm({
     resolver: zodResolver(zRankingBody),
     // Follows the saved ranking, without throwing away what the organizer is typing.
     values: {
@@ -120,6 +123,7 @@ function RankingEditor({
     },
   });
   const update = useMutation({
+    ...form.saveCallbacks,
     ...updateRankingByIdApiTournamentsTournamentIdRankingsRankingIdPutMutation(),
     meta: { successMessage: 'Ranking saved.' },
   });
@@ -240,11 +244,13 @@ export function RankingsSection({
   );
 }
 
-const tournamentSettingsSchema = zTournamentUpdateBody.extend({ start_time: zLocalDateTime });
+const tournamentSettingsSchema = zTournamentUpdateBody.extend({
+  dashboard_endpoint: zDetailsLink,
+  start_time: zLocalDateTime,
+});
 
 function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament }) {
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
+  const form = useSavedForm({
     resolver: zodResolver(tournamentSettingsSchema),
     values: {
       dashboard_endpoint: normalizeDashboardEndpoint(tournament.dashboard_endpoint) ?? '',
@@ -257,23 +263,41 @@ function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament
     },
   });
   const update = useMutation({
+    ...form.saveCallbacks,
     ...updateTournamentByIdApiTournamentsTournamentIdPutMutation(),
     meta: { successMessage: 'Tournament saved.' },
   });
   const uploadLogo = useMutation({
     ...uploadLogoApiTournamentsTournamentIdLogoPostMutation(),
-    meta: { successMessage: 'Logo uploaded.' },
+    meta: { successMessage: 'Logo updated.' },
   });
   const path = { tournament_id: tournament.id };
   const { errors } = form.formState;
+  const sharedLink = tournament.dashboard_public
+    ? normalizeDashboardEndpoint(tournament.dashboard_endpoint)
+    : null;
 
   return (
-    <form onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}>
+    <form
+      onSubmit={form.handleSubmit((body) => {
+        // The link is on posters and in chats by now, and nothing redirects the old one.
+        if (
+          sharedLink != null &&
+          sharedLink !== normalizeDashboardEndpoint(body.dashboard_endpoint) &&
+          !window.confirm(
+            `Links and QR codes with "${sharedLink}" will stop working. Change the Details link?`,
+          )
+        ) {
+          return;
+        }
+        update.mutate({ body, path });
+      })}
+    >
       <div className="grid gap-x-4 md:grid-cols-2">
         <Field error={errors.name?.message} label="Tournament name">
           <input className="input w-full" required {...form.register('name')} />
         </Field>
-        <Field label="Details link">
+        <Field error={errors.dashboard_endpoint?.message} label="Details link">
           <input
             className="input w-full"
             placeholder="summer-cup-2026"
@@ -288,18 +312,12 @@ function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament
             {...form.register('start_time')}
           />
         </Field>
-        <Field label="Tournament logo">
-          <input
-            accept="image/*"
-            className="file-input w-full"
-            disabled={uploadLogo.isPending}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) uploadLogo.mutate({ body: { file }, path });
-            }}
-            type="file"
-          />
-        </Field>
+        <LogoField
+          isPending={uploadLogo.isPending}
+          label="Tournament logo"
+          logoUrl={tournamentLogoUrl(tournament)}
+          onChange={(file) => uploadLogo.mutate({ body: { file }, path })}
+        />
         <Field error={errors.duration_minutes?.message} label="Match duration (minutes)">
           <input
             className="input w-full"
@@ -326,6 +344,7 @@ function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament
           {...form.register('dashboard_public')}
         />
         <CheckboxField
+          description="Without this, a player can only be in one team."
           label="Players can join multiple teams"
           {...form.register('players_can_be_in_multiple_teams')}
         />
@@ -434,12 +453,12 @@ function StageForm({
   stage: OpenApi.StageWithStageItems;
   tournament: OpenApi.Tournament;
 }) {
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
+  const form = useSavedForm({
     resolver: zodResolver(zStageUpdateBody),
     values: { custom_duration_minutes: stage.custom_duration_minutes, name: stage.name },
   });
   const update = useMutation({
+    ...form.saveCallbacks,
     ...updateStageApiTournamentsTournamentIdStagesStageIdPutMutation(),
     meta: { successMessage: 'Stage saved.' },
   });
@@ -488,6 +507,8 @@ function StageForm({
   );
 }
 
+const SINGLE_ELIMINATION_TEAM_COUNTS = [2, 4, 8, 16, 32];
+
 function NewStageItemForm({
   rankings,
   stageId,
@@ -511,6 +532,7 @@ function NewStageItemForm({
     ...createStageItemApiTournamentsTournamentIdStageItemsPostMutation(),
     meta: { successMessage: 'Stage item created.' },
   });
+  const type = useWatch({ control: form.control, name: 'type' });
 
   return (
     <form
@@ -536,14 +558,28 @@ function NewStageItemForm({
         </select>
       </Field>
       <Field error={form.formState.errors.team_count?.message} label="Team count">
-        <input
-          className="input w-full"
-          max={64}
-          min={2}
-          required
-          type="number"
-          {...form.register('team_count', { valueAsNumber: true })}
-        />
+        {type === 'SINGLE_ELIMINATION' ? (
+          // A bracket halves every round, so it starts from a power of two.
+          <select
+            className="select w-full"
+            {...form.register('team_count', { valueAsNumber: true })}
+          >
+            {SINGLE_ELIMINATION_TEAM_COUNTS.map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            className="input w-full"
+            max={64}
+            min={2}
+            required
+            type="number"
+            {...form.register('team_count', { valueAsNumber: true })}
+          />
+        )}
       </Field>
       {rankings.length > 1 ? (
         <Field label="Ranking">
@@ -570,18 +606,21 @@ function NewStageItemForm({
 }
 
 function StageItemNameForm({
+  fedStageItems,
   stageItem,
   tournamentId,
 }: {
+  /** The stage items with a slot that takes a team from this one. */
+  fedStageItems: OpenApi.StageItemWithRounds[];
   stageItem: OpenApi.StageItemWithRounds;
   tournamentId: number;
 }) {
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
+  const form = useSavedForm({
     resolver: zodResolver(zStageItemUpdateBody),
-    values: { name: stageItem.name, ranking_id: stageItem.ranking_id ?? 0 },
+    values: { name: stageItem.name },
   });
   const update = useMutation({
+    ...form.saveCallbacks,
     ...updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPutMutation(),
     meta: { successMessage: 'Name saved.' },
   });
@@ -609,7 +648,15 @@ function StageItemNameForm({
         className="btn btn-error btn-soft"
         disabled={remove.isPending}
         onClick={() => {
-          if (window.confirm(`Delete stage item ${stageItem.name || stageItem.type_name}?`)) {
+          const fed = fedStageItems.map((item) => item.name || item.type_name).join(', ');
+          const consequence = fed
+            ? ` The slots of ${fed} that take a team from it become open.`
+            : '';
+          if (
+            window.confirm(
+              `Delete stage item ${stageItem.name || stageItem.type_name} with its matches and results?${consequence}`,
+            )
+          ) {
             remove.mutate({ path });
           }
         }}
@@ -647,6 +694,44 @@ export function StagesSection({
     meta: { successMessage: 'Moved active stage backward.' },
   });
 
+  const activeStage = bundle.stages.find((stage) => stage.is_active);
+  const activeMatches = (activeStage?.stage_items ?? []).flatMap((stageItem) =>
+    stageItem.rounds.flatMap((round) => round.matches),
+  );
+  const results = activeMatches.filter(isScored).length;
+  const withoutResult = activeMatches.length - results;
+
+  const goForward = () => {
+    // Teams move on by the standings as they are, which an unplayed match would still change.
+    if (
+      activeStage != null &&
+      withoutResult > 0 &&
+      !window.confirm(
+        `${withoutResult} ${withoutResult === 1 ? 'match' : 'matches'} of ${activeStage.name} ${withoutResult === 1 ? 'has' : 'have'} no result yet. Teams move on by the standings as they are now. Activate the next stage anyway?`,
+      )
+    ) {
+      return;
+    }
+    activateNext.mutate({ body: { direction: 'next', discard_results: false }, path });
+  };
+
+  const goBack = () => {
+    // Going back releases the teams that advanced, and their results in this stage with them.
+    if (
+      activeStage != null &&
+      results > 0 &&
+      !window.confirm(
+        `Going back discards the ${results} ${results === 1 ? 'result' : 'results'} of ${activeStage.name}. This cannot be undone. Go back to the previous stage?`,
+      )
+    ) {
+      return;
+    }
+    activatePrevious.mutate({
+      body: { direction: 'previous', discard_results: results > 0 },
+      path,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Surface>
@@ -664,7 +749,7 @@ export function StagesSection({
               <button
                 className="btn btn-soft btn-sm"
                 disabled={activateNext.isPending}
-                onClick={() => activateNext.mutate({ body: { direction: 'next' }, path })}
+                onClick={goForward}
                 type="button"
               >
                 Activate next stage
@@ -672,7 +757,7 @@ export function StagesSection({
               <button
                 className="btn btn-ghost btn-sm"
                 disabled={activatePrevious.isPending}
-                onClick={() => activatePrevious.mutate({ body: { direction: 'previous' }, path })}
+                onClick={goBack}
                 type="button"
               >
                 Activate previous stage
@@ -681,10 +766,13 @@ export function StagesSection({
           }
           title="Bracket editor"
         />
-        {focusStageItem ? (
-          <div className="alert alert-soft alert-warning text-sm">
-            Focusing stage item <strong>{focusStageItem.name || focusStageItem.type_name}</strong>{' '}
-            via the swiss route.
+        <p className="text-sm text-base-content/70">
+          A tournament is played stage by stage. Activating the next stage moves the teams on by the
+          standings of the current one.
+        </p>
+        {bundle.managementError ? (
+          <div className="alert alert-soft alert-warning text-sm" role="alert">
+            The choices for the slots couldn't be loaded: {bundle.managementError}
           </div>
         ) : null}
       </Surface>
@@ -730,7 +818,15 @@ export function StagesSection({
                   </span>
                 </summary>
                 <div className="collapse-content space-y-5">
-                  <StageItemNameForm stageItem={stageItem} tournamentId={bundle.tournament.id} />
+                  <StageItemNameForm
+                    fedStageItems={[...stageItemsById.values()].filter((other) =>
+                      other.inputs.some(
+                        (input) => input.winner_from_stage_item_id === stageItem.id,
+                      ),
+                    )}
+                    stageItem={stageItem}
+                    tournamentId={bundle.tournament.id}
+                  />
                   <StageItemSlots
                     nextStageEntries={bundle.nextStageRankings[String(stageItem.id)]}
                     options={bundle.availableInputs[String(stage.id)] ?? []}

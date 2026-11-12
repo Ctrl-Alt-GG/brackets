@@ -36,7 +36,11 @@ async def insert_generic[BaseModelT: BaseModel](
 ) -> tuple[int, BaseModelT]:
     assert environment is not Environment.PRODUCTION, "Below code can allow SQL injection"
     try:
-        statement = table.insert().values(**to_string_mapping(data_model)).returning(table)
+        # Models can carry more than the table stores, such as values worked out from the columns.
+        values = {
+            key: value for key, value in to_string_mapping(data_model).items() if key in table.c
+        }
+        statement = table.insert().values(**values).returning(table)
         row = (await conn.execute(statement)).one()
         return row.id, return_type.model_validate(row._mapping)
     except Exception:

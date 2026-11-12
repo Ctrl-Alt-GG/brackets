@@ -8,9 +8,12 @@
     "build": "vite build",
     "openapi-ts": "openapi-ts && oxfmt .",
     "typecheck": "tsc",
+    "lint": "oxlint .",
     "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
-    "test": "tsc && oxfmt --check ."
+    "test:unit": "vitest run",
+    "test:browser": "playwright test",
+    "test": "tsc && oxlint . && oxfmt --check . && vitest run"
   },
   "dependencies": {
     "@fontsource-variable/outfit": "^5.3.0",
@@ -33,6 +36,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "0.99.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
@@ -41,9 +45,11 @@
     "daisyui": "^5.7.47",
     "npm-check-updates": "23.1.0",
     "oxfmt": "0.72.0",
+    "oxlint": "^1.93.0",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
-    "vite": "8.3.3"
+    "vite": "8.3.3",
+    "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@11.21.0"
 }

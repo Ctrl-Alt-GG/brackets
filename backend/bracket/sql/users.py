@@ -1,10 +1,13 @@
-from sqlalchemy import func, text
+from datetime import datetime
+
+from sqlalchemy import exists, func, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.logic.tournaments import sql_delete_tournament_completely
+from bracket.logic.tournaments import TournamentUploads, sql_delete_tournament_completely
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import User, UserInDB, UserInsertable, UserPublic, UserToUpdate
-from bracket.schema import users
+from bracket.schema import revoked_sessions, users
 from bracket.sql.clubs import get_clubs_for_user_id, sql_delete_club
 from bracket.sql.tournaments import sql_get_tournaments
 from bracket.utils.db import fetch_one_parsed
@@ -144,20 +147,44 @@ async def get_user_in_db(conn: AsyncConnection, user_id: UserId) -> UserInDB | N
     return await fetch_one_parsed(conn, UserInDB, users.select().where(users.c.id == user_id))
 
 
-async def delete_user_and_owned_clubs(conn: AsyncConnection, user_id: UserId) -> list[str]:
+async def get_user_in_db_with_session(
+    conn: AsyncConnection, user_id: UserId, session_id: str
+) -> UserInDB | None:
+    """The user a session belongs to, unless the session was ended by logging out."""
+    return await fetch_one_parsed(
+        conn,
+        UserInDB,
+        users.select().where(
+            (users.c.id == user_id) & ~exists().where(revoked_sessions.c.session_id == session_id)
+        ),
+    )
+
+
+async def revoke_session(conn: AsyncConnection, session_id: str, expires: datetime) -> None:
+    """End a session. This is forgotten at `expires`, once the last of its tokens has expired."""
+    await conn.execute(revoked_sessions.delete().where(revoked_sessions.c.expires < func.now()))
+    await conn.execute(
+        insert(revoked_sessions)
+        .values(session_id=session_id, expires=expires)
+        .on_conflict_do_nothing()
+    )
+
+
+async def delete_user_and_owned_clubs(
+    conn: AsyncConnection, user_id: UserId
+) -> list[TournamentUploads]:
     """
     Delete the user with their clubs and tournaments.
 
     Returns the logos of the deleted tournaments, which the caller discards once the deletion is
     committed.
     """
-    logos = []
+    uploads = []
     for club in await get_clubs_for_user_id(conn, user_id):
         for tournament in await sql_get_tournaments(conn, (club.id,), None):
-            if (logo := await sql_delete_tournament_completely(conn, tournament.id)) is not None:
-                logos.append(logo)
+            uploads.append(await sql_delete_tournament_completely(conn, tournament.id))
 
         await sql_delete_club(conn, club.id)
 
     await delete_user(conn, user_id)
-    return logos
+    return uploads

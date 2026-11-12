@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -8,15 +7,16 @@ import {
   createRoundApiTournamentsTournamentIdRoundsPostMutation,
   deleteMatchApiTournamentsTournamentIdMatchesMatchIdDeleteMutation,
   deleteRoundApiTournamentsTournamentIdRoundsRoundIdDeleteMutation,
-  updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutMutation,
+  regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostMutation,
   updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation,
 } from '../../openapi/@tanstack/react-query.gen';
-import { zMatchBody } from '../../openapi/zod.gen';
+import { ScoreForm } from '../components/score-form';
 import {
   activeTeamInputs,
   formatDateTime,
-  hasTeam,
   inputLabel,
+  inputTeamId,
+  isBracket,
   isEmptySlot,
   isScored,
 } from '../utils';
@@ -44,15 +44,6 @@ function playedCount(round: Round) {
 
 function pairKey(input1Id: number | null, input2Id: number | null) {
   return `${Math.min(input1Id ?? 0, input2Id ?? 0)}-${Math.max(input1Id ?? 0, input2Id ?? 0)}`;
-}
-
-/** Swiss rounds are paired by the backend when they are created. */
-function generateRound({ tournamentId }: RoundContext, stageItemId: number) {
-  return OpenApi.createRoundApiTournamentsTournamentIdRoundsPost({
-    body: { name: null, stage_item_id: stageItemId },
-    path: { tournament_id: tournamentId },
-    throwOnError: true,
-  });
 }
 
 /** Where a stage item stands and what the organizer should do next, in one line. */
@@ -109,6 +100,7 @@ export function StageItemRounds({
       {/* In Swiss the newest round is where the action is, so it comes first. */}
       {(isSwiss ? published.toReversed() : published).map((round) => (
         <PublishedRound
+          allowsDraw={!isBracket(stageItem)}
           canDelete={isSwiss && draft == null && round.id === latest?.id}
           context={context}
           key={round.id}
@@ -197,16 +189,10 @@ function DraftRound({
     ...updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation(),
     meta: { successMessage: `${round.name} is published.` },
   });
-  // Pairings come from creating a round, so new ones replace the draft with a new round.
+  // Replacement is one server transaction: if pairing fails, the original draft stays intact.
   const regenerate = useMutation({
+    ...regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostMutation(),
     meta: { successMessage: 'New pairings generated.' },
-    mutationFn: async () => {
-      await OpenApi.deleteRoundApiTournamentsTournamentIdRoundsRoundIdDelete({
-        path,
-        throwOnError: true,
-      });
-      await generateRound(context, stageItem.id);
-    },
   });
   const discard = useMutation({
     ...deleteRoundApiTournamentsTournamentIdRoundsRoundIdDeleteMutation(),
@@ -279,7 +265,7 @@ function DraftRound({
           disabled={busy}
           onClick={() => {
             if (window.confirm('Replace these pairings with newly generated ones?')) {
-              regenerate.mutate();
+              regenerate.mutate({ path });
             }
           }}
           type="button"
@@ -440,11 +426,13 @@ function AddPairingForm({
 }
 
 function PublishedRound({
+  allowsDraw,
   canDelete,
   context,
   open,
   round,
 }: {
+  allowsDraw: boolean;
   canDelete: boolean;
   context: RoundContext;
   open: boolean;
@@ -472,7 +460,14 @@ function PublishedRound({
       </summary>
       <div className="collapse-content space-y-2">
         {round.matches.map((match) => (
-          <ScoreForm context={context} key={match.id} match={match} />
+          <ScoreForm
+            allowsDraw={allowsDraw}
+            key={`${match.id}:${inputTeamId(match.stage_item_input1)}:${inputTeamId(match.stage_item_input2)}`}
+            label1={inputLabel(match.stage_item_input1, context.stageItemsById)}
+            label2={inputLabel(match.stage_item_input2, context.stageItemsById)}
+            match={match}
+            tournamentId={context.tournamentId}
+          />
         ))}
         {canDelete ? (
           <button
@@ -492,75 +487,5 @@ function PublishedRound({
         ) : null}
       </div>
     </details>
-  );
-}
-
-const scoresSchema = zMatchBody.pick({
-  stage_item_input1_score: true,
-  stage_item_input2_score: true,
-});
-
-function ScoreForm({ context, match }: { context: RoundContext; match: Match }) {
-  const ready = hasTeam(match.stage_item_input1) && hasTeam(match.stage_item_input2);
-  const label1 = inputLabel(match.stage_item_input1, context.stageItemsById);
-  const label2 = inputLabel(match.stage_item_input2, context.stageItemsById);
-  const form = useForm({
-    resetOptions: { keepDirtyValues: true },
-    resolver: zodResolver(scoresSchema),
-    values: {
-      stage_item_input1_score: match.stage_item_input1_score,
-      stage_item_input2_score: match.stage_item_input2_score,
-    },
-  });
-  const save = useMutation({
-    ...updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutMutation(),
-    meta: { successMessage: `Score saved: ${label1} vs ${label2}.` },
-  });
-
-  return (
-    <form
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-field bg-base-200/60 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
-      onSubmit={form.handleSubmit((scores) =>
-        save.mutate({
-          body: {
-            custom_duration_minutes: match.custom_duration_minutes,
-            custom_margin_minutes: match.custom_margin_minutes,
-            round_id: match.round_id,
-            ...scores,
-          },
-          path: { match_id: match.id, tournament_id: context.tournamentId },
-        }),
-      )}
-      title={ready ? undefined : 'Waiting for both teams to be known'}
-    >
-      <span className="truncate text-sm">{label1}</span>
-      <input
-        aria-label={`${label1} score`}
-        className="input input-sm w-16 text-center"
-        disabled={!ready}
-        min={0}
-        required
-        type="number"
-        {...form.register('stage_item_input1_score', { valueAsNumber: true })}
-      />
-      <span className="truncate text-sm">{label2}</span>
-      <input
-        aria-label={`${label2} score`}
-        className="input input-sm w-16 text-center"
-        disabled={!ready}
-        min={0}
-        required
-        type="number"
-        {...form.register('stage_item_input2_score', { valueAsNumber: true })}
-      />
-      {/* Below the scores on narrow screens, next to them otherwise. */}
-      <button
-        className="btn btn-soft btn-sm col-span-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1"
-        disabled={!ready || save.isPending}
-        type="submit"
-      >
-        {save.isPending ? 'Saving…' : 'Save'}
-      </button>
-    </form>
   );
 }

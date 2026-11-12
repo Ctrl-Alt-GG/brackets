@@ -11,6 +11,12 @@ from bracket.utils.id_types import PlayerId, TournamentId
 from bracket.utils.pagination import PaginationPlayers
 from bracket.utils.types import dict_without_none
 
+NOT_IN_TEAM_FILTER = """
+    AND NOT EXISTS (
+        SELECT 1 FROM players_x_teams WHERE players_x_teams.player_id = players.id
+    )
+    """
+
 
 async def get_all_players_in_tournament(
     conn: AsyncConnection,
@@ -19,7 +25,7 @@ async def get_all_players_in_tournament(
     not_in_team: bool = False,
     pagination: PaginationPlayers | None = None,
 ) -> list[Player]:
-    not_in_team_filter = "AND players.team_id IS NULL" if not_in_team else ""
+    not_in_team_filter = NOT_IN_TEAM_FILTER if not_in_team else ""
     limit_filter = "LIMIT :limit" if pagination is not None and pagination.limit is not None else ""
     offset_filter = (
         "OFFSET :offset" if pagination is not None and pagination.offset is not None else ""
@@ -71,7 +77,7 @@ async def get_player_count(
     *,
     not_in_team: bool = False,
 ) -> int:
-    not_in_team_filter = "AND players.team_id IS NULL" if not_in_team else ""
+    not_in_team_filter = NOT_IN_TEAM_FILTER if not_in_team else ""
     query = f"""
         SELECT count(*)
         FROM players

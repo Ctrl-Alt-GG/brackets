@@ -1,11 +1,16 @@
-import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
-from bracket.app import app
-from openapi import openapi  # noqa: F401
 
-
-def test_openapi_up_to_date() -> None:
-    schema = app.openapi()
-    if Path("openapi/openapi.json").read_text() != json.dumps(schema, indent=2, sort_keys=True):
-        raise Exception("OpenAPI schema is out of date")
+def test_openapi_up_to_date(tmp_path: Path) -> None:
+    generated = tmp_path / "openapi.json"
+    subprocess.run(
+        [sys.executable, "cli.py", "generate-openapi", "--output", str(generated)],
+        env={**os.environ, "API_PREFIX": ""},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert Path("openapi/openapi.json").read_text() == generated.read_text()

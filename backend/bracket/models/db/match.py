@@ -1,5 +1,5 @@
 from heliclockter import datetime_utc, timedelta
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInput
@@ -19,11 +19,27 @@ class MatchBaseInsertable(BaseModelORM):
     stage_item_input2_score: int
     stage_item_input1_conflict: bool
     stage_item_input2_conflict: bool
+    # Scores are the result, and an unplayed match reads 0-0. This marks a 0-0 that was played.
+    scoreless_result: bool = False
 
     @property
     def end_time(self) -> datetime_utc:
         assert self.start_time
         return self.start_time + timedelta(minutes=self.duration_minutes + self.margin_minutes)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def played(self) -> bool:
+        """Whether the match has a result."""
+        return is_played(self)
+
+
+def is_played(match: MatchBaseInsertable) -> bool:
+    return (
+        match.stage_item_input1_score != 0
+        or match.stage_item_input2_score != 0
+        or match.scoreless_result
+    )
 
 
 class MatchInsertable(MatchBaseInsertable):
@@ -78,12 +94,30 @@ class MatchWithDetailsDefinitive(Match):
         ]
 
 
+# Far above any real score, and far below what the database column holds.
+MAX_SCORE = 100_000
+# A day: longer than any match or break.
+MAX_MINUTES = 24 * 60
+
+
 class MatchBody(BaseModelORM):
-    round_id: RoundId
-    stage_item_input1_score: int = Field(0, ge=0)
-    stage_item_input2_score: int = Field(0, ge=0)
-    custom_duration_minutes: int | None = Field(None, ge=1)
-    custom_margin_minutes: int | None = Field(None, ge=0)
+    stage_item_input1_score: int = Field(0, ge=0, le=MAX_SCORE)
+    stage_item_input2_score: int = Field(0, ge=0, le=MAX_SCORE)
+    # Saving 0-0 normally means "not played yet". Set this to record a match that ended 0-0.
+    scoreless_result: bool = False
+    custom_duration_minutes: int | None = Field(None, ge=1, le=MAX_MINUTES)
+    custom_margin_minutes: int | None = Field(None, ge=0, le=MAX_MINUTES)
+
+
+class ScheduleDelayBody(BaseModelORM):
+    minutes: int = Field(ge=-MAX_MINUTES, le=MAX_MINUTES)
+
+    @field_validator("minutes")
+    @classmethod
+    def minutes_move_something(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("Enter how many minutes to move the schedule by")
+        return value
 
 
 class MatchCreateBodyFrontend(BaseModelORM):

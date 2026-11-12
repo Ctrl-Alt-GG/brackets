@@ -2,7 +2,7 @@ import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
 import { readSession } from './hooks';
 import type { TournamentBundle } from './types';
-import { getApiBaseUrl, isNumericIdentifier } from './utils';
+import { getApiBaseUrl, getErrorMessage, isNumericIdentifier } from './utils';
 
 function getResponseStatus(error: unknown) {
   return (error as { response?: { status?: number } })?.response?.status;
@@ -67,14 +67,40 @@ export async function fetchTournament(tournamentKey: string, dashboardMode: bool
   return data.data;
 }
 
-function withoutDraftRounds(stages: OpenApi.StageWithStageItems[]) {
-  return stages.map((stage) => ({
-    ...stage,
-    stage_items: stage.stage_items.map((stageItem) => ({
-      ...stageItem,
-      rounds: stageItem.rounds.filter((round) => !round.is_draft),
-    })),
-  }));
+/** The Details pages: one answer for everything, which the API keeps ready for every visitor. */
+async function fetchDetailsBundle(
+  tournamentKey: string,
+  isAuthenticated: boolean,
+): Promise<TournamentBundle> {
+  const tournamentId = isNumericIdentifier(tournamentKey)
+    ? Number(tournamentKey)
+    : (await fetchTournament(tournamentKey, true)).id;
+  const path = { tournament_id: tournamentId };
+
+  const [details, access] = await Promise.all([
+    OpenApi.getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet({
+      path,
+      throwOnError: true,
+    }),
+    // Visitors can't manage anything, so only someone who is signed in asks.
+    isAuthenticated
+      ? OpenApi.getTournamentAccessApiTournamentsTournamentIdAccessGet({ path, throwOnError: true })
+      : null,
+  ]);
+  const { players, rankings, stages, standings, teams, tournament } = details.data.data;
+
+  return {
+    availableInputs: {},
+    canManage: access?.data.data.can_manage ?? false,
+    managementError: null,
+    nextStageRankings: {},
+    players,
+    rankings,
+    stages,
+    standings,
+    teams,
+    tournament,
+  };
 }
 
 /** Everything a tournament page shows, loaded together so all sections agree with each other. */
@@ -83,6 +109,8 @@ export async function fetchTournamentBundle(
   dashboardMode: boolean,
   isAuthenticated: boolean,
 ): Promise<TournamentBundle> {
+  if (dashboardMode) return fetchDetailsBundle(tournamentKey, isAuthenticated);
+
   const tournament = await fetchTournament(tournamentKey, dashboardMode);
   const path = { tournament_id: tournament.id };
   let canManage = isAuthenticated;
@@ -124,28 +152,36 @@ export async function fetchTournamentBundle(
     OpenApi.getStandingsApiTournamentsTournamentIdStandingsGet({ path, throwOnError: true }),
   ]);
 
-  const managementData =
-    canManage && !dashboardMode
-      ? await Promise.all([
-          OpenApi.getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet({
-            path,
-            throwOnError: true,
-          }),
-          OpenApi.getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet({
-            path,
-            throwOnError: true,
-          }),
-        ])
-      : null;
+  // What the stage editor offers for the slots, and who moves on when the next stage starts. The
+  // workspace is usable without them, so a failure here must not take every page down with it:
+  // the organizer needs those pages to fix whatever went wrong.
+  let managementData = null;
+  let managementError: string | null = null;
+  if (canManage) {
+    try {
+      managementData = await Promise.all([
+        OpenApi.getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet({
+          path,
+          throwOnError: true,
+        }),
+        OpenApi.getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet({
+          path,
+          throwOnError: true,
+        }),
+      ]);
+    } catch (error) {
+      managementError = getErrorMessage(error);
+    }
+  }
 
   return {
     availableInputs: managementData?.[0].data.data ?? {},
     canManage,
+    managementError,
     nextStageRankings: managementData?.[1].data.data ?? {},
     players: players.data.data.players,
     rankings: rankings.data.data,
-    // The Details pages show organizers exactly what everyone else sees.
-    stages: dashboardMode ? withoutDraftRounds(stages) : stages,
+    stages,
     standings: standings.data.data,
     teams: teams.data.data.teams,
     tournament,

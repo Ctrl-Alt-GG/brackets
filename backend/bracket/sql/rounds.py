@@ -1,5 +1,9 @@
+import re
+
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
+from starlette import status
 
 from bracket.models.db.round import RoundInsertable
 from bracket.models.db.util import RoundWithMatches
@@ -45,26 +49,32 @@ async def get_round_by_id(
                 if round_ is not None:
                     return round_
 
-    raise ValueError(f"Could not find round with id {round_id} for tournament {tournament_id}")
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Could not find round with id {round_id}",
+    )
 
 
 async def get_next_round_name(
     conn: AsyncConnection, tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> str:
+    """
+    "Round 04" after "Round 03". Numbered after the highest round there is, not after how many
+    there are: once a round was deleted, counting would hand out a name twice.
+    """
     query = """
-        SELECT count(*) FROM rounds
+        SELECT rounds.name FROM rounds
         JOIN stage_items on stage_items.id = rounds.stage_item_id
         JOIN stages on stage_items.stage_id = stages.id
         WHERE stages.tournament_id = :tournament_id
         AND rounds.stage_item_id = :stage_item_id
     """
-    round_count = int(
-        await conn.scalar(
-            text(query), {"tournament_id": tournament_id, "stage_item_id": stage_item_id}
-        )
-        or 0
+    result = await conn.execute(
+        text(query), {"tournament_id": tournament_id, "stage_item_id": stage_item_id}
     )
-    return f"Round {round_count + 1:02d}"
+    names = [row.name for row in result]
+    numbers = [int(number.group(1)) for name in names if (number := re.search(r"(\d+)\s*$", name))]
+    return f"Round {max([len(names), *numbers]) + 1:02d}"
 
 
 async def sql_delete_rounds_for_stage_item_id(

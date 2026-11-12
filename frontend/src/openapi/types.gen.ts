@@ -104,6 +104,47 @@ export type ClubCreateBody = {
 };
 
 /**
+ * ClubMember
+ *
+ * An organizer of an event: its owner, or someone the owner added to help run it.
+ */
+export type ClubMember = {
+  /**
+   * Email
+   */
+  email: string;
+  /**
+   * Name
+   */
+  name: string;
+  relation: UserXClubRelation;
+  /**
+   * User Id
+   */
+  user_id: number;
+};
+
+/**
+ * ClubMemberCreateBody
+ */
+export type ClubMemberCreateBody = {
+  /**
+   * Email
+   */
+  email: string;
+};
+
+/**
+ * ClubMembersResponse
+ */
+export type ClubMembersResponse = {
+  /**
+   * Data
+   */
+  data: Array<ClubMember>;
+};
+
+/**
  * ClubResponse
  */
 export type ClubResponse = {
@@ -223,9 +264,19 @@ export type Match = {
    */
   margin_minutes: number;
   /**
+   * Played
+   *
+   * Whether the match has a result.
+   */
+  readonly played: boolean;
+  /**
    * Round Id
    */
   round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
   /**
    * Stage Item Input1
    */
@@ -285,9 +336,9 @@ export type MatchBody = {
    */
   custom_margin_minutes: number | null;
   /**
-   * Round Id
+   * Scoreless Result
    */
-  round_id: number;
+  scoreless_result: boolean;
   /**
    * Stage Item Input1 Score
    */
@@ -355,9 +406,19 @@ export type MatchWithDetails = {
    */
   margin_minutes: number;
   /**
+   * Played
+   *
+   * Whether the match has a result.
+   */
+  readonly played: boolean;
+  /**
    * Round Id
    */
   round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
   /**
    * Stage Item Input1
    */
@@ -433,9 +494,19 @@ export type MatchWithDetailsDefinitive = {
    */
   margin_minutes: number;
   /**
+   * Played
+   *
+   * Whether the match has a result.
+   */
+  readonly played: boolean;
+  /**
    * Round Id
    */
   round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
   /**
    * Stage Item Input1
    */
@@ -746,6 +817,16 @@ export type RoundWithMatches = {
 };
 
 /**
+ * ScheduleDelayBody
+ */
+export type ScheduleDelayBody = {
+  /**
+   * Minutes
+   */
+  minutes: number;
+};
+
+/**
  * SingleMatchResponse
  */
 export type SingleMatchResponse = {
@@ -774,6 +855,10 @@ export type StageActivateBody = {
    * Direction
    */
   direction: 'next' | 'previous';
+  /**
+   * Discard Results
+   */
+  discard_results: boolean;
 };
 
 /**
@@ -1086,10 +1171,6 @@ export type StageItemUpdateBody = {
    * Name
    */
   name: string;
-  /**
-   * Ranking Id
-   */
-  ranking_id: number;
 };
 
 /**
@@ -1379,6 +1460,10 @@ export type Tournament = {
    */
   id: number;
   /**
+   * Last Match End
+   */
+  last_match_end: string | null;
+  /**
    * Logo Path
    */
   logo_path: string | null;
@@ -1386,6 +1471,14 @@ export type Tournament = {
    * Margin Minutes
    */
   margin_minutes: number;
+  /**
+   * Matches Played
+   */
+  matches_played: number;
+  /**
+   * Matches Total
+   */
+  matches_total: number;
   /**
    * Name
    */
@@ -1399,6 +1492,23 @@ export type Tournament = {
    */
   start_time: string;
   status: TournamentStatus;
+};
+
+/**
+ * TournamentAccess
+ */
+export type TournamentAccess = {
+  /**
+   * Can Manage
+   */
+  can_manage: boolean;
+};
+
+/**
+ * TournamentAccessResponse
+ */
+export type TournamentAccessResponse = {
+  data: TournamentAccess;
 };
 
 /**
@@ -1444,6 +1554,44 @@ export type TournamentBody = {
  */
 export type TournamentChangeStatusBody = {
   status: TournamentStatus;
+};
+
+/**
+ * TournamentDetails
+ *
+ * What the Details pages of a tournament show: one answer instead of six requests.
+ */
+export type TournamentDetails = {
+  /**
+   * Players
+   */
+  players: Array<Player>;
+  /**
+   * Rankings
+   */
+  rankings: Array<Ranking>;
+  /**
+   * Stages
+   */
+  stages: Array<StageWithStageItems>;
+  /**
+   * Standings
+   */
+  standings: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
+  /**
+   * Teams
+   */
+  teams: Array<FullTeamWithPlayers>;
+  tournament: Tournament;
+};
+
+/**
+ * TournamentDetailsResponse
+ */
+export type TournamentDetailsResponse = {
+  data: TournamentDetails;
 };
 
 /**
@@ -1574,6 +1722,10 @@ export type UserToRegister = {
  */
 export type UserToUpdate = {
   /**
+   * Current Password
+   */
+  current_password: string | null;
+  /**
    * Email
    */
   email: string;
@@ -1582,6 +1734,11 @@ export type UserToUpdate = {
    */
   name: string;
 };
+
+/**
+ * UserXClubRelation
+ */
+export type UserXClubRelation = 'OWNER' | 'COLLABORATOR';
 
 /**
  * ValidationError
@@ -1609,6 +1766,416 @@ export type ValidationError = {
    * Error Type
    */
   type: string;
+};
+
+/**
+ * Match
+ */
+export type MatchWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
+  /**
+   * Custom Margin Minutes
+   */
+  custom_margin_minutes: number | null;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Round Id
+   */
+  round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
+  /**
+   * Stage Item Input1
+   */
+  stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
+  /**
+   * Stage Item Input1 Conflict
+   */
+  stage_item_input1_conflict: boolean;
+  /**
+   * Stage Item Input1 Id
+   */
+  stage_item_input1_id: number | null;
+  /**
+   * Stage Item Input1 Score
+   */
+  stage_item_input1_score: number;
+  /**
+   * Stage Item Input1 Winner From Match Id
+   */
+  stage_item_input1_winner_from_match_id: number | null;
+  /**
+   * Stage Item Input2
+   */
+  stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
+  /**
+   * Stage Item Input2 Conflict
+   */
+  stage_item_input2_conflict: boolean;
+  /**
+   * Stage Item Input2 Id
+   */
+  stage_item_input2_id: number | null;
+  /**
+   * Stage Item Input2 Score
+   */
+  stage_item_input2_score: number;
+  /**
+   * Stage Item Input2 Winner From Match Id
+   */
+  stage_item_input2_winner_from_match_id: number | null;
+  /**
+   * Start Time
+   */
+  start_time: string | null;
+};
+
+/**
+ * MatchWithDetails
+ *
+ * MatchWithDetails has zero or one defined stage item inputs, but not both.
+ */
+export type MatchWithDetailsWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
+  /**
+   * Custom Margin Minutes
+   */
+  custom_margin_minutes: number | null;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Round Id
+   */
+  round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
+  /**
+   * Stage Item Input1
+   */
+  stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
+  /**
+   * Stage Item Input1 Conflict
+   */
+  stage_item_input1_conflict: boolean;
+  /**
+   * Stage Item Input1 Id
+   */
+  stage_item_input1_id: number | null;
+  /**
+   * Stage Item Input1 Score
+   */
+  stage_item_input1_score: number;
+  /**
+   * Stage Item Input1 Winner From Match Id
+   */
+  stage_item_input1_winner_from_match_id: number | null;
+  /**
+   * Stage Item Input2
+   */
+  stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
+  /**
+   * Stage Item Input2 Conflict
+   */
+  stage_item_input2_conflict: boolean;
+  /**
+   * Stage Item Input2 Id
+   */
+  stage_item_input2_id: number | null;
+  /**
+   * Stage Item Input2 Score
+   */
+  stage_item_input2_score: number;
+  /**
+   * Stage Item Input2 Winner From Match Id
+   */
+  stage_item_input2_winner_from_match_id: number | null;
+  /**
+   * Start Time
+   */
+  start_time: string | null;
+};
+
+/**
+ * MatchWithDetailsDefinitive
+ */
+export type MatchWithDetailsDefinitiveWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
+  /**
+   * Custom Margin Minutes
+   */
+  custom_margin_minutes: number | null;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Round Id
+   */
+  round_id: number;
+  /**
+   * Scoreless Result
+   */
+  scoreless_result: boolean;
+  /**
+   * Stage Item Input1
+   */
+  stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
+  /**
+   * Stage Item Input1 Conflict
+   */
+  stage_item_input1_conflict: boolean;
+  /**
+   * Stage Item Input1 Id
+   */
+  stage_item_input1_id: number | null;
+  /**
+   * Stage Item Input1 Score
+   */
+  stage_item_input1_score: number;
+  /**
+   * Stage Item Input1 Winner From Match Id
+   */
+  stage_item_input1_winner_from_match_id: number | null;
+  /**
+   * Stage Item Input2
+   */
+  stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
+  /**
+   * Stage Item Input2 Conflict
+   */
+  stage_item_input2_conflict: boolean;
+  /**
+   * Stage Item Input2 Id
+   */
+  stage_item_input2_id: number | null;
+  /**
+   * Stage Item Input2 Score
+   */
+  stage_item_input2_score: number;
+  /**
+   * Stage Item Input2 Winner From Match Id
+   */
+  stage_item_input2_winner_from_match_id: number | null;
+  /**
+   * Start Time
+   */
+  start_time: string | null;
+};
+
+/**
+ * RoundWithMatches
+ */
+export type RoundWithMatchesWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Is Draft
+   */
+  is_draft: boolean;
+  /**
+   * Matches
+   */
+  matches: Array<MatchWithDetailsDefinitiveWritable | MatchWithDetailsWritable>;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Stage Item Id
+   */
+  stage_item_id: number;
+};
+
+/**
+ * SingleMatchResponse
+ */
+export type SingleMatchResponseWritable = {
+  data: MatchWritable;
+};
+
+/**
+ * StageItemWithRounds
+ */
+export type StageItemWithRoundsWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Inputs
+   */
+  inputs: Array<StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty>;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Ranking Id
+   */
+  ranking_id: number | null;
+  /**
+   * Rounds
+   */
+  rounds: Array<RoundWithMatchesWritable>;
+  /**
+   * Stage Id
+   */
+  stage_id: number;
+  /**
+   * Team Count
+   */
+  team_count: number;
+  type: StageType;
+  /**
+   * Type Name
+   */
+  type_name: string;
+};
+
+/**
+ * StageWithStageItems
+ */
+export type StageWithStageItemsWritable = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Custom Duration Minutes
+   */
+  custom_duration_minutes: number | null;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Is Active
+   */
+  is_active: boolean;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Stage Items
+   */
+  stage_items: Array<StageItemWithRoundsWritable>;
+  /**
+   * Tournament Id
+   */
+  tournament_id: number;
+};
+
+/**
+ * StagesWithStageItemsResponse
+ */
+export type StagesWithStageItemsResponseWritable = {
+  /**
+   * Data
+   */
+  data: Array<StageWithStageItemsWritable>;
+};
+
+/**
+ * TournamentDetails
+ *
+ * What the Details pages of a tournament show: one answer instead of six requests.
+ */
+export type TournamentDetailsWritable = {
+  /**
+   * Players
+   */
+  players: Array<Player>;
+  /**
+   * Rankings
+   */
+  rankings: Array<Ranking>;
+  /**
+   * Stages
+   */
+  stages: Array<StageWithStageItemsWritable>;
+  /**
+   * Standings
+   */
+  standings: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
+  /**
+   * Teams
+   */
+  teams: Array<FullTeamWithPlayers>;
+  tournament: Tournament;
+};
+
+/**
+ * TournamentDetailsResponse
+ */
+export type TournamentDetailsResponseWritable = {
+  data: TournamentDetailsWritable;
 };
 
 export type GetAuthFeaturesApiAuthFeaturesGetData = {
@@ -1736,6 +2303,106 @@ export type UpdateClubApiClubsClubIdPutResponses = {
 export type UpdateClubApiClubsClubIdPutResponse =
   UpdateClubApiClubsClubIdPutResponses[keyof UpdateClubApiClubsClubIdPutResponses];
 
+export type GetMembersApiClubsClubIdMembersGetData = {
+  body?: never;
+  path: {
+    /**
+     * Club Id
+     */
+    club_id: number;
+  };
+  query?: never;
+  url: '/api/clubs/{club_id}/members';
+};
+
+export type GetMembersApiClubsClubIdMembersGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetMembersApiClubsClubIdMembersGetError =
+  GetMembersApiClubsClubIdMembersGetErrors[keyof GetMembersApiClubsClubIdMembersGetErrors];
+
+export type GetMembersApiClubsClubIdMembersGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ClubMembersResponse;
+};
+
+export type GetMembersApiClubsClubIdMembersGetResponse =
+  GetMembersApiClubsClubIdMembersGetResponses[keyof GetMembersApiClubsClubIdMembersGetResponses];
+
+export type AddMemberApiClubsClubIdMembersPostData = {
+  body: ClubMemberCreateBody;
+  path: {
+    /**
+     * Club Id
+     */
+    club_id: number;
+  };
+  query?: never;
+  url: '/api/clubs/{club_id}/members';
+};
+
+export type AddMemberApiClubsClubIdMembersPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddMemberApiClubsClubIdMembersPostError =
+  AddMemberApiClubsClubIdMembersPostErrors[keyof AddMemberApiClubsClubIdMembersPostErrors];
+
+export type AddMemberApiClubsClubIdMembersPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ClubMembersResponse;
+};
+
+export type AddMemberApiClubsClubIdMembersPostResponse =
+  AddMemberApiClubsClubIdMembersPostResponses[keyof AddMemberApiClubsClubIdMembersPostResponses];
+
+export type RemoveMemberApiClubsClubIdMembersUserIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Club Id
+     */
+    club_id: number;
+    /**
+     * User Id
+     */
+    user_id: number;
+  };
+  query?: never;
+  url: '/api/clubs/{club_id}/members/{user_id}';
+};
+
+export type RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveMemberApiClubsClubIdMembersUserIdDeleteError =
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors[keyof RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors];
+
+export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: ClubMembersResponse;
+};
+
+export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse =
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses[keyof RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses];
+
 export type LogoutApiLogoutPostData = {
   body?: never;
   path?: never;
@@ -1855,7 +2522,7 @@ export type CreateTournamentApiTournamentsPostResponses = {
   /**
    * Successful Response
    */
-  200: SuccessResponse;
+  200: TournamentResponse;
 };
 
 export type CreateTournamentApiTournamentsPostResponse =
@@ -1957,6 +2624,38 @@ export type UpdateTournamentByIdApiTournamentsTournamentIdPutResponses = {
 export type UpdateTournamentByIdApiTournamentsTournamentIdPutResponse =
   UpdateTournamentByIdApiTournamentsTournamentIdPutResponses[keyof UpdateTournamentByIdApiTournamentsTournamentIdPutResponses];
 
+export type GetTournamentAccessApiTournamentsTournamentIdAccessGetData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/access';
+};
+
+export type GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTournamentAccessApiTournamentsTournamentIdAccessGetError =
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors[keyof GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors];
+
+export type GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: TournamentAccessResponse;
+};
+
+export type GetTournamentAccessApiTournamentsTournamentIdAccessGetResponse =
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses[keyof GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses];
+
 export type GetAvailableInputsApiTournamentsTournamentIdAvailableInputsGetData = {
   body?: never;
   path: {
@@ -2020,6 +2719,70 @@ export type ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses = {
 
 export type ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponse =
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses[keyof ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses];
+
+export type DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData = {
+  body: ScheduleDelayBody;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/delay_schedule';
+};
+
+export type DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DelayScheduleApiTournamentsTournamentIdDelaySchedulePostError =
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors[keyof DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors];
+
+export type DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuccessResponse;
+};
+
+export type DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponse =
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses[keyof DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses];
+
+export type GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/details';
+};
+
+export type GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetError =
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors[keyof GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors];
+
+export type GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: TournamentDetailsResponse;
+};
+
+export type GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponse =
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses[keyof GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses];
 
 export type GetTournamentLogoApiTournamentsTournamentIdLogoGetData = {
   body?: never;
@@ -2658,6 +3421,42 @@ export type UpdateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutResponses =
 
 export type UpdateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutResponse =
   UpdateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutResponses[keyof UpdateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutResponses];
+
+export type RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+    /**
+     * Round Id
+     */
+    round_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/rounds/{round_id}/regenerate';
+};
+
+export type RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostError =
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors[keyof RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors];
+
+export type RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuccessResponse;
+};
+
+export type RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponse =
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses[keyof RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses];
 
 export type ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData = {
   body?: never;

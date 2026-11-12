@@ -29,4 +29,4 @@ def get_mock_user() -> UserInsertable:
 
 
 def get_mock_token(user: User | UserInDB) -> str:
-    return create_access_token(user.id, assert_some(user.password_hash))
+    return create_access_token(user.id, assert_some(user.password_hash), uuid4().hex)

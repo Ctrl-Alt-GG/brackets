@@ -14,6 +14,9 @@ import type {
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostData,
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostErrors,
   ActivateNextStageApiTournamentsTournamentIdStagesActivatePostResponses,
+  AddMemberApiClubsClubIdMembersPostData,
+  AddMemberApiClubsClubIdMembersPostErrors,
+  AddMemberApiClubsClubIdMembersPostResponses,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostData,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostErrors,
   ChangeStatusApiTournamentsTournamentIdChangeStatusPostResponses,
@@ -50,6 +53,9 @@ import type {
   CreateTournamentApiTournamentsPostData,
   CreateTournamentApiTournamentsPostErrors,
   CreateTournamentApiTournamentsPostResponses,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses,
   DeleteClubApiClubsClubIdDeleteData,
   DeleteClubApiClubsClubIdDeleteErrors,
   DeleteClubApiClubsClubIdDeleteResponses,
@@ -87,6 +93,9 @@ import type {
   GetMeApiUsersUserIdGetData,
   GetMeApiUsersUserIdGetErrors,
   GetMeApiUsersUserIdGetResponses,
+  GetMembersApiClubsClubIdMembersGetData,
+  GetMembersApiClubsClubIdMembersGetErrors,
+  GetMembersApiClubsClubIdMembersGetResponses,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetErrors,
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponses,
@@ -108,9 +117,15 @@ import type {
   GetTeamsApiTournamentsTournamentIdTeamsGetData,
   GetTeamsApiTournamentsTournamentIdTeamsGetErrors,
   GetTeamsApiTournamentsTournamentIdTeamsGetResponses,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetData,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses,
   GetTournamentApiTournamentsTournamentIdGetData,
   GetTournamentApiTournamentsTournamentIdGetErrors,
   GetTournamentApiTournamentsTournamentIdGetResponses,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses,
   GetTournamentLogoApiTournamentsTournamentIdLogoGetData,
   GetTournamentLogoApiTournamentsTournamentIdLogoGetErrors,
   GetTournamentLogoApiTournamentsTournamentIdLogoGetResponses,
@@ -129,9 +144,15 @@ import type {
   PutUserPasswordApiUsersUserIdPasswordPutData,
   PutUserPasswordApiUsersUserIdPasswordPutErrors,
   PutUserPasswordApiUsersUserIdPasswordPutResponses,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses,
   RegisterUserApiUsersRegisterPostData,
   RegisterUserApiUsersRegisterPostErrors,
   RegisterUserApiUsersRegisterPostResponses,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteData,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostErrors,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostResponses,
@@ -323,14 +344,118 @@ export const updateClubApiClubsClubIdPut = <ThrowOnError extends boolean = false
   });
 
 /**
+ * Get Members
+ *
+ * The organizers of an event: its owner and the people the owner added.
+ */
+export const getMembersApiClubsClubIdMembersGet = <ThrowOnError extends boolean = false>(
+  options: Options<GetMembersApiClubsClubIdMembersGetData, ThrowOnError>,
+): RequestResult<
+  GetMembersApiClubsClubIdMembersGetResponses,
+  GetMembersApiClubsClubIdMembersGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetMembersApiClubsClubIdMembersGetResponses,
+    GetMembersApiClubsClubIdMembersGetErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/clubs/{club_id}/members',
+    ...options,
+  });
+
+/**
+ * Add Member
+ *
+ * Let another account help run this event and its tournaments, so that organizers don't have
+ * to share one login.
+ */
+export const addMemberApiClubsClubIdMembersPost = <ThrowOnError extends boolean = false>(
+  options: Options<AddMemberApiClubsClubIdMembersPostData, ThrowOnError>,
+): RequestResult<
+  AddMemberApiClubsClubIdMembersPostResponses,
+  AddMemberApiClubsClubIdMembersPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    AddMemberApiClubsClubIdMembersPostResponses,
+    AddMemberApiClubsClubIdMembersPostErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/clubs/{club_id}/members',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Member
+ *
+ * Remove an organizer from the event. The owner removes others; anyone can leave.
+ */
+export const removeMemberApiClubsClubIdMembersUserIdDelete = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveMemberApiClubsClubIdMembersUserIdDeleteData, ThrowOnError>,
+): RequestResult<
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses,
+  RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses,
+    RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/clubs/{club_id}/members/{user_id}',
+    ...options,
+  });
+
+/**
  * Logout
  *
- * Ends the session in this browser by removing its cookie.
+ * Ends the session: its cookie is removed from this browser, and its tokens stop working, also
+ * for anyone who copied one.
  */
 export const logoutApiLogoutPost = <ThrowOnError extends boolean = false>(
   options?: Options<LogoutApiLogoutPostData, ThrowOnError>,
 ): RequestResult<LogoutApiLogoutPostResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).post<LogoutApiLogoutPostResponses, unknown, ThrowOnError>({
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
     url: '/api/logout',
     ...options,
   });
@@ -525,6 +650,38 @@ export const updateTournamentByIdApiTournamentsTournamentIdPut = <
   });
 
 /**
+ * Get Tournament Access
+ *
+ * Whether whoever asks can manage the tournament, or only follow it.
+ */
+export const getTournamentAccessApiTournamentsTournamentIdAccessGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetTournamentAccessApiTournamentsTournamentIdAccessGetData, ThrowOnError>,
+): RequestResult<
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses,
+  GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTournamentAccessApiTournamentsTournamentIdAccessGetResponses,
+    GetTournamentAccessApiTournamentsTournamentIdAccessGetErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/tournaments/{tournament_id}/access',
+    ...options,
+  });
+
+/**
  * Get Available Inputs
  */
 export const getAvailableInputsApiTournamentsTournamentIdAvailableInputsGet = <
@@ -591,6 +748,78 @@ export const changeStatusApiTournamentsTournamentIdChangeStatusPost = <
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Delay Schedule
+ *
+ * Move every round that hasn't been played yet, and everything after it, for an event that
+ * runs late. A negative number of minutes moves them earlier.
+ */
+export const delayScheduleApiTournamentsTournamentIdDelaySchedulePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DelayScheduleApiTournamentsTournamentIdDelaySchedulePostData, ThrowOnError>,
+): RequestResult<
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses,
+  DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DelayScheduleApiTournamentsTournamentIdDelaySchedulePostResponses,
+    DelayScheduleApiTournamentsTournamentIdDelaySchedulePostErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/tournaments/{tournament_id}/delay_schedule',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Tournament Details By Id
+ *
+ * Everything the Details pages of a tournament show, in one answer: the tournament, its stages
+ * without draft rounds, players, teams, rankings and standings.
+ *
+ * It can be a few seconds old.
+ */
+export const getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetData, ThrowOnError>,
+): RequestResult<
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses,
+  GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetResponses,
+    GetTournamentDetailsByIdApiTournamentsTournamentIdDetailsGetErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/tournaments/{tournament_id}/details',
+    ...options,
   });
 
 /**
@@ -757,7 +986,10 @@ export const updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut = <
 /**
  * Get Next Stage Rankings
  *
- * Get the rankings for the stage items in this stage.
+ * Get the teams that take the slots of the next stage once it is activated.
+ *
+ * A slot that can't be decided yet is left out: its source ranks fewer teams than the position
+ * the slot takes.
  */
 export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet = <
   ThrowOnError extends boolean = false,
@@ -1192,6 +1424,41 @@ export const updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPut = <
   });
 
 /**
+ * Regenerate Round
+ *
+ * Replace a Swiss draft in one transaction, retaining it if any replacement fails.
+ */
+export const regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostData,
+    ThrowOnError
+  >,
+): RequestResult<
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses,
+  RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostResponses,
+    RegenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/tournaments/{tournament_id}/rounds/{round_id}/regenerate',
+    ...options,
+  });
+
+/**
  * Schedule Matches
  */
 export const scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost = <
@@ -1257,6 +1524,11 @@ export const createStageItemApiTournamentsTournamentIdStageItemsPost = <
 
 /**
  * Delete Stage Item
+ *
+ * Delete a stage item with its rounds and matches.
+ *
+ * Slots of later stage items that take a team from it become open again. That is refused
+ * once such a stage item has results, which belong to the teams that advanced.
  */
 export const deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDelete = <
   ThrowOnError extends boolean = false,

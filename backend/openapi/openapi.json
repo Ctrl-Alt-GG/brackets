@@ -32,7 +32,7 @@
         "title": "AuthFeatureFlagsResponse",
         "type": "object"
       },
-      "Body_login_for_access_token_token_post": {
+      "Body_login_for_access_token_api_token_post": {
         "properties": {
           "client_id": {
             "anyOf": [
@@ -92,10 +92,10 @@
           "client_id",
           "client_secret"
         ],
-        "title": "Body_login_for_access_token_token_post",
+        "title": "Body_login_for_access_token_api_token_post",
         "type": "object"
       },
-      "Body_update_team_logo_tournaments__tournament_id__teams__team_id__logo_post": {
+      "Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post": {
         "properties": {
           "file": {
             "anyOf": [
@@ -113,10 +113,10 @@
         "required": [
           "file"
         ],
-        "title": "Body_update_team_logo_tournaments__tournament_id__teams__team_id__logo_post",
+        "title": "Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post",
         "type": "object"
       },
-      "Body_upload_logo_tournaments__tournament_id__logo_post": {
+      "Body_upload_logo_api_tournaments__tournament_id__logo_post": {
         "properties": {
           "file": {
             "anyOf": [
@@ -134,7 +134,7 @@
         "required": [
           "file"
         ],
-        "title": "Body_upload_logo_tournaments__tournament_id__logo_post",
+        "title": "Body_upload_logo_api_tournaments__tournament_id__logo_post",
         "type": "object"
       },
       "Club": {
@@ -174,6 +174,64 @@
           "name"
         ],
         "title": "ClubCreateBody",
+        "type": "object"
+      },
+      "ClubMember": {
+        "description": "An organizer of an event: its owner, or someone the owner added to help run it.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "relation": {
+            "$ref": "#/components/schemas/UserXClubRelation"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "relation"
+        ],
+        "title": "ClubMember",
+        "type": "object"
+      },
+      "ClubMemberCreateBody": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ClubMemberCreateBody",
+        "type": "object"
+      },
+      "ClubMembersResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ClubMember"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ClubMembersResponse",
         "type": "object"
       },
       "ClubResponse": {
@@ -366,9 +424,20 @@
             "title": "Margin Minutes",
             "type": "integer"
           },
+          "played": {
+            "description": "Whether the match has a result.",
+            "readOnly": true,
+            "title": "Played",
+            "type": "boolean"
+          },
           "round_id": {
             "title": "Round Id",
             "type": "integer"
+          },
+          "scoreless_result": {
+            "default": false,
+            "title": "Scoreless Result",
+            "type": "boolean"
           },
           "stage_item_input1": {
             "anyOf": [
@@ -489,13 +558,15 @@
           "stage_item_input2_score",
           "stage_item_input1_conflict",
           "stage_item_input2_conflict",
+          "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
           "stage_item_input1_winner_from_match_id",
           "stage_item_input2_winner_from_match_id",
           "id",
           "stage_item_input1",
-          "stage_item_input2"
+          "stage_item_input2",
+          "played"
         ],
         "title": "Match",
         "type": "object"
@@ -505,6 +576,7 @@
           "custom_duration_minutes": {
             "anyOf": [
               {
+                "maximum": 1440.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -517,6 +589,7 @@
           "custom_margin_minutes": {
             "anyOf": [
               {
+                "maximum": 1440.0,
                 "minimum": 0.0,
                 "type": "integer"
               },
@@ -526,27 +599,30 @@
             ],
             "title": "Custom Margin Minutes"
           },
-          "round_id": {
-            "title": "Round Id",
-            "type": "integer"
+          "scoreless_result": {
+            "default": false,
+            "title": "Scoreless Result",
+            "type": "boolean"
           },
           "stage_item_input1_score": {
             "default": 0,
+            "maximum": 100000.0,
             "minimum": 0.0,
             "title": "Stage Item Input1 Score",
             "type": "integer"
           },
           "stage_item_input2_score": {
             "default": 0,
+            "maximum": 100000.0,
             "minimum": 0.0,
             "title": "Stage Item Input2 Score",
             "type": "integer"
           }
         },
         "required": [
-          "round_id",
           "stage_item_input1_score",
           "stage_item_input2_score",
+          "scoreless_result",
           "custom_duration_minutes",
           "custom_margin_minutes"
         ],
@@ -656,9 +732,20 @@
             "title": "Margin Minutes",
             "type": "integer"
           },
+          "played": {
+            "description": "Whether the match has a result.",
+            "readOnly": true,
+            "title": "Played",
+            "type": "boolean"
+          },
           "round_id": {
             "title": "Round Id",
             "type": "integer"
+          },
+          "scoreless_result": {
+            "default": false,
+            "title": "Scoreless Result",
+            "type": "boolean"
           },
           "stage_item_input1": {
             "anyOf": [
@@ -779,13 +866,15 @@
           "stage_item_input2_score",
           "stage_item_input1_conflict",
           "stage_item_input2_conflict",
+          "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
           "stage_item_input1_winner_from_match_id",
           "stage_item_input2_winner_from_match_id",
           "id",
           "stage_item_input1",
-          "stage_item_input2"
+          "stage_item_input2",
+          "played"
         ],
         "title": "MatchWithDetails",
         "type": "object"
@@ -831,9 +920,20 @@
             "title": "Margin Minutes",
             "type": "integer"
           },
+          "played": {
+            "description": "Whether the match has a result.",
+            "readOnly": true,
+            "title": "Played",
+            "type": "boolean"
+          },
           "round_id": {
             "title": "Round Id",
             "type": "integer"
+          },
+          "scoreless_result": {
+            "default": false,
+            "title": "Scoreless Result",
+            "type": "boolean"
           },
           "stage_item_input1": {
             "anyOf": [
@@ -948,13 +1048,15 @@
           "stage_item_input2_score",
           "stage_item_input1_conflict",
           "stage_item_input2_conflict",
+          "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
           "stage_item_input1_winner_from_match_id",
           "stage_item_input2_winner_from_match_id",
           "id",
           "stage_item_input1",
-          "stage_item_input2"
+          "stage_item_input2",
+          "played"
         ],
         "title": "MatchWithDetailsDefinitive",
         "type": "object"
@@ -1395,6 +1497,21 @@
         "title": "RoundWithMatches",
         "type": "object"
       },
+      "ScheduleDelayBody": {
+        "properties": {
+          "minutes": {
+            "maximum": 1440.0,
+            "minimum": -1440.0,
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minutes"
+        ],
+        "title": "ScheduleDelayBody",
+        "type": "object"
+      },
       "SingleMatchResponse": {
         "properties": {
           "data": {
@@ -1441,10 +1558,16 @@
             ],
             "title": "Direction",
             "type": "string"
+          },
+          "discard_results": {
+            "default": false,
+            "title": "Discard Results",
+            "type": "boolean"
           }
         },
         "required": [
-          "direction"
+          "direction",
+          "discard_results"
         ],
         "title": "StageActivateBody",
         "type": "object"
@@ -1938,15 +2061,10 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "ranking_id": {
-            "title": "Ranking Id",
-            "type": "integer"
           }
         },
         "required": [
-          "name",
-          "ranking_id"
+          "name"
         ],
         "title": "StageItemUpdateBody",
         "type": "object"
@@ -2067,6 +2185,7 @@
           "custom_duration_minutes": {
             "anyOf": [
               {
+                "maximum": 1440.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -2100,6 +2219,7 @@
           "custom_duration_minutes": {
             "anyOf": [
               {
+                "maximum": 1440.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -2407,6 +2527,18 @@
             "title": "Id",
             "type": "integer"
           },
+          "last_match_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Match End"
+          },
           "logo_path": {
             "anyOf": [
               {
@@ -2421,6 +2553,16 @@
           "margin_minutes": {
             "minimum": 0.0,
             "title": "Margin Minutes",
+            "type": "integer"
+          },
+          "matches_played": {
+            "default": 0,
+            "title": "Matches Played",
+            "type": "integer"
+          },
+          "matches_total": {
+            "default": 0,
+            "title": "Matches Total",
             "type": "integer"
           },
           "name": {
@@ -2453,9 +2595,37 @@
           "logo_path",
           "players_can_be_in_multiple_teams",
           "status",
-          "id"
+          "id",
+          "matches_total",
+          "matches_played",
+          "last_match_end"
         ],
         "title": "Tournament",
+        "type": "object"
+      },
+      "TournamentAccess": {
+        "properties": {
+          "can_manage": {
+            "title": "Can Manage",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_manage"
+        ],
+        "title": "TournamentAccess",
+        "type": "object"
+      },
+      "TournamentAccessResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TournamentAccess"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentAccessResponse",
         "type": "object"
       },
       "TournamentBody": {
@@ -2480,11 +2650,13 @@
             "type": "boolean"
           },
           "duration_minutes": {
+            "maximum": 1440.0,
             "minimum": 1.0,
             "title": "Duration Minutes",
             "type": "integer"
           },
           "margin_minutes": {
+            "maximum": 1440.0,
             "minimum": 0.0,
             "title": "Margin Minutes",
             "type": "integer"
@@ -2530,6 +2702,74 @@
         "title": "TournamentChangeStatusBody",
         "type": "object"
       },
+      "TournamentDetails": {
+        "description": "What the Details pages of a tournament show: one answer instead of six requests.",
+        "properties": {
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/Player"
+            },
+            "title": "Players",
+            "type": "array"
+          },
+          "rankings": {
+            "items": {
+              "$ref": "#/components/schemas/Ranking"
+            },
+            "title": "Rankings",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageWithStageItems"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "standings": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StageItemInputStanding"
+              },
+              "type": "array"
+            },
+            "title": "Standings",
+            "type": "object"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/FullTeamWithPlayers"
+            },
+            "title": "Teams",
+            "type": "array"
+          },
+          "tournament": {
+            "$ref": "#/components/schemas/Tournament"
+          }
+        },
+        "required": [
+          "tournament",
+          "stages",
+          "players",
+          "teams",
+          "rankings",
+          "standings"
+        ],
+        "title": "TournamentDetails",
+        "type": "object"
+      },
+      "TournamentDetailsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TournamentDetails"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentDetailsResponse",
+        "type": "object"
+      },
       "TournamentResponse": {
         "properties": {
           "data": {
@@ -2568,11 +2808,13 @@
             "type": "boolean"
           },
           "duration_minutes": {
+            "maximum": 1440.0,
             "minimum": 1.0,
             "title": "Duration Minutes",
             "type": "integer"
           },
           "margin_minutes": {
+            "maximum": 1440.0,
             "minimum": 0.0,
             "title": "Margin Minutes",
             "type": "integer"
@@ -2722,6 +2964,17 @@
       },
       "UserToUpdate": {
         "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          },
           "email": {
             "format": "email",
             "title": "Email",
@@ -2736,10 +2989,19 @@
         },
         "required": [
           "email",
-          "name"
+          "name",
+          "current_password"
         ],
         "title": "UserToUpdate",
         "type": "object"
+      },
+      "UserXClubRelation": {
+        "enum": [
+          "OWNER",
+          "COLLABORATOR"
+        ],
+        "title": "UserXClubRelation",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -2792,7 +3054,7 @@
         "flows": {
           "password": {
             "scopes": {},
-            "tokenUrl": "/token"
+            "tokenUrl": "/api/token"
           }
         },
         "type": "oauth2"
@@ -2811,9 +3073,9 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/auth/features": {
+    "/api/auth/features": {
       "get": {
-        "operationId": "get_auth_features_auth_features_get",
+        "operationId": "get_auth_features_api_auth_features_get",
         "responses": {
           "200": {
             "content": {
@@ -2832,9 +3094,9 @@
         ]
       }
     },
-    "/clubs": {
+    "/api/clubs": {
       "get": {
-        "operationId": "get_clubs_clubs_get",
+        "operationId": "get_clubs_api_clubs_get",
         "responses": {
           "200": {
             "content": {
@@ -2861,7 +3123,7 @@
         ]
       },
       "post": {
-        "operationId": "create_new_club_clubs_post",
+        "operationId": "create_new_club_api_clubs_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2908,9 +3170,9 @@
         ]
       }
     },
-    "/clubs/{club_id}": {
+    "/api/clubs/{club_id}": {
       "delete": {
-        "operationId": "delete_club_clubs__club_id__delete",
+        "operationId": "delete_club_api_clubs__club_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -2958,7 +3220,7 @@
         ]
       },
       "put": {
-        "operationId": "update_club_clubs__club_id__put",
+        "operationId": "update_club_api_clubs__club_id__put",
         "parameters": [
           {
             "in": "path",
@@ -3016,30 +3278,208 @@
         ]
       }
     },
-    "/logout": {
+    "/api/clubs/{club_id}/members": {
+      "get": {
+        "description": "The organizers of an event: its owner and the people the owner added.",
+        "operationId": "get_members_api_clubs__club_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "club_id",
+            "required": true,
+            "schema": {
+              "title": "Club Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClubMembersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Members",
+        "tags": [
+          "Clubs"
+        ]
+      },
       "post": {
-        "description": "Ends the session in this browser by removing its cookie.",
-        "operationId": "logout_logout_post",
+        "description": "Let another account help run this event and its tournaments, so that organizers don't have\nto share one login.",
+        "operationId": "add_member_api_clubs__club_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "club_id",
+            "required": true,
+            "schema": {
+              "title": "Club Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubMemberCreateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClubMembersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Add Member",
+        "tags": [
+          "Clubs"
+        ]
+      }
+    },
+    "/api/clubs/{club_id}/members/{user_id}": {
+      "delete": {
+        "description": "Remove an organizer from the event. The owner removes others; anyone can leave.",
+        "operationId": "remove_member_api_clubs__club_id__members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "club_id",
+            "required": true,
+            "schema": {
+              "title": "Club Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClubMembersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Remove Member",
+        "tags": [
+          "Clubs"
+        ]
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "description": "Ends the session: its cookie is removed from this browser, and its tokens stop working, also\nfor anyone who copied one.",
+        "operationId": "logout_api_logout_post",
         "responses": {
           "204": {
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "summary": "Logout",
         "tags": [
           "Auth"
         ]
       }
     },
-    "/ping": {
+    "/api/ping": {
       "get": {
-        "operationId": "ping_ping_get",
+        "operationId": "ping_api_ping_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Ping Ping Get",
+                  "title": "Response Ping Api Ping Get",
                   "type": "string"
                 }
               }
@@ -3053,14 +3493,14 @@
         ]
       }
     },
-    "/token": {
+    "/api/token": {
       "post": {
-        "operationId": "login_for_access_token_token_post",
+        "operationId": "login_for_access_token_api_token_post",
         "requestBody": {
           "content": {
             "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_login_for_access_token_token_post"
+                "$ref": "#/components/schemas/Body_login_for_access_token_api_token_post"
               }
             }
           },
@@ -3094,9 +3534,9 @@
         ]
       }
     },
-    "/tournaments": {
+    "/api/tournaments": {
       "get": {
-        "operationId": "get_tournaments_tournaments_get",
+        "operationId": "get_tournaments_api_tournaments_get",
         "parameters": [
           {
             "in": "query",
@@ -3166,7 +3606,7 @@
         ]
       },
       "post": {
-        "operationId": "create_tournament_tournaments_post",
+        "operationId": "create_tournament_api_tournaments_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3182,7 +3622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/TournamentResponse"
                 }
               }
             },
@@ -3213,9 +3653,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}": {
+    "/api/tournaments/{tournament_id}": {
       "delete": {
-        "operationId": "delete_tournament_tournaments__tournament_id__delete",
+        "operationId": "delete_tournament_api_tournaments__tournament_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -3263,7 +3703,7 @@
         ]
       },
       "get": {
-        "operationId": "get_tournament_tournaments__tournament_id__get",
+        "operationId": "get_tournament_api_tournaments__tournament_id__get",
         "parameters": [
           {
             "in": "path",
@@ -3311,7 +3751,7 @@
         ]
       },
       "put": {
-        "operationId": "update_tournament_by_id_tournaments__tournament_id__put",
+        "operationId": "update_tournament_by_id_api_tournaments__tournament_id__put",
         "parameters": [
           {
             "in": "path",
@@ -3369,9 +3809,60 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/available_inputs": {
+    "/api/tournaments/{tournament_id}/access": {
       "get": {
-        "operationId": "get_available_inputs_tournaments__tournament_id__available_inputs_get",
+        "description": "Whether whoever asks can manage the tournament, or only follow it.",
+        "operationId": "get_tournament_access_api_tournaments__tournament_id__access_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TournamentAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Tournament Access",
+        "tags": [
+          "Tournaments"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/available_inputs": {
+      "get": {
+        "operationId": "get_available_inputs_api_tournaments__tournament_id__available_inputs_get",
         "parameters": [
           {
             "in": "path",
@@ -3419,10 +3910,10 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/change-status": {
+    "/api/tournaments/{tournament_id}/change-status": {
       "post": {
         "description": "Make a tournament archived or non-archived.",
-        "operationId": "change_status_tournaments__tournament_id__change_status_post",
+        "operationId": "change_status_api_tournaments__tournament_id__change_status_post",
         "parameters": [
           {
             "in": "path",
@@ -3480,9 +3971,121 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/logo": {
+    "/api/tournaments/{tournament_id}/delay_schedule": {
+      "post": {
+        "description": "Move every round that hasn't been played yet, and everything after it, for an event that\nruns late. A negative number of minutes moves them earlier.",
+        "operationId": "delay_schedule_api_tournaments__tournament_id__delay_schedule_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleDelayBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Delay Schedule",
+        "tags": [
+          "Matches"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/details": {
       "get": {
-        "operationId": "get_tournament_logo_tournaments__tournament_id__logo_get",
+        "description": "Everything the Details pages of a tournament show, in one answer: the tournament, its stages\nwithout draft rounds, players, teams, rankings and standings.\n\nIt can be a few seconds old.",
+        "operationId": "get_tournament_details_by_id_api_tournaments__tournament_id__details_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TournamentDetailsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Tournament Details By Id",
+        "tags": [
+          "Tournaments"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/logo": {
+      "get": {
+        "operationId": "get_tournament_logo_api_tournaments__tournament_id__logo_get",
         "parameters": [
           {
             "in": "path",
@@ -3528,7 +4131,7 @@
         ]
       },
       "post": {
-        "operationId": "upload_logo_tournaments__tournament_id__logo_post",
+        "operationId": "upload_logo_api_tournaments__tournament_id__logo_post",
         "parameters": [
           {
             "in": "path",
@@ -3544,7 +4147,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_logo_tournaments__tournament_id__logo_post"
+                "$ref": "#/components/schemas/Body_upload_logo_api_tournaments__tournament_id__logo_post"
               }
             }
           }
@@ -3585,9 +4188,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/matches": {
+    "/api/tournaments/{tournament_id}/matches": {
       "post": {
-        "operationId": "create_match_tournaments__tournament_id__matches_post",
+        "operationId": "create_match_api_tournaments__tournament_id__matches_post",
         "parameters": [
           {
             "in": "path",
@@ -3645,9 +4248,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/matches/{match_id}": {
+    "/api/tournaments/{tournament_id}/matches/{match_id}": {
       "delete": {
-        "operationId": "delete_match_tournaments__tournament_id__matches__match_id__delete",
+        "operationId": "delete_match_api_tournaments__tournament_id__matches__match_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -3704,7 +4307,7 @@
         ]
       },
       "put": {
-        "operationId": "update_match_by_id_tournaments__tournament_id__matches__match_id__put",
+        "operationId": "update_match_by_id_api_tournaments__tournament_id__matches__match_id__put",
         "parameters": [
           {
             "in": "path",
@@ -3771,10 +4374,10 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/next_stage_rankings": {
+    "/api/tournaments/{tournament_id}/next_stage_rankings": {
       "get": {
-        "description": "Get the rankings for the stage items in this stage.",
-        "operationId": "get_next_stage_rankings_tournaments__tournament_id__next_stage_rankings_get",
+        "description": "Get the teams that take the slots of the next stage once it is activated.\n\nA slot that can't be decided yet is left out: its source ranks fewer teams than the position\nthe slot takes.",
+        "operationId": "get_next_stage_rankings_api_tournaments__tournament_id__next_stage_rankings_get",
         "parameters": [
           {
             "in": "path",
@@ -3822,9 +4425,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/players": {
+    "/api/tournaments/{tournament_id}/players": {
       "get": {
-        "operationId": "get_players_tournaments__tournament_id__players_get",
+        "operationId": "get_players_api_tournaments__tournament_id__players_get",
         "parameters": [
           {
             "in": "path",
@@ -3943,7 +4546,7 @@
         ]
       },
       "post": {
-        "operationId": "create_single_player_tournaments__tournament_id__players_post",
+        "operationId": "create_single_player_api_tournaments__tournament_id__players_post",
         "parameters": [
           {
             "in": "path",
@@ -4001,9 +4604,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/players/{player_id}": {
+    "/api/tournaments/{tournament_id}/players/{player_id}": {
       "delete": {
-        "operationId": "delete_player_tournaments__tournament_id__players__player_id__delete",
+        "operationId": "delete_player_api_tournaments__tournament_id__players__player_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4060,7 +4663,7 @@
         ]
       },
       "put": {
-        "operationId": "update_player_by_id_tournaments__tournament_id__players__player_id__put",
+        "operationId": "update_player_by_id_api_tournaments__tournament_id__players__player_id__put",
         "parameters": [
           {
             "in": "path",
@@ -4127,9 +4730,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/players_multi": {
+    "/api/tournaments/{tournament_id}/players_multi": {
       "post": {
-        "operationId": "create_multiple_players_tournaments__tournament_id__players_multi_post",
+        "operationId": "create_multiple_players_api_tournaments__tournament_id__players_multi_post",
         "parameters": [
           {
             "in": "path",
@@ -4187,9 +4790,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/rankings": {
+    "/api/tournaments/{tournament_id}/rankings": {
       "get": {
-        "operationId": "get_rankings_tournaments__tournament_id__rankings_get",
+        "operationId": "get_rankings_api_tournaments__tournament_id__rankings_get",
         "parameters": [
           {
             "in": "path",
@@ -4237,7 +4840,7 @@
         ]
       },
       "post": {
-        "operationId": "create_ranking_tournaments__tournament_id__rankings_post",
+        "operationId": "create_ranking_api_tournaments__tournament_id__rankings_post",
         "parameters": [
           {
             "in": "path",
@@ -4295,9 +4898,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/rankings/{ranking_id}": {
+    "/api/tournaments/{tournament_id}/rankings/{ranking_id}": {
       "delete": {
-        "operationId": "delete_ranking_tournaments__tournament_id__rankings__ranking_id__delete",
+        "operationId": "delete_ranking_api_tournaments__tournament_id__rankings__ranking_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4354,7 +4957,7 @@
         ]
       },
       "put": {
-        "operationId": "update_ranking_by_id_tournaments__tournament_id__rankings__ranking_id__put",
+        "operationId": "update_ranking_by_id_api_tournaments__tournament_id__rankings__ranking_id__put",
         "parameters": [
           {
             "in": "path",
@@ -4421,10 +5024,10 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/rounds": {
+    "/api/tournaments/{tournament_id}/rounds": {
       "post": {
         "description": "Create the next round of a Swiss stage item as a draft in which every active team is paired.\n\nOnly organizers see the draft. Its pairings can be changed by adding and deleting matches, and\nit is published by updating the round with `is_draft` set to false.",
-        "operationId": "create_round_tournaments__tournament_id__rounds_post",
+        "operationId": "create_round_api_tournaments__tournament_id__rounds_post",
         "parameters": [
           {
             "in": "path",
@@ -4482,9 +5085,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/rounds/{round_id}": {
+    "/api/tournaments/{tournament_id}/rounds/{round_id}": {
       "delete": {
-        "operationId": "delete_round_tournaments__tournament_id__rounds__round_id__delete",
+        "operationId": "delete_round_api_tournaments__tournament_id__rounds__round_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4541,7 +5144,7 @@
         ]
       },
       "put": {
-        "operationId": "update_round_by_id_tournaments__tournament_id__rounds__round_id__put",
+        "operationId": "update_round_by_id_api_tournaments__tournament_id__rounds__round_id__put",
         "parameters": [
           {
             "in": "path",
@@ -4608,9 +5211,69 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/schedule_matches": {
+    "/api/tournaments/{tournament_id}/rounds/{round_id}/regenerate": {
       "post": {
-        "operationId": "schedule_matches_tournaments__tournament_id__schedule_matches_post",
+        "description": "Replace a Swiss draft in one transaction, retaining it if any replacement fails.",
+        "operationId": "regenerate_round_api_tournaments__tournament_id__rounds__round_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "round_id",
+            "required": true,
+            "schema": {
+              "title": "Round Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Regenerate Round",
+        "tags": [
+          "Rounds"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/schedule_matches": {
+      "post": {
+        "operationId": "schedule_matches_api_tournaments__tournament_id__schedule_matches_post",
         "parameters": [
           {
             "in": "path",
@@ -4658,9 +5321,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stage_items": {
+    "/api/tournaments/{tournament_id}/stage_items": {
       "post": {
-        "operationId": "create_stage_item_tournaments__tournament_id__stage_items_post",
+        "operationId": "create_stage_item_api_tournaments__tournament_id__stage_items_post",
         "parameters": [
           {
             "in": "path",
@@ -4718,9 +5381,10 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stage_items/{stage_item_id}": {
+    "/api/tournaments/{tournament_id}/stage_items/{stage_item_id}": {
       "delete": {
-        "operationId": "delete_stage_item_tournaments__tournament_id__stage_items__stage_item_id__delete",
+        "description": "Delete a stage item with its rounds and matches.\n\nSlots of later stage items that take a team from it become open again. That is refused\nonce such a stage item has results, which belong to the teams that advanced.",
+        "operationId": "delete_stage_item_api_tournaments__tournament_id__stage_items__stage_item_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4777,7 +5441,7 @@
         ]
       },
       "put": {
-        "operationId": "update_stage_item_tournaments__tournament_id__stage_items__stage_item_id__put",
+        "operationId": "update_stage_item_api_tournaments__tournament_id__stage_items__stage_item_id__put",
         "parameters": [
           {
             "in": "path",
@@ -4844,9 +5508,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stage_items/{stage_item_id}/inputs/{stage_item_input_id}": {
+    "/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/inputs/{stage_item_input_id}": {
       "put": {
-        "operationId": "update_stage_item_input_tournaments__tournament_id__stage_items__stage_item_id__inputs__stage_item_input_id__put",
+        "operationId": "update_stage_item_input_api_tournaments__tournament_id__stage_items__stage_item_id__inputs__stage_item_input_id__put",
         "parameters": [
           {
             "in": "path",
@@ -4933,9 +5597,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stages": {
+    "/api/tournaments/{tournament_id}/stages": {
       "get": {
-        "operationId": "get_stages_tournaments__tournament_id__stages_get",
+        "operationId": "get_stages_api_tournaments__tournament_id__stages_get",
         "parameters": [
           {
             "in": "path",
@@ -4993,7 +5657,7 @@
         ]
       },
       "post": {
-        "operationId": "create_stage_tournaments__tournament_id__stages_post",
+        "operationId": "create_stage_api_tournaments__tournament_id__stages_post",
         "parameters": [
           {
             "in": "path",
@@ -5041,9 +5705,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stages/activate": {
+    "/api/tournaments/{tournament_id}/stages/activate": {
       "post": {
-        "operationId": "activate_next_stage_tournaments__tournament_id__stages_activate_post",
+        "operationId": "activate_next_stage_api_tournaments__tournament_id__stages_activate_post",
         "parameters": [
           {
             "in": "path",
@@ -5101,9 +5765,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/stages/{stage_id}": {
+    "/api/tournaments/{tournament_id}/stages/{stage_id}": {
       "delete": {
-        "operationId": "delete_stage_tournaments__tournament_id__stages__stage_id__delete",
+        "operationId": "delete_stage_api_tournaments__tournament_id__stages__stage_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -5160,7 +5824,7 @@
         ]
       },
       "put": {
-        "operationId": "update_stage_tournaments__tournament_id__stages__stage_id__put",
+        "operationId": "update_stage_api_tournaments__tournament_id__stages__stage_id__put",
         "parameters": [
           {
             "in": "path",
@@ -5227,10 +5891,10 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/standings": {
+    "/api/tournaments/{tournament_id}/standings": {
       "get": {
         "description": "Get the teams of every stage item, best first. Teams advance to the next stage in this order.",
-        "operationId": "get_standings_tournaments__tournament_id__standings_get",
+        "operationId": "get_standings_api_tournaments__tournament_id__standings_get",
         "parameters": [
           {
             "in": "path",
@@ -5278,9 +5942,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/teams": {
+    "/api/tournaments/{tournament_id}/teams": {
       "get": {
-        "operationId": "get_teams_tournaments__tournament_id__teams_get",
+        "operationId": "get_teams_api_tournaments__tournament_id__teams_get",
         "parameters": [
           {
             "in": "path",
@@ -5389,7 +6053,7 @@
         ]
       },
       "post": {
-        "operationId": "create_team_tournaments__tournament_id__teams_post",
+        "operationId": "create_team_api_tournaments__tournament_id__teams_post",
         "parameters": [
           {
             "in": "path",
@@ -5447,9 +6111,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/teams/{team_id}": {
+    "/api/tournaments/{tournament_id}/teams/{team_id}": {
       "delete": {
-        "operationId": "delete_team_tournaments__tournament_id__teams__team_id__delete",
+        "operationId": "delete_team_api_tournaments__tournament_id__teams__team_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -5506,7 +6170,7 @@
         ]
       },
       "put": {
-        "operationId": "update_team_by_id_tournaments__tournament_id__teams__team_id__put",
+        "operationId": "update_team_by_id_api_tournaments__tournament_id__teams__team_id__put",
         "parameters": [
           {
             "in": "path",
@@ -5573,9 +6237,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/teams/{team_id}/logo": {
+    "/api/tournaments/{tournament_id}/teams/{team_id}/logo": {
       "get": {
-        "operationId": "get_team_logo_tournaments__tournament_id__teams__team_id__logo_get",
+        "operationId": "get_team_logo_api_tournaments__tournament_id__teams__team_id__logo_get",
         "parameters": [
           {
             "in": "path",
@@ -5630,7 +6294,7 @@
         ]
       },
       "post": {
-        "operationId": "update_team_logo_tournaments__tournament_id__teams__team_id__logo_post",
+        "operationId": "update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post",
         "parameters": [
           {
             "in": "path",
@@ -5655,7 +6319,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_update_team_logo_tournaments__tournament_id__teams__team_id__logo_post"
+                "$ref": "#/components/schemas/Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post"
               }
             }
           }
@@ -5696,9 +6360,9 @@
         ]
       }
     },
-    "/tournaments/{tournament_id}/teams_multi": {
+    "/api/tournaments/{tournament_id}/teams_multi": {
       "post": {
-        "operationId": "create_multiple_teams_tournaments__tournament_id__teams_multi_post",
+        "operationId": "create_multiple_teams_api_tournaments__tournament_id__teams_multi_post",
         "parameters": [
           {
             "in": "path",
@@ -5756,9 +6420,9 @@
         ]
       }
     },
-    "/users/me": {
+    "/api/users/me": {
       "get": {
-        "operationId": "get_user_users_me_get",
+        "operationId": "get_user_api_users_me_get",
         "responses": {
           "200": {
             "content": {
@@ -5785,9 +6449,9 @@
         ]
       }
     },
-    "/users/register": {
+    "/api/users/register": {
       "post": {
-        "operationId": "register_user_users_register_post",
+        "operationId": "register_user_api_users_register_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5826,9 +6490,9 @@
         ]
       }
     },
-    "/users/{user_id}": {
+    "/api/users/{user_id}": {
       "get": {
-        "operationId": "get_me_users__user_id__get",
+        "operationId": "get_me_api_users__user_id__get",
         "parameters": [
           {
             "in": "path",
@@ -5876,7 +6540,7 @@
         ]
       },
       "put": {
-        "operationId": "update_user_details_users__user_id__put",
+        "operationId": "update_user_details_api_users__user_id__put",
         "parameters": [
           {
             "in": "path",
@@ -5934,10 +6598,10 @@
         ]
       }
     },
-    "/users/{user_id}/password": {
+    "/api/users/{user_id}/password": {
       "put": {
         "description": "Asks for the current password as well, so that a stolen session can't lock the owner out.\n\nSigns out every other session. This one gets a new session cookie.",
-        "operationId": "put_user_password_users__user_id__password_put",
+        "operationId": "put_user_password_api_users__user_id__password_put",
         "parameters": [
           {
             "in": "path",

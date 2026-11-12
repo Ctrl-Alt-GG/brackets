@@ -29,7 +29,9 @@ class Config(BaseSettings):
 
     admin_email: str | None = None
     admin_password: str | None = None
-    allow_user_registration: bool = True
+    # Open tournaments are public, so anyone who can create an account can publish on the home
+    # page. Self-service signup is therefore something an operator turns on, not off.
+    allow_user_registration: bool = False
     base_url: str = "http://localhost:8400"
     cors_origin_regex: str = ""
     cors_origins: list[str] = Field(default_factory=list)
@@ -37,7 +39,9 @@ class Config(BaseSettings):
     jwt_secret: str
     jwt_audience: str = "bracket-api"
     jwt_issuer: str | None = None
-    access_token_expire_minutes: int = 30
+    # A session is renewed while it is used, so this is how long an organizer can be away
+    # before they have to sign in again: long enough for an event day.
+    access_token_expire_minutes: int = 12 * 60
     auto_run_migrations: bool = True
     pg_dsn: PostgresDsn = PostgresDsn("postgresql://user:pass@localhost:5432/db")
     api_prefix: str = ""
@@ -95,6 +99,7 @@ class Config(BaseSettings):
 
 class DevelopmentConfig(Config):
     admin_email: Annotated[str | None, Field("test@example.org")]
+    allow_user_registration: Annotated[bool, Field(True)]
     cors_origin_regex: Annotated[str, Field(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")]
 
     model_config = SettingsConfigDict(env_file="dev.env")
@@ -104,7 +109,9 @@ class ProductionConfig(Config):
     model_config = SettingsConfigDict(env_file="prod.env")
 
 
-environment = Environment(os.getenv("ENVIRONMENT", "DEVELOPMENT").upper())
+# Production unless told otherwise: forgetting the variable must not switch off the security
+# headers, the secure cookie and the shared rate limits.
+environment = Environment(os.getenv("ENVIRONMENT", "PRODUCTION").upper())
 config: Config
 
 match environment:

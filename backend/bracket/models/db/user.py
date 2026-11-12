@@ -54,6 +54,8 @@ class UserPublic(UserBase):
 class UserToUpdate(BaseModel):
     email: EmailStr
     name: Name
+    # Only needed to change the email, which is what the account signs in with.
+    current_password: str | None = None
 
     @field_validator("email")
     @classmethod

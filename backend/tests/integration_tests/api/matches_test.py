@@ -64,16 +64,34 @@ async def test_create_match(
         inserted_team(
             DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as team2_inserted,
+        inserted_stage_item_input(
+            StageItemInputInsertable(
+                slot=1,
+                team_id=team1_inserted.id,
+                tournament_id=auth_context.tournament.id,
+                stage_item_id=stage_item_inserted.id,
+            )
+        ) as input1,
+        inserted_stage_item_input(
+            StageItemInputInsertable(
+                slot=2,
+                team_id=team2_inserted.id,
+                tournament_id=auth_context.tournament.id,
+                stage_item_id=stage_item_inserted.id,
+            )
+        ) as input2,
     ):
         body = {
-            "team1_id": team1_inserted.id,
-            "team2_id": team2_inserted.id,
+            "stage_item_input1_id": input1.id,
+            "stage_item_input2_id": input2.id,
             "round_id": round_inserted.id,
         }
         response = await send_tournament_request(
             HTTPMethod.POST, "matches", auth_context, json=body
         )
         assert response["data"]["id"], response
+        assert response["data"]["stage_item_input1_id"] == input1.id
+        assert response["data"]["stage_item_input2_id"] == input2.id
         # The response holds the planned timing, with the match duration of the stage.
         assert response["data"]["start_time"] is not None
         assert response["data"]["duration_minutes"] == 30

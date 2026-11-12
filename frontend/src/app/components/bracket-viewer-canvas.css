@@ -72,7 +72,13 @@
   cursor: pointer;
 }
 
-.brackets-viewer .participant.team-link:hover .name {
+.brackets-viewer .participant.team-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.brackets-viewer .participant.team-link:hover .name,
+.brackets-viewer .participant.team-link:focus-visible .name {
   text-decoration: underline;
   text-underline-offset: 4px;
 }

@@ -1,14 +1,19 @@
 from typing import Literal
 
+from async_lru import alru_cache
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from starlette import status
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, Response
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbConnection, engine
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.subscriptions import check_requirement
-from bracket.logic.tournaments import get_tournament_logo_path, sql_delete_tournament_completely
+from bracket.logic.tournaments import (
+    get_tournament_details,
+    get_tournament_logo_path,
+    sql_delete_tournament_completely,
+)
 from bracket.models.db.ranking import RankingCreateBody
 from bracket.models.db.tournament import (
     Tournament,
@@ -16,6 +21,7 @@ from bracket.models.db.tournament import (
     TournamentChangeStatusBody,
     TournamentUpdateBody,
 )
+from bracket.models.db.tournament_details import TournamentAccess
 from bracket.models.db.user import UserPublic
 from bracket.routes.auth import (
     user_authenticated,
@@ -23,7 +29,13 @@ from bracket.routes.auth import (
     user_authenticated_or_public_dashboard,
     user_authenticated_or_public_dashboard_by_endpoint_name,
 )
-from bracket.routes.models import SuccessResponse, TournamentResponse, TournamentsResponse
+from bracket.routes.models import (
+    SuccessResponse,
+    TournamentAccessResponse,
+    TournamentDetailsResponse,
+    TournamentResponse,
+    TournamentsResponse,
+)
 from bracket.routes.util import disallow_archived_tournament
 from bracket.schema import tournaments
 from bracket.sql.rankings import (
@@ -47,16 +59,54 @@ from bracket.utils.id_types import TournamentId
 from bracket.utils.uploads import (
     get_image_media_type,
     remove_existing_upload,
+    remove_existing_uploads,
     store_validated_image_upload,
 )
 
 router = APIRouter(prefix=config.api_prefix)
 
-unauthorized_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="You don't have access to this tournament",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+# How long the Details pages of a tournament are served from memory. Every visitor's page asks
+# again twice a minute, so at an event hundreds of them ask for the same thing.
+DETAILS_CACHE_SECONDS = 5
+
+
+@alru_cache(maxsize=64, ttl=DETAILS_CACHE_SECONDS)
+async def get_tournament_details_json(tournament_id: TournamentId) -> bytes:
+    """
+    The answer of the details endpoint, ready to send.
+
+    Requests that arrive while it is being worked out wait for that one result, and it is kept
+    for a few seconds, so the database does the work once however many visitors are watching.
+    It has its own connection: the result outlives the request that happened to ask first.
+    """
+    async with engine.connect() as conn:
+        details = await get_tournament_details(conn, tournament_id)
+    return TournamentDetailsResponse(data=details).model_dump_json().encode()
+
+
+@router.get("/tournaments/{tournament_id}/details", response_model=TournamentDetailsResponse)
+async def get_tournament_details_by_id(
+    tournament_id: TournamentId,
+    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> Response:
+    """
+    Everything the Details pages of a tournament show, in one answer: the tournament, its stages
+    without draft rounds, players, teams, rankings and standings.
+
+    It can be a few seconds old.
+    """
+    return Response(
+        content=await get_tournament_details_json(tournament_id), media_type="application/json"
+    )
+
+
+@router.get("/tournaments/{tournament_id}/access", response_model=TournamentAccessResponse)
+async def get_tournament_access(
+    tournament_id: TournamentId,
+    user: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> TournamentAccessResponse:
+    """Whether whoever asks can manage the tournament, or only follow it."""
+    return TournamentAccessResponse(data=TournamentAccess(can_manage=user is not None))
 
 
 @router.get("/tournaments/{tournament_id}", response_model=TournamentResponse)
@@ -121,9 +171,10 @@ async def delete_tournament(
     background_tasks: BackgroundTasks,
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> SuccessResponse:
-    logo_path = await sql_delete_tournament_completely(conn, tournament_id)
+    uploads = await sql_delete_tournament_completely(conn, tournament_id)
     # Background tasks run after the response, so the deletion is committed by then.
-    background_tasks.add_task(remove_existing_upload, "tournament-logos", logo_path)
+    background_tasks.add_task(remove_existing_upload, "tournament-logos", uploads.tournament_logo)
+    background_tasks.add_task(remove_existing_uploads, "team-logos", uploads.team_logos)
     return SuccessResponse()
 
 
@@ -150,12 +201,12 @@ async def change_status(
     return SuccessResponse()
 
 
-@router.post("/tournaments", response_model=SuccessResponse)
+@router.post("/tournaments", response_model=TournamentResponse)
 async def create_tournament(
     conn: DbConnection,
     tournament_to_insert: TournamentBody,
     user: UserPublic = Depends(user_authenticated),
-) -> SuccessResponse:
+) -> TournamentResponse:
     if not await get_user_access_to_club(conn, tournament_to_insert.club_id, user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Club ID is invalid")
 
@@ -168,7 +219,7 @@ async def create_tournament(
     ranking = RankingCreateBody()
     await sql_create_ranking(conn, tournament_id, ranking, position=0)
 
-    return SuccessResponse()
+    return TournamentResponse(data=await sql_get_tournament(conn, tournament_id))
 
 
 @router.post("/tournaments/{tournament_id}/logo")

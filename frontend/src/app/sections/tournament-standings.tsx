@@ -15,6 +15,18 @@ import {
 } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
+/** How the teams of a group earn their place, in a few words next to its table. */
+function pointsRule(stageItem: OpenApi.StageItemWithRounds, rankings: OpenApi.Ranking[]) {
+  if (stageItem.type === 'SWISS') {
+    return 'ranked by a rating that starts at 1200 and moves with every result';
+  }
+
+  const ranking = rankings.find((candidate) => candidate.id === stageItem.ranking_id);
+  if (!ranking) return 'ranked by points';
+  const rule = `win ${formatPoints(ranking.win_points)}, draw ${formatPoints(ranking.draw_points)}, loss ${formatPoints(ranking.loss_points)}`;
+  return ranking.add_score_points ? `${rule}, plus the score of every match` : rule;
+}
+
 function ColumnHeading({ long, short }: { long: string; short: string }) {
   return (
     <th>
@@ -50,7 +62,6 @@ export function StandingsSection({
       .map((stageItem) => ({ entries: stageItemStandings(stageItem, standings), stage, stageItem }))
       .filter(({ entries }) => entries.length > 0),
   );
-  const hasSwiss = tables.some(({ stageItem }) => stageItem.type === 'SWISS');
 
   return (
     <div className="space-y-6">
@@ -80,6 +91,7 @@ export function StandingsSection({
               <h3 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h3>
               <p className="text-sm text-base-content/70">
                 {stage.name} · {stageItem.type_name}
+                {compact ? null : ` · ${pointsRule(stageItem, rankings)}`}
               </p>
             </div>
             {compact ? (
@@ -157,30 +169,12 @@ export function StandingsSection({
           </section>
         ))}
       </Surface>
-      {!compact ? (
-        <Surface>
-          <SurfaceHeading title="How points are awarded" />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {rankings.map((ranking) => (
-              <p
-                className="rounded-box border border-base-300 bg-base-100/50 p-4 text-sm text-base-content/80"
-                key={ranking.id}
-              >
-                A win is worth {formatPoints(ranking.win_points)}{' '}
-                {Number(ranking.win_points) === 1 ? 'point' : 'points'}, a draw{' '}
-                {formatPoints(ranking.draw_points)} and a loss {formatPoints(ranking.loss_points)}.
-              </p>
-            ))}
-          </div>
-          <p className="text-sm text-base-content/70">
-            Teams with the same points are ranked by score difference, then by their total score,
-            then by the number of wins, and after that by their seeding. Teams go through to the
-            next stage in this order.
-            {hasSwiss
-              ? ' In Swiss groups, teams are ranked by a rating that starts at 1200 and changes with every result.'
-              : null}
-          </p>
-        </Surface>
+      {!compact && tables.length > 0 ? (
+        <p className="px-1 text-sm text-base-content/70">
+          Teams with the same points are ranked by score difference, then by their total score, then
+          by the number of wins, and after that by their seeding. Teams go through to the next stage
+          in this order.
+        </p>
       ) : null}
     </div>
   );

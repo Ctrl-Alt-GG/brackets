@@ -57,6 +57,8 @@ export type TournamentBundle = {
     Array<OpenApi.StageItemInputOptionFinal | OpenApi.StageItemInputOptionTentative>
   >;
   nextStageRankings: Record<string, OpenApi.StageItemInputUpdate[]>;
+  /** Why the stage editor's slot options couldn't be loaded, when they couldn't. */
+  managementError: string | null;
 };
 
 export type FlattenedMatch = {

@@ -11,12 +11,12 @@ from bracket.utils.types import EnumAutoStr
 
 
 class UniqueIndex(EnumAutoStr):
-    ix_clubs_name = auto()
     ix_tournaments_dashboard_endpoint = auto()
     ix_users_email = auto()
     ix_users_email_lower = auto()
     stage_item_inputs_stage_item_id_team_id_key = auto()
     stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key = auto()
+    users_x_clubs_club_id_user_id_key = auto()
 
 
 class ForeignKey(EnumAutoStr):
@@ -27,7 +27,6 @@ class ForeignKey(EnumAutoStr):
 
 
 unique_index_violation_error_lookup = {
-    UniqueIndex.ix_clubs_name: "This event name is already taken",
     UniqueIndex.ix_tournaments_dashboard_endpoint: "This Details link is already taken",
     UniqueIndex.ix_users_email: "This email is already taken",
     UniqueIndex.ix_users_email_lower: "This email is already taken",
@@ -37,13 +36,16 @@ unique_index_violation_error_lookup = {
     UniqueIndex.stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key: (
         "This stage item winner is already assigned to another stage item"
     ),
+    UniqueIndex.users_x_clubs_club_id_user_id_key: "This account already helps run this event",
 }
 
 
 foreign_key_violation_error_lookup = {
     ForeignKey.matches_stage_item_input1_id_fkey: "This team is still part of matches",
     ForeignKey.matches_stage_item_input2_id_fkey: "This team is still part of matches",
-    ForeignKey.stage_item_inputs_team_id_fkey: "Invalid team as input to this stage item",
+    ForeignKey.stage_item_inputs_team_id_fkey: (
+        "This team still has a slot in a stage. Open that slot in Stages first."
+    ),
     ForeignKey.tournaments_club_id_fkey: "This event still has tournaments, delete those first",
 }
 

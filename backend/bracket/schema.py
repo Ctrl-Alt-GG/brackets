@@ -18,7 +18,8 @@ clubs = Table(
     "clubs",
     metadata,
     Column("id", BigInteger, primary_key=True, index=True, autoincrement=True),
-    Column("name", String, nullable=False, index=True, unique=True),
+    # Unique per organizer, which the route checks: two organizers may both run a "LAN party".
+    Column("name", String, nullable=False, index=True),
     Column("created", DateTimeTZ, nullable=False, server_default=func.now()),
 )
 
@@ -178,6 +179,8 @@ matches = Table(
     ),
     Column("stage_item_input1_score", Integer, nullable=False),
     Column("stage_item_input2_score", Integer, nullable=False),
+    # A match counts as played once it has a score. This marks a match that ended 0-0.
+    Column("scoreless_result", Boolean, nullable=False, server_default="false"),
 )
 
 teams = Table(
@@ -243,6 +246,14 @@ users = Table(
 # Created by the `6d5f2a8ec1b1` migration. Logins look users up by it.
 Index("ix_users_email_lower", func.lower(users.c.email), unique=True)
 
+# Sessions that were ended by logging out, until their tokens would have expired anyway.
+revoked_sessions = Table(
+    "revoked_sessions",
+    metadata,
+    Column("session_id", String, primary_key=True),
+    Column("expires", DateTimeTZ, nullable=False, index=True),
+)
+
 users_x_clubs = Table(
     "users_x_clubs",
     metadata,
@@ -259,6 +270,7 @@ users_x_clubs = Table(
         nullable=False,
         default="OWNER",
     ),
+    UniqueConstraint("club_id", "user_id"),
 )
 
 players_x_teams = Table(

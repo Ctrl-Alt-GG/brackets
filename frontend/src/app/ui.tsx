@@ -1,8 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 
 import type { Session } from './types';
-import { cx } from './utils';
+import { cx, loginPath } from './utils';
 
 export function PageShell({
   children,
@@ -65,23 +65,29 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** A labelled form control with its validation message. */
+/** A labelled form control with its validation message, or a hint while there is none. */
 export function Field({
   children,
   className,
   error,
+  hint,
   label,
 }: {
   children: ReactNode;
   className?: string;
   error?: string;
+  hint?: string;
   label: string;
 }) {
   return (
     <label className={cx('fieldset', className)}>
       <span className="fieldset-legend">{label}</span>
       {children}
-      {error ? <span className="label text-error">{error}</span> : null}
+      {error ? (
+        <span className="label text-error">{error}</span>
+      ) : hint ? (
+        <span className="label whitespace-normal">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -159,13 +165,17 @@ export function EmptyState({
 
 export function TopNav({
   currentUserName,
+  logoutPending = false,
   onLogout,
   session,
 }: {
   currentUserName?: string | null;
+  logoutPending?: boolean;
   onLogout: () => void;
   session: Session;
 }) {
+  const { pathname } = useLocation();
+
   return (
     <header className="border-b border-base-300 bg-base-100/40 backdrop-blur">
       <nav
@@ -215,13 +225,18 @@ export function TopNav({
               <Link className="btn btn-ghost btn-sm" to="/user">
                 {currentUserName ?? 'Account'}
               </Link>
-              <button className="btn btn-ghost btn-sm" onClick={onLogout} type="button">
-                Log out
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={logoutPending}
+                onClick={onLogout}
+                type="button"
+              >
+                {logoutPending ? 'Logging out…' : 'Log out'}
               </button>
             </>
           ) : (
             // Players never need an account, so visitors only get a quiet way in for organizers.
-            <Link className="link link-hover text-sm font-semibold" to="/login">
+            <Link className="link link-hover text-sm font-semibold" to={loginPath(pathname)}>
               Organizer login
             </Link>
           )}

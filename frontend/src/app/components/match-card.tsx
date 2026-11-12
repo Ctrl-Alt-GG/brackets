@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import * as OpenApi from '../../openapi';
 import { useTournamentContext } from '../tournament-context';
 import type { FlattenedMatch } from '../types';
@@ -14,6 +16,7 @@ import {
 import { TeamLink } from './team-link';
 
 const STATUS_BADGES: Record<MatchStatus, string> = {
+  awaiting: 'badge-warning',
   finished: 'badge-success',
   live: 'badge-error',
   scheduled: '',
@@ -77,11 +80,14 @@ function Side({
 }
 
 export function MatchCard({
+  editor,
   entry,
   showTime = true,
   size = 'md',
   stageItemsById,
 }: {
+  /** Where an organizer enters the result. It takes the place of the two teams and their score. */
+  editor?: ReactNode;
   entry: FlattenedMatch;
   showTime?: boolean;
   size?: 'lg' | 'md';
@@ -91,7 +97,8 @@ export function MatchCard({
   const { match, round, stageItem } = entry;
   const status = matchStatus(match);
   const winner = matchWinner(match);
-  const showScore = status === 'finished' || status === 'live';
+  // A match in progress has no score yet: its 0-0 would read as the score so far.
+  const showScore = status === 'finished';
   const isMine1 = myTeamId != null && inputTeamId(match.stage_item_input1) === myTeamId;
   const isMine2 = myTeamId != null && inputTeamId(match.stage_item_input2) === myTeamId;
 
@@ -114,28 +121,32 @@ export function MatchCard({
         </span>
       </div>
 
-      <div className="mt-3 space-y-1">
-        <Side
-          input={match.stage_item_input1}
-          isLoser={winner === 2}
-          isMine={isMine1}
-          isWinner={winner === 1}
-          score={match.stage_item_input1_score}
-          showScore={showScore}
-          size={size}
-          stageItemsById={stageItemsById}
-        />
-        <Side
-          input={match.stage_item_input2}
-          isLoser={winner === 1}
-          isMine={isMine2}
-          isWinner={winner === 2}
-          score={match.stage_item_input2_score}
-          showScore={showScore}
-          size={size}
-          stageItemsById={stageItemsById}
-        />
-      </div>
+      {editor ? (
+        <div className="mt-3">{editor}</div>
+      ) : (
+        <div className="mt-3 space-y-1">
+          <Side
+            input={match.stage_item_input1}
+            isLoser={winner === 2}
+            isMine={isMine1}
+            isWinner={winner === 1}
+            score={match.stage_item_input1_score}
+            showScore={showScore}
+            size={size}
+            stageItemsById={stageItemsById}
+          />
+          <Side
+            input={match.stage_item_input2}
+            isLoser={winner === 1}
+            isMine={isMine2}
+            isWinner={winner === 2}
+            score={match.stage_item_input2_score}
+            showScore={showScore}
+            size={size}
+            stageItemsById={stageItemsById}
+          />
+        </div>
+      )}
 
       {showTime ? (
         <p className="mt-3 text-xs text-base-content/70">{formatMatchTime(match.start_time)}</p>

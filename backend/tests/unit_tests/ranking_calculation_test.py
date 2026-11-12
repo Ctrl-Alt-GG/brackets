@@ -217,12 +217,14 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
         ),
     )
 
+    # The ranking awards 3.5 for a win. A rating doesn't: it moves by the result on a scale of 0 to
+    # 1, so what one team gains the other loses.
     assert ranking == {
         -2: TeamStatistics(
-            wins=0, draws=1, losses=1, points=Decimal("1208"), score_for=2, score_against=4
+            wins=0, draws=1, losses=1, points=Decimal("1184"), score_for=2, score_against=4
         ),
         -1: TeamStatistics(
-            wins=1, draws=1, losses=0, points=Decimal("1320"), score_for=4, score_against=2
+            wins=1, draws=1, losses=0, points=Decimal("1216"), score_for=4, score_against=2
         ),
     }
 

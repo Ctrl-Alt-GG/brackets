@@ -9,18 +9,11 @@ from bracket.utils.id_types import MatchId
 
 
 def matches_overlap(match1: Match, match2: Match) -> bool:
-    if (
-        match1.start_time is None
-        or match1.end_time is None
-        or match2.start_time is None
-        or match2.end_time is None
-    ):
+    """Whether the two matches are on at the same moment, including their breaks."""
+    if match1.start_time is None or match2.start_time is None:
         return False
 
-    return not (
-        (match1.end_time < match2.end_time and match1.start_time < match2.start_time)
-        or (match1.start_time > match2.start_time or match1.end_time > match2.end_time)
-    )
+    return match1.start_time < match2.end_time and match2.start_time < match1.end_time
 
 
 def get_conflicting_matches(
@@ -47,25 +40,27 @@ def get_conflicting_matches(
             if match1.id == match2.id:
                 continue
 
-            conflicting_input_ids = []
+            # The same team has a different slot id in each stage item. Compare teams so
+            # simultaneous matches in different groups are detected too; open slots have
+            # no team and cannot conflict.
+            conflicting_team_ids = {
+                input_.team_id for input_ in match1.stage_item_inputs if input_.team_id is not None
+            } & {
+                input_.team_id for input_ in match2.stage_item_inputs if input_.team_id is not None
+            }
 
-            if match2.stage_item_input1_id in match1.stage_item_input_ids:
-                conflicting_input_ids.append(match2.stage_item_input1_id)
-            if match2.stage_item_input2_id in match1.stage_item_input_ids:
-                conflicting_input_ids.append(match2.stage_item_input2_id)
-
-            if len(conflicting_input_ids) < 1:
+            if not conflicting_team_ids:
                 continue
 
             if matches_overlap(match1, match2):
                 for match in (match1, match2):
                     if not conflicts_to_set[match.id][0]:
                         conflicts_to_set[match.id][0] = (
-                            match.stage_item_input1_id in conflicting_input_ids
+                            match.stage_item_input1.team_id in conflicting_team_ids
                         )
                     if not conflicts_to_set[match.id][1]:
                         conflicts_to_set[match.id][1] = (
-                            match.stage_item_input2_id in conflicting_input_ids
+                            match.stage_item_input2.team_id in conflicting_team_ids
                         )
 
                 matches_with_conflicts.add(match1.id)

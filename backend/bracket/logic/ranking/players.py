@@ -4,15 +4,17 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bracket.logic.ranking.calculation import D, K
-from bracket.logic.ranking.statistics import START_ELO, PlayerStatistics
-from bracket.models.db.match import MatchWithDetailsDefinitive
+from bracket.logic.ranking.statistics import START_ELO, D, K, PlayerStatistics
+from bracket.models.db.match import MatchWithDetailsDefinitive, is_played
+from bracket.models.db.player import Player
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.team import FullTeamWithPlayers
 from bracket.models.db.util import StageWithStageItems
+from bracket.sql.players import get_all_players_in_tournament
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_teams_with_members
 from bracket.utils.id_types import PlayerId, TournamentId
+from bracket.utils.pagination import PaginationPlayers
 
 
 def determine_player_statistics(
@@ -39,7 +41,7 @@ def determine_player_statistics(
             if not round_.is_draft
             for match in round_.matches
             if isinstance(match, MatchWithDetailsDefinitive)
-            if match.stage_item_input1_score != 0 or match.stage_item_input2_score != 0
+            if is_played(match)
         ),
         key=lambda match: (
             match.start_time.timestamp() if match.start_time is not None else math.inf,
@@ -93,8 +95,38 @@ def determine_player_statistics(
 
 
 async def get_player_statistics(
-    conn: AsyncConnection, tournament_id: TournamentId
+    conn: AsyncConnection,
+    tournament_id: TournamentId,
+    *,
+    stages: list[StageWithStageItems] | None = None,
+    teams: list[FullTeamWithPlayers] | None = None,
 ) -> dict[PlayerId, PlayerStatistics]:
-    stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
-    teams = await get_teams_with_members(conn, tournament_id)
+    """`stages` (without draft rounds) and `teams` can be passed by a caller that has them."""
+    if stages is None:
+        stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
+    if teams is None:
+        teams = await get_teams_with_members(conn, tournament_id)
     return determine_player_statistics(stages, teams)
+
+
+async def get_players_with_statistics(
+    conn: AsyncConnection,
+    tournament_id: TournamentId,
+    *,
+    not_in_team: bool = False,
+    pagination: PaginationPlayers | None = None,
+    stages: list[StageWithStageItems] | None = None,
+    teams: list[FullTeamWithPlayers] | None = None,
+) -> list[Player]:
+    """
+    The players with their results. Those follow from the match results, so they are worked out
+    on every request instead of being read from the players table.
+    """
+    statistics = await get_player_statistics(conn, tournament_id, stages=stages, teams=teams)
+    players = await get_all_players_in_tournament(
+        conn, tournament_id, not_in_team=not_in_team, pagination=pagination
+    )
+    return [
+        player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
+        for player in players
+    ]

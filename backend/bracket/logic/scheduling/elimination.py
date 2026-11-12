@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette import status
 
 from bracket.models.db.match import Match, MatchCreateBody
+from bracket.models.db.stage_item import SINGLE_ELIMINATION_TEAM_COUNTS
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds
 from bracket.sql.matches import sql_create_match
@@ -88,17 +89,13 @@ def get_number_of_rounds_to_create_single_elimination(team_count: int) -> int:
     if team_count < 1:
         return 0
 
-    game_count_lookup = {
-        2: 1,
-        4: 2,
-        8: 3,
-        16: 4,
-        32: 5,
-    }
-    if team_count not in game_count_lookup:
+    if team_count not in SINGLE_ELIMINATION_TEAM_COUNTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Number of teams invalid, should be one of {list(game_count_lookup.keys())}",
+            detail=(
+                f"Number of teams invalid, should be one of {list(SINGLE_ELIMINATION_TEAM_COUNTS)}"
+            ),
         )
 
-    return game_count_lookup[team_count]
+    # Every round halves the teams that are left.
+    return team_count.bit_length() - 1

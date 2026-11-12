@@ -42,7 +42,6 @@ from bracket.sql.teams import (
     sql_delete_team,
 )
 from bracket.sql.validation import check_foreign_keys_belong_to_tournament
-from bracket.utils.db import fetch_one_parsed
 from bracket.utils.errors import ForeignKey, check_foreign_key_violation
 from bracket.utils.id_types import PlayerId, TeamId, TournamentId
 from bracket.utils.pagination import PaginationTeams
@@ -56,10 +55,35 @@ from bracket.utils.uploads import (
 router = APIRouter(prefix=config.api_prefix)
 
 
-async def update_team_members(
-    conn: AsyncConnection, team_id: TeamId, tournament_id: TournamentId, player_ids: set[PlayerId]
+async def check_players_are_free(
+    conn: AsyncConnection, team_id: TeamId, tournament: Tournament, player_ids: set[PlayerId]
 ) -> None:
-    [team] = await get_teams_with_members(conn, tournament_id, team_id=team_id)
+    """Unless the tournament allows it, a player who joins a team isn't in another one."""
+    if tournament.players_can_be_in_multiple_teams or len(player_ids) < 1:
+        return
+
+    for other_team in await get_teams_with_members(conn, tournament.id):
+        if other_team.id == team_id:
+            continue
+        taken = next((player for player in other_team.players if player.id in player_ids), None)
+        if taken is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{taken.name} is already in {other_team.name}. Players can be in one team, "
+                    "unless the tournament's settings allow more."
+                ),
+            )
+
+
+async def update_team_members(
+    conn: AsyncConnection, team_id: TeamId, tournament: Tournament, player_ids: set[PlayerId]
+) -> None:
+    [team] = await get_teams_with_members(conn, tournament.id, team_id=team_id)
+    # Players who are already in the team stay in it. A tournament from before this rule, or one
+    # that allowed several teams for a while, can have them in a second team, and its teams must
+    # still be saveable.
+    await check_players_are_free(conn, team_id, tournament, player_ids - set(team.player_ids))
 
     # Add members to the team
     for player_id in player_ids:
@@ -98,7 +122,7 @@ async def update_team_by_id(
     tournament_id: TournamentId,
     team_body: TeamBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    tournament: Tournament = Depends(disallow_archived_tournament),
     team: Team = Depends(team_dependency),
 ) -> SingleTeamResponse:
     await check_foreign_keys_belong_to_tournament(conn, team_body, tournament_id)
@@ -108,19 +132,9 @@ async def update_team_by_id(
         .where((teams.c.id == team.id) & (teams.c.tournament_id == tournament_id))
         .values(**team_body.model_dump(exclude={"player_ids"}))
     )
-    await update_team_members(conn, team.id, tournament_id, team_body.player_ids)
+    await update_team_members(conn, team.id, tournament, team_body.player_ids)
 
-    return SingleTeamResponse(
-        data=assert_some(
-            await fetch_one_parsed(
-                conn,
-                Team,
-                teams.select().where(
-                    (teams.c.id == team.id) & (teams.c.tournament_id == tournament_id)
-                ),
-            )
-        )
-    )
+    return SingleTeamResponse(data=assert_some(await get_team_by_id(conn, team.id, tournament_id)))
 
 
 @router.post("/tournaments/{tournament_id}/teams/{team_id}/logo", response_model=SingleTeamResponse)
@@ -158,6 +172,7 @@ async def get_team_logo(
 async def delete_team(
     conn: DbConnection,
     tournament_id: TournamentId,
+    background_tasks: BackgroundTasks,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     team: FullTeamWithPlayers = Depends(team_with_players_dependency),
@@ -171,6 +186,8 @@ async def delete_team(
     ):
         await sql_delete_team(conn, tournament_id, team.id)
 
+    # Background tasks run after the response, so the deletion is committed by then.
+    background_tasks.add_task(remove_existing_upload, "team-logos", team.logo_path)
     return SuccessResponse()
 
 
@@ -180,7 +197,7 @@ async def create_team(
     team_to_insert: TeamBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    tournament: Tournament = Depends(disallow_archived_tournament),
 ) -> SingleTeamResponse:
     await check_foreign_keys_belong_to_tournament(conn, team_to_insert, tournament_id)
 
@@ -200,7 +217,7 @@ async def create_team(
             .returning(teams.c.id)
         )
     )
-    await update_team_members(conn, last_record_id, tournament_id, team_to_insert.player_ids)
+    await update_team_members(conn, last_record_id, tournament, team_to_insert.player_ids)
 
     team_result = await get_team_by_id(conn, last_record_id, tournament_id)
     assert team_result is not None

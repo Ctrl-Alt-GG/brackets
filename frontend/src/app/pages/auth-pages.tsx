@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import {
   getAuthFeaturesApiAuthFeaturesGetOptions,
@@ -15,11 +15,13 @@ import {
 } from '../../openapi/zod.gen';
 import { useSession } from '../hooks';
 import { EmptyState, Field, PageShell, Surface } from '../ui';
+import { safeNextPath } from '../utils';
 
 const loginSchema = zBodyLoginForAccessTokenApiTokenPost.pick({ password: true, username: true });
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [, setSession] = useSession();
   const authFeatures = useQuery(getAuthFeaturesApiAuthFeaturesGetOptions());
   const form = useForm({
@@ -31,7 +33,8 @@ export function LoginPage() {
     meta: { successMessage: 'Logged in successfully.' },
     onSuccess: ({ name, user_id }) => {
       setSession({ name, user_id });
-      navigate('/');
+      // Back to where the organizer was, such as the tournament their session ended on.
+      navigate(safeNextPath(searchParams.get('next')));
     },
   });
 
@@ -86,10 +89,17 @@ export function LoginPage() {
                 Create account
               </Link>
             ) : null}
-            <Link className="link text-sm" to="/password-reset">
-              Password reset
-            </Link>
+            {authFeatures.data?.data.password_reset_enabled ? (
+              <Link className="link text-sm" to="/password-reset">
+                Password reset
+              </Link>
+            ) : null}
           </div>
+          {authFeatures.data && !authFeatures.data.data.password_reset_enabled ? (
+            <p className="mt-4 text-sm text-base-content/70">
+              Forgot your password? Ask whoever runs this site to set a new one for you.
+            </p>
+          ) : null}
         </form>
       </Surface>
     </PageShell>
@@ -185,7 +195,10 @@ export function PasswordResetStatusPage() {
   return (
     <PageShell title="Password reset">
       <Surface>
-        <p className="text-sm text-base-content/80">Password reset is currently unavailable.</p>
+        <p className="text-sm text-base-content/80">
+          Passwords can't be reset by email here. Ask whoever runs this site to set a new one for
+          you.
+        </p>
       </Surface>
     </PageShell>
   );

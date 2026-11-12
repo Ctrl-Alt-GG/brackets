@@ -12,6 +12,12 @@ from bracket.models.db.account import UserAccountType
 from bracket.routes.auth import CSRF_HEADER, CSRF_HEADER_VALUE, SESSION_COOKIE, get_auth_hash
 from bracket.sql.clubs import sql_delete_club
 from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
+from bracket.utils.rate_limit import (
+    get_account_lockout_key,
+    get_account_lockout_retry_after,
+    record_account_failure,
+    reset_account_failures,
+)
 from bracket.utils.types import JsonDict
 from tests.integration_tests.api.shared import (
     get_root_uvicorn_url,
@@ -153,7 +159,8 @@ async def test_not_authenticated_for_tournament(
                     auth_context,
                 )
             )
-    assert response == {"detail": "Could not validate credentials"}
+    # A valid session that may not do this is refused, not signed out.
+    assert response == {"detail": "You don't have access to this tournament"}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -191,3 +198,125 @@ async def test_session_cookie(startup_and_shutdown_uvicorn_server: None) -> None
     assert with_csrf_header.status == 200
     assert logout.status == 204
     assert after_logout.status == 401
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_logout_ends_the_session_for_copied_tokens(
+    startup_and_shutdown_uvicorn_server: None,
+) -> None:
+    """Logging out removes the cookie, and also stops a token that was copied before."""
+    mock_user = get_mock_user()
+    url = get_root_uvicorn_url()
+
+    async with inserted_user(mock_user), aiohttp.ClientSession() as session:
+        login = await session.post(
+            f"{url}token", data={"username": mock_user.email, "password": "mypassword"}
+        )
+        headers = {"Authorization": f"Bearer {(await login.json())['access_token']}"}
+        before = await session.get(f"{url}users/me", headers=headers)
+        logout = await session.post(f"{url}logout", headers=headers)
+        after = await session.get(f"{url}users/me", headers=headers)
+
+    assert before.status == 200
+    assert logout.status == 204
+    assert after.status == 401
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_frontend_login_keeps_the_token_out_of_the_body(
+    startup_and_shutdown_uvicorn_server: None,
+) -> None:
+    """The frontend's session is the cookie, so it gets no token that a script could read."""
+    mock_user = get_mock_user()
+
+    async with inserted_user(mock_user), aiohttp.ClientSession() as session:
+        login = await session.post(
+            f"{get_root_uvicorn_url()}token",
+            data={"username": mock_user.email, "password": "mypassword"},
+            headers={CSRF_HEADER: CSRF_HEADER_VALUE},
+        )
+        body = await login.json()
+
+    assert body["access_token"] == ""
+    assert body["name"] == mock_user.name
+    assert login.headers["Set-Cookie"].startswith(f"{SESSION_COOKIE}=")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_login_from_another_site_is_refused(
+    startup_and_shutdown_uvicorn_server: None,
+) -> None:
+    """Another site can't sign a visitor in to an account of its choosing (login CSRF)."""
+    mock_user = get_mock_user()
+    credentials = {"username": mock_user.email, "password": "mypassword"}
+    url = f"{get_root_uvicorn_url()}token"
+
+    async with inserted_user(mock_user), aiohttp.ClientSession() as session:
+        statuses = [
+            (await session.post(url, data=credentials, headers=headers)).status
+            for headers in (
+                {"Sec-Fetch-Site": "cross-site"},
+                # Browsers without Sec-Fetch-Site still say where the request comes from.
+                {"Origin": "https://evil.example"},
+                {"Sec-Fetch-Site": "same-origin", "Origin": "https://evil.example"},
+                # A compromised sibling host is same-site, but still can't sign this host in.
+                {"Sec-Fetch-Site": "same-site", "Origin": "https://evil.example"},
+                {"Sec-Fetch-Site": "same-site", "Origin": config.base_url},
+                {"Origin": config.base_url},
+                {},
+            )
+        ]
+
+    assert statuses == [403, 403, 403, 403, 200, 200, 200]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_session_cookie_is_renewed_while_it_is_used(
+    startup_and_shutdown_uvicorn_server: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    A session past half its life gets a new cookie, so an organizer who keeps working isn't
+    signed out in the middle of an event. A bearer token is left alone.
+    """
+    mock_user = get_mock_user()
+    url = get_root_uvicorn_url()
+
+    async with (
+        inserted_user(mock_user),
+        aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session,
+    ):
+        login = await session.post(
+            f"{url}token", data={"username": mock_user.email, "password": "mypassword"}
+        )
+        token = (await login.json())["access_token"]
+        fresh = await session.get(f"{url}users/me")
+
+        # The same session, seen from a server on which sessions last twice as long: past half.
+        monkeypatch.setattr(
+            config, "access_token_expire_minutes", config.access_token_expire_minutes * 2 + 2
+        )
+        used = await session.get(f"{url}users/me")
+        async with aiohttp.ClientSession() as api_client:
+            with_bearer = await api_client.get(
+                f"{url}users/me", headers={"Authorization": f"Bearer {token}"}
+            )
+
+    assert "Set-Cookie" not in fresh.headers
+    assert used.headers["Set-Cookie"].startswith(f"{SESSION_COOKIE}=")
+    assert with_bearer.status == 200
+    assert "Set-Cookie" not in with_bearer.headers
+
+
+def test_failed_logins_are_counted_per_account_and_address() -> None:
+    """Someone failing on purpose only locks out their own address, not the organizer's."""
+    organizer = get_account_lockout_key("organizer@example.org", address="203.0.113.7")
+    attacker = get_account_lockout_key("organizer@example.org", address="198.51.100.9")
+
+    for _ in range(6):
+        record_account_failure(attacker)
+
+    try:
+        assert get_account_lockout_retry_after(attacker) is not None
+        assert get_account_lockout_retry_after(organizer) is None
+    finally:
+        reset_account_failures(attacker)

@@ -4,9 +4,11 @@ from starlette import status
 
 from bracket.config import config
 from bracket.database import DbConnection
+from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.scheduling.builder import determine_available_inputs
 from bracket.logic.scheduling.handle_stage_activation import (
+    count_results_in_stage,
     get_updates_to_inputs_in_activated_stage,
     update_matches_in_activated_stage,
     update_matches_in_deactivated_stage,
@@ -72,12 +74,6 @@ async def delete_stage(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Stage contains stage items, please delete those first",
-        )
-
-    if stage.is_active and len(stage.stage_items) > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stage is active, please activate another stage first",
         )
 
     await sql_delete_stage(conn, tournament_id, stage_id)
@@ -154,11 +150,21 @@ async def activate_next_stage(
 
     if stage_body.direction == "next":
         await update_matches_in_activated_stage(conn, tournament_id, new_active_stage_id)
-    else:
-        if deactivated_stage:
-            await update_matches_in_deactivated_stage(conn, tournament_id, deactivated_stage)
+    elif deactivated_stage:
+        results = count_results_in_stage(deactivated_stage)
+        if results > 0 and not stage_body.discard_results:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Going back discards the {results} "
+                    f"{'result' if results == 1 else 'results'} of {deactivated_stage.name}. "
+                    "Confirm that they can be discarded."
+                ),
+            )
+        await update_matches_in_deactivated_stage(conn, tournament_id, deactivated_stage)
 
     await sql_activate_next_stage(conn, new_active_stage_id, tournament_id)
+    await handle_conflicts(conn, await get_full_tournament_details(conn, tournament_id))
     return SuccessResponse()
 
 
@@ -183,7 +189,10 @@ async def get_next_stage_rankings(
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> StageRankingResponse:
     """
-    Get the rankings for the stage items in this stage.
+    Get the teams that take the slots of the next stage once it is activated.
+
+    A slot that can't be decided yet is left out: its source ranks fewer teams than the position
+    the slot takes.
     """
     next_stage_id = await get_next_stage_in_tournament(conn, tournament_id, "next")
 

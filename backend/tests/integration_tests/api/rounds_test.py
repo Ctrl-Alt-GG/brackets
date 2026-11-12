@@ -96,7 +96,11 @@ async def test_delete_round(
         ) as stage_inserted,
         inserted_stage_item(
             DUMMY_STAGE_ITEM1.model_copy(
-                update={"stage_id": stage_inserted.id, "ranking_id": auth_context.ranking.id}
+                update={
+                    "stage_id": stage_inserted.id,
+                    "ranking_id": auth_context.ranking.id,
+                    "type": StageType.SWISS,
+                }
             )
         ) as stage_item_inserted,
         inserted_round(
@@ -110,6 +114,36 @@ async def test_delete_round(
             == SUCCESS_RESPONSE
         )
         await assert_row_count_and_clear(rounds, 0)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_delete_round_of_fixed_format(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """Only Swiss rounds are drawn one at a time. The rounds of the other formats stay."""
+    async with (
+        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_stage(
+            DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
+        ) as stage_inserted,
+        inserted_stage_item(
+            DUMMY_STAGE_ITEM1.model_copy(
+                update={"stage_id": stage_inserted.id, "ranking_id": auth_context.ranking.id}
+            )
+        ) as stage_item_inserted,
+        inserted_round(
+            DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item_inserted.id})
+        ) as round_inserted,
+    ):
+        responses = [
+            await send_tournament_request(HTTPMethod.DELETE, f"rounds/{round_id}", auth_context, {})
+            for round_id in (round_inserted.id, 999_999)
+        ]
+
+    assert responses == [
+        {"detail": "The rounds of a round robin belong to its format and can't be deleted"},
+        {"detail": "Could not find round with id 999999"},
+    ]
 
 
 @pytest.mark.asyncio(loop_scope="session")

@@ -3,6 +3,8 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 START_ELO = Decimal("1200")
+K = 32
+D = 400
 
 
 class TeamStatistics(BaseModel):
@@ -24,3 +26,9 @@ class PlayerStatistics(BaseModel):
     losses: int = 0
     elo_score: Decimal = START_ELO
     swiss_score: Decimal = Decimal("0.0")
+
+
+class TeamTotals(PlayerStatistics):
+    """Tournament-wide results, separate from the ranking of a team's individual stage slot."""
+
+    elo_score: Decimal = Decimal("1200.0")

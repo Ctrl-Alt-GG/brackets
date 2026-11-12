@@ -28,22 +28,86 @@ function normalizeApiBaseUrl(value: string) {
   return value.replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
+/**
+ * Where an uploaded logo is served. The file name changes with every upload, so adding it makes
+ * browsers fetch the new picture instead of showing the one they kept.
+ */
+export function tournamentLogoUrl(tournament: OpenApi.Tournament) {
+  if (!tournament.logo_path) return null;
+  const version = encodeURIComponent(tournament.logo_path);
+  return `${getApiBaseUrl()}/api/tournaments/${tournament.id}/logo?v=${version}`;
+}
+
+export function teamLogoUrl(team: Pick<OpenApi.Team, 'id' | 'logo_path' | 'tournament_id'>) {
+  if (!team.logo_path) return null;
+  const version = encodeURIComponent(team.logo_path);
+  return `${getApiBaseUrl()}/api/tournaments/${team.tournament_id}/teams/${team.id}/logo?v=${version}`;
+}
+
+/** The login page, which brings the organizer back to `from` once they are signed in. */
+export function loginPath(from: string) {
+  const isWorthReturningTo =
+    from !== '/' && !/^\/(login|create-account|password-reset)\b/.test(from);
+  return isWorthReturningTo ? `/login?next=${encodeURIComponent(from)}` : '/login';
+}
+
+/** Only a path of this site: `next` is in the address bar, where anyone can put anything. */
+export function safeNextPath(next: string | null) {
+  return next != null && /^\/(?![/\\])/.test(next) ? next : '/';
+}
+
 export function getErrorMessage(error: unknown) {
-  const fallback = 'The request failed. Check the backend connection and your credentials.';
+  const fallback = 'The request failed. Check your connection and try again.';
   const axiosError = error as AxiosError<{
     detail?: string | Array<{ loc: string[]; msg: string }>;
   }>;
-  const detail = axiosError?.response?.data?.detail;
+  const response = axiosError?.response;
+  const detail = response?.data?.detail;
 
   if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0];
-    return `${first.loc.join(' > ')}: ${first.msg}`;
+    // "Value error, " is how the API prefixes the message of its own checks.
+    return detail[0].msg.replace(/^Value error, /, '');
   }
 
   if (typeof detail === 'string' && detail) return detail;
+
+  // The request limit of the API answers without a `detail`.
+  if (response?.status === 429) {
+    const seconds = Number(response.headers?.['retry-after']);
+    const minutes = Math.ceil(seconds / 60);
+    return Number.isFinite(seconds) && seconds > 0
+      ? `Too many attempts. Try again in ${minutes === 1 ? 'a minute' : `${minutes} minutes`}.`
+      : 'Too many attempts. Try again in a few minutes.';
+  }
+
   if (axiosError?.message) return axiosError.message;
 
   return fallback;
+}
+
+/** Groups items by a key, keeping the order in which the keys first appear. */
+export function groupBy<T, K>(items: T[], key: (item: T) => K) {
+  const groups = new Map<K, T[]>();
+  for (const item of items) {
+    const group = groups.get(key(item));
+    if (group) group.push(item);
+    else groups.set(key(item), [item]);
+  }
+  return groups;
+}
+
+// Dates and times follow the visitor's own language settings: "15:30" where that is how a time
+// is written, "3:30 PM" where that is.
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const DATE_WITH_YEAR_FORMAT = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+export function formatTime(date: Date) {
+  return TIME_FORMAT.format(date);
 }
 
 export function formatDateTime(value: string | null) {
@@ -51,14 +115,15 @@ export function formatDateTime(value: string | null) {
 
   const date = parseISO(value);
   if (!isValid(date)) return value;
-  return format(date, isThisYear(date) ? 'MMM d, p' : 'PP, p');
+  const day = (isThisYear(date) ? DATE_FORMAT : DATE_WITH_YEAR_FORMAT).format(date);
+  return `${day}, ${formatTime(date)}`;
 }
 
 /** Like `formatDateTime`, but an event mostly runs on one day, so today's matches show the time. */
 export function formatMatchTime(value: string | null) {
   const date = value ? parseISO(value) : null;
   if (!date || !isValid(date) || !isToday(date)) return formatDateTime(value);
-  return `Today, ${format(date, 'p')}`;
+  return `Today, ${formatTime(date)}`;
 }
 
 /** The value of a `datetime-local` input for an ISO timestamp, in the viewer's time zone. */
@@ -83,9 +148,27 @@ export function publicTournamentPath(tournament: OpenApi.Tournament) {
 
 export type TournamentPhase = 'finished' | 'running' | 'upcoming';
 
+// How long after its last match a tournament still counts as running. Swiss rounds are drawn one
+// at a time, so between two of them every match has a result for a while.
+const FINISHED_AFTER_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Archiving a tournament is the organizer's call and easily forgotten, so a tournament whose
+ * matches all have a result is finished too, a few hours after the last one.
+ */
 export function tournamentPhase(tournament: OpenApi.Tournament, now = Date.now()): TournamentPhase {
   if (tournament.status !== 'OPEN') return 'finished';
-  return new Date(tournament.start_time).getTime() > now ? 'upcoming' : 'running';
+  if (new Date(tournament.start_time).getTime() > now) return 'upcoming';
+
+  const allPlayed =
+    tournament.matches_total > 0 && tournament.matches_played === tournament.matches_total;
+  const lastMatchEnd = tournament.last_match_end
+    ? new Date(tournament.last_match_end).getTime()
+    : null;
+  if (allPlayed && lastMatchEnd != null && now - lastMatchEnd > FINISHED_AFTER_MS) {
+    return 'finished';
+  }
+  return 'running';
 }
 
 export const TOURNAMENT_PHASE_LABELS: Record<TournamentPhase, string> = {
@@ -204,13 +287,13 @@ export function inputLabel(
   return 'TBD';
 }
 
+/** Whether the match has a result. An unplayed match reads 0-0, so the API says which it is. */
 export function isScored(match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive) {
-  return match.stage_item_input1_score !== 0 || match.stage_item_input2_score !== 0;
+  return match.played;
 }
 
 export type MatchOutcome = 1 | 2 | 'draw' | null;
 
-/** Scores are the only completion signal the API exposes, so an unplayed match reads as 0-0. */
 export function matchWinner(
   match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
 ): MatchOutcome {
@@ -220,24 +303,37 @@ export function matchWinner(
   return 'draw';
 }
 
-export type MatchStatus = 'finished' | 'live' | 'scheduled' | 'waiting';
+export type MatchStatus = 'awaiting' | 'finished' | 'live' | 'scheduled' | 'waiting';
 
+/**
+ * Where a match stands. The schedule is a plan, and matches run over: one that has started stays
+ * in progress until its result is entered. It is `live` during its planned time, and `awaiting`
+ * its result after that.
+ */
 export function matchStatus(
   match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
   now = Date.now(),
 ): MatchStatus {
   if (isScored(match)) return 'finished';
-  if (match.stage_item_input1 == null || match.stage_item_input2 == null) return 'waiting';
+  // A slot that takes "Group A #1" has no team until that group is decided, so its match can't
+  // be played yet, whatever the plan says.
+  if (!hasTeam(match.stage_item_input1) || !hasTeam(match.stage_item_input2)) return 'waiting';
   if (match.start_time) {
     const start = new Date(match.start_time).getTime();
-    if (Number.isFinite(start) && now >= start && now < start + match.duration_minutes * 60_000) {
-      return 'live';
+    if (Number.isFinite(start) && now >= start) {
+      return now < start + match.duration_minutes * 60_000 ? 'live' : 'awaiting';
     }
   }
   return 'scheduled';
 }
 
+/** Being played, or played and waiting for its result. */
+export function isInProgress(status: MatchStatus) {
+  return status === 'live' || status === 'awaiting';
+}
+
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
+  awaiting: 'Awaiting result',
   finished: 'Finished',
   live: 'Playing now',
   scheduled: 'Scheduled',
@@ -263,10 +359,10 @@ export function isStageHappeningNow(
   );
 }
 
-/** From matches sorted by time: the one being played, otherwise the earliest without a result. */
+/** From matches sorted by time: the one in progress, otherwise the earliest without a result. */
 export function nextMatch(entries: FlattenedMatch[]) {
   return (
-    entries.find(({ match }) => matchStatus(match) === 'live') ??
+    entries.find(({ match }) => isInProgress(matchStatus(match))) ??
     entries.find(({ match }) => !isScored(match)) ??
     null
   );

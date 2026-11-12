@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Navigate, NavLink, useParams } from 'react-router';
+import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router';
 
 import * as OpenApi from '../../openapi';
 import { fetchTournamentBundle, TOURNAMENT_BUNDLE_QUERY_KEY } from '../api';
@@ -16,8 +16,10 @@ import {
   hasBracketView,
   isBracket,
   isScored,
+  loginPath,
   publicTournamentPath,
   tournamentDateLabel,
+  tournamentLogoUrl,
 } from '../utils';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '../ui';
 import { OverviewSection } from '../sections/tournament-overview';
@@ -121,12 +123,22 @@ function TournamentHeader({
   teamCount: number;
   tournament: OpenApi.Tournament;
 }) {
+  const logoUrl = tournamentLogoUrl(tournament);
+
   return (
     <header className="card border border-base-300 bg-base-200/60 backdrop-blur">
       <div className="card-body gap-5 pb-0">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
-            <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            <h1 className="flex items-center gap-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              {/* Decorative: the name is right next to it. */}
+              {logoUrl ? (
+                <img
+                  alt=""
+                  className="size-12 shrink-0 rounded-field object-contain"
+                  src={logoUrl}
+                />
+              ) : null}
               {tournament.name}
             </h1>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-base-content/70">
@@ -220,20 +232,26 @@ function TournamentView({
   const hasBrackets = stageItems.some(hasBracketView);
   const team = teamMap.get(teamId ?? -1);
   const pageTitle = section === 'dashboard-team' ? team?.name : SECTION_TITLES[section];
-  const context = {
-    isBigScreen,
-    // A remembered team can have been deleted since, and a screen at the venue is for everyone.
-    myTeamId: !isBigScreen && teamMap.has(myTeamId ?? -1) ? myTeamId : null,
-    publicPath,
-    setMyTeamId,
-  };
+  // A remembered team can have been deleted since, and a screen at the venue is for everyone.
+  const shownTeamId = !isBigScreen && teamMap.has(myTeamId ?? -1) ? myTeamId : null;
+  // The same object until something in it changes, so a refresh of the tournament doesn't make
+  // everything that reads it render again.
+  const context = useMemo(
+    () => ({ isBigScreen, myTeamId: shownTeamId, publicPath, setMyTeamId }),
+    [isBigScreen, publicPath, setMyTeamId, shownTeamId],
+  );
 
   let content: ReactNode;
   switch (section) {
     case 'overview':
     case 'dashboard':
       content = (
-        <OverviewSection bundle={bundle} matches={matches} stageItemsById={stageItemsById} />
+        <OverviewSection
+          bundle={bundle}
+          matches={matches}
+          stageItemsById={stageItemsById}
+          workspace={!dashboardMode}
+        />
       );
       break;
     case 'schedule':
@@ -390,6 +408,7 @@ function TournamentView({
 
 export function TournamentPage({ section }: { section: TournamentSection }) {
   const params = useParams();
+  const { pathname } = useLocation();
   const [session] = useSession();
   const tournamentKey = params.tournamentKey ?? '';
   const dashboardMode = section.startsWith('dashboard');
@@ -405,8 +424,10 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
     enabled: Boolean(tournamentKey) && !isLockedOut && !sendVisitorToDetails,
     queryFn: () => fetchTournamentBundle(tournamentKey, dashboardMode, isAuthenticated),
     queryKey: [...TOURNAMENT_BUNDLE_QUERY_KEY, tournamentKey, dashboardMode, session?.user_id],
-    // The Details pages follow a live event, and the big screens run unattended.
-    refetchInterval: dashboardMode ? 30_000 : false,
+    // The Details pages follow a live event, and the big screens run unattended. Organizers
+    // work side by side during an event, so the workspace also picks up what the others changed:
+    // less often, and never under a form that is being filled in (refetching keeps what is open).
+    refetchInterval: dashboardMode ? 30_000 : 60_000,
   });
 
   if (sendVisitorToDetails) {
@@ -417,7 +438,7 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
     return (
       <ErrorState
         action={
-          <Link className="btn btn-primary btn-sm" to="/login">
+          <Link className="btn btn-primary btn-sm" to={loginPath(pathname)}>
             Organizer login
           </Link>
         }
@@ -466,13 +487,33 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
   }
 
   return (
-    <TournamentView
-      bundle={workspace.data}
-      section={section}
-      stageItemId={params.stageItemId ? Number(params.stageItemId) : null}
-      teamId={params.teamId ? Number(params.teamId) : null}
-      tournamentKey={tournamentKey}
-    />
+    <>
+      {workspace.isRefetchError || workspace.fetchStatus === 'paused' ? (
+        <div className="alert alert-warning alert-soft flex-wrap" role="alert">
+          <div>
+            <p className="font-semibold">Updates are unavailable. This view may be out of date.</p>
+            <p className="text-sm">
+              Last updated {new Date(workspace.dataUpdatedAt).toLocaleString()}.
+            </p>
+          </div>
+          <button
+            className="btn btn-sm"
+            disabled={workspace.isFetching}
+            onClick={() => void workspace.refetch()}
+            type="button"
+          >
+            {workspace.isFetching ? 'Retrying…' : 'Retry updates'}
+          </button>
+        </div>
+      ) : null}
+      <TournamentView
+        bundle={workspace.data}
+        section={section}
+        stageItemId={params.stageItemId ? Number(params.stageItemId) : null}
+        teamId={params.teamId ? Number(params.teamId) : null}
+        tournamentKey={tournamentKey}
+      />
+    </>
   );
 }
 

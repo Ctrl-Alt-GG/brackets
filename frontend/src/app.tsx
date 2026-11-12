@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
@@ -16,7 +16,10 @@ import { useSession } from './app/hooks';
 import { HomePage } from './app/pages/home-page';
 import { NotFoundPage, TournamentPage } from './app/pages/tournament-page';
 import { queryClient } from './app/query-client';
-import { logoutApiLogoutPostMutation } from './openapi/@tanstack/react-query.gen';
+import {
+  getUserApiUsersMeGetOptions,
+  logoutApiLogoutPostMutation,
+} from './openapi/@tanstack/react-query.gen';
 import type { TournamentSection } from './app/types';
 import { ErrorState, LoadingState, TopNav } from './app/ui';
 import { cx } from './app/utils';
@@ -64,11 +67,11 @@ function RootLayout() {
   const location = useLocation();
   // A big screen at the venue shows the tournament only, without the site's navigation.
   const isBigScreen = location.pathname.includes('/dashboard/present/');
-  // Only the API can remove the session cookie. This browser is signed out even if it fails.
+  // Only the API can remove the HttpOnly cookie. A failed request leaves the browser signed in.
   const logout = useMutation({
     ...logoutApiLogoutPostMutation(),
     meta: { invalidates: [], successMessage: 'Logged out successfully.' },
-    onSettled: () => setSession(null),
+    onSuccess: () => setSession(null),
   });
 
   useEffect(() => {
@@ -77,6 +80,25 @@ function RootLayout() {
       toast.error('Your session expired. Please log in again.');
     });
   }, [setSession]);
+
+  // The page only remembers who signed in. The session itself is a cookie, which can end without
+  // the page noticing: it expires overnight, or the organizer signs out on another device. A
+  // tournament page would then quietly turn read-only. Asking who is signed in settles it: the
+  // API answers 401, which signs this page out as well. It is asked again when the organizer
+  // comes back to the tab.
+  const me = useQuery({
+    ...getUserApiUsersMeGetOptions(),
+    enabled: Boolean(session),
+    refetchInterval: 5 * 60_000,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const currentName = me.data?.data.name;
+  useEffect(() => {
+    if (session && currentName && currentName !== session.name) {
+      setSession({ ...session, name: currentName });
+    }
+  }, [currentName, session, setSession]);
 
   // Only wipe cached data on logout. Clearing on mount would also drop the
   // anonymous queries that are already in flight, leaving them stuck pending.
@@ -92,6 +114,7 @@ function RootLayout() {
       {isBigScreen ? null : (
         <TopNav
           currentUserName={session?.name ?? null}
+          logoutPending={logout.isPending}
           onLogout={() => logout.mutate({})}
           session={session}
         />
@@ -102,6 +125,22 @@ function RootLayout() {
           isBigScreen ? 'max-w-[110rem]' : 'max-w-7xl',
         )}
       >
+        {session && logout.isError ? (
+          <ErrorState
+            action={
+              <button
+                className="btn btn-sm"
+                disabled={logout.isPending}
+                onClick={() => logout.mutate({})}
+                type="button"
+              >
+                Try logging out again
+              </button>
+            }
+            error="You are still signed in on this browser. Check your connection and try again before leaving this device."
+            title="Log out failed"
+          />
+        ) : null}
         <Suspense fallback={<LoadingState title="Loading…" />}>
           <Outlet />
         </Suspense>
