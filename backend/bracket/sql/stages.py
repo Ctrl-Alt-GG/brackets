@@ -1,234 +1,131 @@
-from typing import Literal
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
-
+from bracket import orm
 from bracket.logic.ranking.statistics import TeamTotals
 from bracket.logic.ranking.team_totals import get_team_totals
-from bracket.models.db.stage import Stage
+from bracket.models.db.stage import Stage, StageUpdateBody
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.util import StageWithStageItems
 from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
-from bracket.utils.types import dict_without_none
 
 
 async def get_full_tournament_details(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     round_id: RoundId | None = None,
     stage_id: StageId | None = None,
     stage_item_ids: set[StageItemId] | None = None,
     *,
     no_draft_rounds: bool = False,
+    with_team_totals: bool = False,
 ) -> list[StageWithStageItems]:
-    draft_filter = "AND rounds.is_draft IS FALSE" if no_draft_rounds else ""
-    round_filter = "AND rounds.id = :round_id" if round_id is not None else ""
-    stage_filter = "AND stages.id = :stage_id" if stage_id is not None else ""
-    stage_item_filter = (
-        "AND stage_items.id = any(:stage_item_ids)" if stage_item_ids is not None else ""
-    )
-    stage_has_items_filter = (
-        """AND EXISTS (
-            SELECT 1 FROM stage_items selected_item
-            WHERE selected_item.stage_id = stages.id
-            AND selected_item.id = any(:stage_item_ids)
-        )"""
-        if stage_item_ids is not None
-        else ""
-    )
+    """Load a tournament's stage tree, optionally enriching its teams with published results."""
+    item_loader = selectinload(orm.Stage.stage_items)
+    if stage_item_ids is not None:
+        item_loader = selectinload(orm.Stage.stage_items.and_(orm.StageItem.id.in_(stage_item_ids)))
 
-    query = f"""
-        WITH inputs_with_teams AS (
-            SELECT DISTINCT ON (stage_item_inputs.id)
-                stage_item_inputs.*,
-                to_json(t.*) AS team
-            FROM stage_item_inputs
-            JOIN stage_items on stage_item_inputs.stage_item_id = stage_items.id
-            LEFT JOIN stages s2 on s2.id = stage_items.stage_id
-            LEFT JOIN teams t on t.id = stage_item_inputs.team_id
-            WHERE s2.tournament_id = :tournament_id
-            {stage_item_filter}
-            GROUP BY stage_item_inputs.id, t.id
-        ), matches_with_inputs AS (
-            SELECT DISTINCT ON (matches.id)
-                matches.*,
-                to_json(sii1) as stage_item_input1,
-                to_json(sii2) as stage_item_input2
-            FROM matches
-            LEFT JOIN inputs_with_teams sii1 on sii1.id = matches.stage_item_input1_id
-            LEFT JOIN inputs_with_teams sii2 on sii2.id = matches.stage_item_input2_id
-            LEFT JOIN rounds r on matches.round_id = r.id
-            LEFT JOIN stage_items si on r.stage_item_id = si.id
-            LEFT JOIN stages s2 on s2.id = si.stage_id
-            WHERE s2.tournament_id = :tournament_id
-        ), rounds_with_matches AS (
-            SELECT DISTINCT ON (rounds.id)
-                rounds.*,
-                to_json(array_agg(m.* ORDER BY m.id)) AS matches
-            FROM rounds
-            LEFT JOIN matches_with_inputs m on m.round_id = rounds.id
-            LEFT JOIN stage_items si on rounds.stage_item_id = si.id
-            LEFT JOIN stages s2 on s2.id = si.stage_id
-            WHERE s2.tournament_id = :tournament_id
-            {draft_filter}
-            {round_filter}
-            GROUP BY rounds.id
-        ), stage_items_with_rounds AS (
-            SELECT DISTINCT ON (stage_items.id)
-                stage_items.*,
-                to_json(array_agg(r.* ORDER BY r.id)) AS rounds
-            FROM stage_items
-            JOIN stages st on stage_items.stage_id = st.id
-            LEFT JOIN rounds_with_matches r on r.stage_item_id = stage_items.id
-            WHERE st.tournament_id = :tournament_id
-            {stage_item_filter}
-            GROUP BY stage_items.id
-        ), stage_items_with_inputs AS (
-            SELECT DISTINCT ON (stage_items.id)
-                stage_items.id,
-                to_json(array_agg(sii ORDER BY sii.slot)) AS inputs
-            FROM stage_items
-            LEFT JOIN inputs_with_teams sii ON stage_items.id = sii.stage_item_id
-            WHERE sii.tournament_id = :tournament_id
-            {stage_item_filter}
-            GROUP BY stage_items.id
-            ORDER BY stage_items.id
-        ), stage_items_with_rounds_and_inputs AS (
-            SELECT stage_items.*, stage_items_with_inputs.inputs, stage_items_with_rounds.rounds
-            FROM stage_items
-            JOIN stage_items_with_rounds ON stage_items_with_rounds.id = stage_items.id
-            LEFT JOIN stage_items_with_inputs ON stage_items_with_inputs.id = stage_items.id
-            ORDER BY stage_items.name
-        )
-        SELECT stages.*, to_json(array_agg(r.* ORDER BY r.name, r.id)) AS stage_items
-        FROM stages
-        LEFT JOIN stage_items_with_rounds_and_inputs r on stages.id = r.stage_id
-        WHERE stages.tournament_id = :tournament_id
-        {stage_filter}
-        {stage_has_items_filter}
-        GROUP BY stages.id
-        ORDER BY stages.id
-    """
-    values = dict_without_none(
-        {
-            "tournament_id": tournament_id,
-            "round_id": round_id,
-            "stage_id": stage_id,
-            "stage_item_ids": stage_item_ids,
-        }
-    )
-    result = await conn.execute(text(query), values)
-    parsed = [StageWithStageItems.model_validate(x._mapping) for x in result]
-    totals = None
-    for stage in parsed:
-        for stage_item in stage.stage_items:
-            inputs = [
-                *stage_item.inputs,
-                *(
-                    input_
-                    for round_ in stage_item.rounds
-                    for match in round_.matches
-                    for input_ in (match.stage_item_input1, match.stage_item_input2)
+    round_criteria: list[ColumnElement[bool]] = []
+    if no_draft_rounds:
+        round_criteria.append(orm.Round.is_draft.is_(False))
+    if round_id is not None:
+        round_criteria.append(orm.Round.id == round_id)
+    round_loader = selectinload(orm.StageItem.rounds)
+    if round_criteria:
+        round_loader = selectinload(orm.StageItem.rounds.and_(*round_criteria))
+
+    stmt = (
+        select(orm.Stage)
+        .where(orm.Stage.tournament_id == tournament_id)
+        .order_by(orm.Stage.id)
+        .options(
+            item_loader.options(
+                selectinload(orm.StageItem.inputs).joinedload(orm.StageItemInput.team),
+                round_loader.selectinload(orm.Round.matches).options(
+                    joinedload(orm.Match.stage_item_input1).joinedload(orm.StageItemInput.team),
+                    joinedload(orm.Match.stage_item_input2).joinedload(orm.StageItemInput.team),
                 ),
-            ]
-            for input_ in inputs:
-                if isinstance(input_, StageItemInputFinal):
-                    if totals is None:
-                        totals = await get_team_totals(conn, tournament_id)
-                    input_.team = input_.team.model_copy(
-                        update=totals.get(input_.team_id, TeamTotals()).model_dump()
-                    )
-    return parsed
+            )
+        )
+        .execution_options(populate_existing=True)
+    )
+    if stage_id is not None:
+        stmt = stmt.where(orm.Stage.id == stage_id)
+    if stage_item_ids is not None:
+        stmt = stmt.where(orm.Stage.stage_items.any(orm.StageItem.id.in_(stage_item_ids)))
+
+    stages = [StageWithStageItems.model_validate(stage) for stage in await conn.scalars(stmt)]
+    if with_team_totals:
+        await add_team_totals(conn, tournament_id, stages)
+    return stages
+
+
+async def add_team_totals(
+    conn: AsyncSession, tournament_id: TournamentId, stages: list[StageWithStageItems]
+) -> None:
+    # The slots of a stage item and those in its matches are separate copies.
+    inputs = [
+        input_
+        for stage in stages
+        for stage_item in stage.stage_items
+        for input_ in (
+            *stage_item.inputs,
+            *(
+                match_input
+                for round_ in stage_item.rounds
+                for match in round_.matches
+                for match_input in (match.stage_item_input1, match.stage_item_input2)
+            ),
+        )
+        if isinstance(input_, StageItemInputFinal)
+    ]
+    if not inputs:
+        return
+
+    totals = await get_team_totals(conn, tournament_id)
+    for input_ in inputs:
+        input_.team = input_.team.model_copy(
+            update=totals.get(input_.team_id, TeamTotals()).model_dump()
+        )
 
 
 async def sql_delete_stage(
-    conn: AsyncConnection, tournament_id: TournamentId, stage_id: StageId
+    conn: AsyncSession, tournament_id: TournamentId, stage_id: StageId
 ) -> None:
-    query = """
-        DELETE FROM stage_items
-        WHERE stage_items.stage_id = :stage_id
-        """
-    await conn.execute(text(query), {"stage_id": stage_id})
-
-    query = """
-        DELETE FROM stages
-        WHERE stages.id = :stage_id
-        AND stages.tournament_id = :tournament_id
-        """
-    await conn.execute(text(query), {"stage_id": stage_id, "tournament_id": tournament_id})
-
-
-async def sql_create_stage(conn: AsyncConnection, tournament_id: TournamentId) -> Stage:
-    query = """
-        INSERT INTO stages (created, is_active, name, tournament_id)
-        VALUES (NOW(), false, :name, :tournament_id)
-        RETURNING *
-        """
-    result = (
-        await conn.execute(text(query), {"tournament_id": tournament_id, "name": "Stage"})
-    ).first()
-
-    if result is None:
-        raise ValueError("Could not create stage")
-
-    return Stage.model_validate(result._mapping)
-
-
-async def get_next_stage_in_tournament(
-    conn: AsyncConnection, tournament_id: TournamentId, direction: Literal["next", "previous"]
-) -> StageId | None:
-    select_query = """
-        SELECT id
-        FROM stages
-        WHERE
-            CASE WHEN :direction='next'
-            THEN (
-                id > COALESCE(
-                    (
-                        SELECT id FROM stages
-                        WHERE is_active IS TRUE
-                        AND stages.tournament_id = :tournament_id
-                        ORDER BY id ASC
-                        LIMIT 1
-                    ),
-                    -1
-                )
-            )
-            ELSE (
-                id < COALESCE(
-                    (
-                        SELECT id FROM stages
-                        WHERE is_active IS TRUE
-                        AND stages.tournament_id = :tournament_id
-                        ORDER BY id DESC
-                        LIMIT 1
-                    ),
-                    10000000000
-                )
-            )
-            END
-        AND stages.tournament_id = :tournament_id
-        AND is_active IS FALSE
-        ORDER BY
-            CASE WHEN :direction='next' THEN id END ASC,
-            CASE WHEN NOT :direction='next' THEN id END DESC
-    """
-    stage_id = await conn.scalar(
-        text(select_query), {"tournament_id": tournament_id, "direction": direction}
+    await conn.execute(
+        delete(orm.Stage).where(orm.Stage.id == stage_id, orm.Stage.tournament_id == tournament_id)
     )
-    return StageId(stage_id) if stage_id is not None else None
+
+
+async def sql_create_stage(conn: AsyncSession, tournament_id: TournamentId) -> Stage:
+    stage = orm.Stage(name="Stage", tournament_id=tournament_id, is_active=False)
+    conn.add(stage)
+    await conn.flush()
+    return Stage.model_validate(stage)
+
+
+async def sql_update_stage(
+    conn: AsyncSession,
+    tournament_id: TournamentId,
+    stage_id: StageId,
+    body: StageUpdateBody,
+) -> None:
+    stage = await conn.scalar(
+        select(orm.Stage).where(orm.Stage.id == stage_id, orm.Stage.tournament_id == tournament_id)
+    )
+    if stage is not None:
+        stage.name = body.name
+        stage.custom_duration_minutes = body.custom_duration_minutes
+        await conn.flush()
 
 
 async def sql_activate_next_stage(
-    conn: AsyncConnection, new_active_stage_id: StageId, tournament_id: TournamentId
+    conn: AsyncSession, new_active_stage_id: StageId, tournament_id: TournamentId
 ) -> None:
-    update_query = """
-        UPDATE stages
-        SET is_active = (stages.id = :new_active_stage_id)
-        WHERE stages.tournament_id = :tournament_id
-
-    """
     await conn.execute(
-        text(update_query),
-        {"tournament_id": tournament_id, "new_active_stage_id": new_active_stage_id},
+        update(orm.Stage)
+        .where(orm.Stage.tournament_id == tournament_id)
+        .values(is_active=orm.Stage.id == new_active_stage_id)
     )

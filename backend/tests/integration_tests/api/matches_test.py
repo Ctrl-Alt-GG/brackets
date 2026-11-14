@@ -1,15 +1,15 @@
 from http import HTTPMethod
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.models.db.match import Match
+from bracket import orm
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
     StageItemInputInsertable,
 )
-from bracket.schema import matches
-from bracket.utils.db import fetch_one_parsed_certain
+from bracket.sql.matches import match_without_details
 from bracket.utils.dummy_records import (
     DUMMY_MATCH1,
     DUMMY_ROUND1,
@@ -20,6 +20,7 @@ from bracket.utils.dummy_records import (
     DUMMY_TEAM3,
     DUMMY_TOURNAMENT,
 )
+from bracket.utils.types import assert_some
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
@@ -96,7 +97,7 @@ async def test_create_match(
         assert response["data"]["start_time"] is not None
         assert response["data"]["duration_minutes"] == 30
 
-        await assert_row_count_and_clear(matches, 1)
+        await assert_row_count_and_clear(orm.Match, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -159,12 +160,12 @@ async def test_delete_match(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(matches, 0)
+        await assert_row_count_and_clear(orm.Match, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_match(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -225,20 +226,24 @@ async def test_update_match(
             )
             == SUCCESS_RESPONSE
         )
-        updated_match = await fetch_one_parsed_certain(
-            conn,
-            Match,
-            query=matches.select().where(matches.c.id == match_inserted.id),
+        updated_match = match_without_details(
+            assert_some(
+                await session.scalar(
+                    (select(orm.Match).where(orm.Match.id == match_inserted.id)).execution_options(
+                        populate_existing=True
+                    )
+                )
+            )
         )
         assert updated_match.stage_item_input1_score == body["stage_item_input1_score"]
         assert updated_match.stage_item_input2_score == body["stage_item_input2_score"]
 
-        await assert_row_count_and_clear(matches, 1)
+        await assert_row_count_and_clear(orm.Match, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_endpoint_custom_duration_margin(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -301,15 +306,19 @@ async def test_update_endpoint_custom_duration_margin(
             )
             == SUCCESS_RESPONSE
         )
-        updated_match = await fetch_one_parsed_certain(
-            conn,
-            Match,
-            query=matches.select().where(matches.c.id == match_inserted.id),
+        updated_match = match_without_details(
+            assert_some(
+                await session.scalar(
+                    (select(orm.Match).where(orm.Match.id == match_inserted.id)).execution_options(
+                        populate_existing=True
+                    )
+                )
+            )
         )
         assert updated_match.custom_duration_minutes == body["custom_duration_minutes"]
         assert updated_match.custom_margin_minutes == body["custom_margin_minutes"]
 
-        await assert_row_count_and_clear(matches, 1)
+        await assert_row_count_and_clear(orm.Match, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -371,12 +380,12 @@ async def test_create_match_for_team_already_playing_in_round(
         )
         assert response == {"detail": "One of these teams already has a match in this round"}
 
-        await assert_row_count_and_clear(matches, 1)
+        await assert_row_count_and_clear(orm.Match, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_match_of_other_tournament(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_tournament(
@@ -411,7 +420,13 @@ async def test_update_match_of_other_tournament(
         )
         assert response == {"detail": f"Could not find match with id {match.id}"}
 
-        unchanged_match = await fetch_one_parsed_certain(
-            conn, Match, query=matches.select().where(matches.c.id == match.id)
+        unchanged_match = match_without_details(
+            assert_some(
+                await session.scalar(
+                    (select(orm.Match).where(orm.Match.id == match.id)).execution_options(
+                        populate_existing=True
+                    )
+                )
+            )
         )
         assert unchanged_match.stage_item_input1_score == DUMMY_MATCH1.stage_item_input1_score

@@ -28,12 +28,19 @@ ghcr.io/ctrl-alt-gg/bracket-backend:<tag>
 ghcr.io/ctrl-alt-gg/bracket-frontend:<tag>
 ```
 
-Compose requires these values in the environment before `docker compose up`:
+Compose requires these values in the environment before `docker compose up`,
+`APP_IMAGE_TAG` being the tag of the release to run:
 
 ```bash
-POSTGRES_DB=... POSTGRES_USER=... POSTGRES_PASSWORD=... JWT_SECRET=... \
+APP_IMAGE_TAG=... POSTGRES_DB=... POSTGRES_USER=... POSTGRES_PASSWORD=... JWT_SECRET=... \
   docker compose up -d
 ```
+
+Both application containers run read-only, without Linux capabilities and
+without a way to gain privileges. The backend writes only to the uploads volume
+and `/tmp`, the frontend's nginx only to `/tmp` and its rendered configuration.
+The backend runs four worker processes by default (`WEB_CONCURRENCY`), so a long
+request doesn't hold up the others.
 
 On startup the backend connects to the database, runs Alembic migrations
 (`AUTO_RUN_MIGRATIONS`, on by default), and — if the database is empty and
@@ -58,7 +65,12 @@ docker exec -it bracket-backend python cli.py clear-user-lock --email someone@ex
 
 - **Sharing an event.** The owner of an event adds other accounts on the Events
   page, by email. They can manage its tournaments; only the owner renames or
-  deletes the event and decides who helps. Nobody needs to share a login.
+  deletes the event and decides who helps. Nobody needs to share a login. An
+  owner who leaves the organizing team makes another organizer the owner there.
+- **An event without a reachable owner.** When the owner's account is gone or
+  they can't sign in, `docker exec -it bracket-backend python cli.py
+  set-event-owner` makes another account the owner (it asks for the event's
+  name or id and the account's email).
 - **Failed logins.** Five wrong passwords lock an account for fifteen minutes,
   but only for the client address they came from. Someone guessing from
   elsewhere doesn't lock the organizer out. `clear-user-lock` lifts a lock
@@ -72,16 +84,16 @@ Both containers listen on `127.0.0.1` only; a reverse proxy on the host
 terminates TLS and routes `/api` to the backend (port 8400) and everything else
 to the frontend (port 3000).
 
-- **Client addresses.** Login and registration are rate limited per client IP.
-  The backend only trusts `X-Forwarded-For` from the addresses in
-  `FORWARDED_ALLOW_IPS`; otherwise every request seems to come from the proxy,
-  and all visitors share one limit. Docker forwards the published port from the
-  network's gateway, so set it to that address (the network is named
-  `<compose project>_bracket_lan`):
-
-  ```bash
-  docker network inspect bracket_bracket_lan -f '{{(index .IPAM.Config 0).Gateway}}'
-  ```
+- **Client addresses.** Login and registration are rate limited per client IP,
+  and failed logins lock an account for one address only. The backend only
+  trusts `X-Forwarded-For` from the addresses in `FORWARDED_ALLOW_IPS`;
+  otherwise every request seems to come from the proxy, all visitors share one
+  limit, and anyone could lock an organizer out. Docker forwards the published
+  ports from the network's gateway, so that is the default: `172.31.240.1`, on
+  the fixed `172.31.240.0/24` subnet that `docker-compose.yml` gives the
+  network. If that subnet is taken on the host, change it there and set
+  `FORWARDED_ALLOW_IPS` to its gateway. The backend logs a warning when a
+  request carries `X-Forwarded-For` from an address it doesn't trust.
 
   Don't use `*`: uvicorn then takes the left-most `X-Forwarded-For` entry, which
   the client chooses.
@@ -109,6 +121,7 @@ the `PRODUCTION` or `DEVELOPMENT` config class, which picks up `prod.env` or
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | How long a session lasts without being used. 720 (12 hours) by default, minimum 5 |
 | `UPLOAD_DIR` / `UPLOAD_MAX_BYTES` | Team and tournament logo uploads |
 | `FORWARDED_ALLOW_IPS` | The reverse proxy's address (see above); read by uvicorn |
+| `WEB_CONCURRENCY` | Backend worker processes, 4 in the image; read by uvicorn |
 
 ## Local development
 
@@ -126,6 +139,13 @@ in production. `DevelopmentConfig` reads `backend/dev.env`, which is not
 committed. At minimum it needs `JWT_SECRET` and `PG_DSN`. The interactive API
 docs (`/docs`, `/redoc`) are only served in development.
 
+Database entities live in `backend/bracket/orm/`. Repository functions in `bracket/sql/`
+use an `AsyncSession` and return the Pydantic models in `bracket/models/db/` that define
+the API contract. Each request shares one session and transaction, committed before the
+response is sent. Relationships require explicit eager loading. After changing an entity,
+run `alembic check` against the current database and add a migration for intended schema
+changes.
+
 Tests need a PostgreSQL database; stamp it first so that the app doesn't replay
 the migrations on top of the tables the tests create:
 
@@ -141,7 +161,7 @@ Frontend:
 cd frontend
 corepack enable
 pnpm install
-pnpm dev
+pnpm dev     # on localhost; `pnpm dev --host` makes it reachable from other devices
 pnpm test    # type check, lint (oxlint), formatting (oxfmt) and unit tests (vitest)
 pnpm exec playwright install chromium
 pnpm test:browser  # organizer workflows, concurrency, refresh failures and logout recovery
@@ -196,9 +216,18 @@ Team totals count published, played matches across the tournament. They follow
 corrections, cleared scores and removed rounds; unpublished draft results do not
 count. Stage standings continue to use each stage item's own ranking rules.
 
+Teams with the same points are ranked by their matches against each other, then
+by score difference, total score and wins. Teams that are level on all of these
+keep the order of their slots. The stage editor shows where that order alone
+decides who moves on, before the next stage is activated.
+
 ### Public pages
 
 `GET /api/tournaments/{id}/details` returns everything the Details pages show in
 one response, which the backend keeps for a few seconds. A venue full of phones
 that refresh every half minute costs one database read per tournament, not one
 per visitor.
+
+The other public reads of a tournament (stages, players, teams, rankings and
+standings) are worked out on every request. A client that can't manage the
+tournament gets 60 of those a minute per address; its organizers have no limit.

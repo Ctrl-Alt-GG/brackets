@@ -62,6 +62,7 @@ import {
   registerUserApiUsersRegisterPost,
   removeMemberApiClubsClubIdMembersUserIdDelete,
   scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPost,
+  transferOwnershipApiClubsClubIdOwnerPut,
   updateClubApiClubsClubIdPut,
   updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut,
   updatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPut,
@@ -220,6 +221,9 @@ import type {
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostError,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostResponse,
+  TransferOwnershipApiClubsClubIdOwnerPutData,
+  TransferOwnershipApiClubsClubIdOwnerPutError,
+  TransferOwnershipApiClubsClubIdOwnerPutResponse,
   UpdateClubApiClubsClubIdPutData,
   UpdateClubApiClubsClubIdPutError,
   UpdateClubApiClubsClubIdPutResponse,
@@ -524,6 +528,36 @@ export const removeMemberApiClubsClubIdMembersUserIdDeleteMutation = (
 };
 
 /**
+ * Transfer Ownership
+ *
+ * Hand the event over to another of its organizers, for an owner who leaves the organizing
+ * team. The previous owner stays on as an organizer.
+ */
+export const transferOwnershipApiClubsClubIdOwnerPutMutation = (
+  options?: Partial<Options<TransferOwnershipApiClubsClubIdOwnerPutData>>,
+): UseMutationOptions<
+  TransferOwnershipApiClubsClubIdOwnerPutResponse,
+  AxiosError<TransferOwnershipApiClubsClubIdOwnerPutError>,
+  Options<TransferOwnershipApiClubsClubIdOwnerPutData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    TransferOwnershipApiClubsClubIdOwnerPutResponse,
+    AxiosError<TransferOwnershipApiClubsClubIdOwnerPutError>,
+    Options<TransferOwnershipApiClubsClubIdOwnerPutData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await transferOwnershipApiClubsClubIdOwnerPut({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Logout
  *
  * Ends the session: its cookie is removed from this browser, and its tokens stop working, also
@@ -611,6 +645,11 @@ export const getTournamentsApiTournamentsGetQueryKey = (
 
 /**
  * Get Tournaments
+ *
+ * The tournaments that everyone may see, and for an organizer also those of their events, with
+ * whether the one who asks can manage each.
+ *
+ * With `endpoint_name`, only the tournament whose Details link that is.
  */
 export const getTournamentsApiTournamentsGetOptions = (
   options?: Options<GetTournamentsApiTournamentsGetData>,
@@ -1038,7 +1077,8 @@ export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetQ
  * Get the teams that take the slots of the next stage once it is activated.
  *
  * A slot that can't be decided yet is left out: its source ranks fewer teams than the position
- * the slot takes.
+ * the slot takes. `tied_team` names a team that is level on every criterion with the one that
+ * gets the slot, which only seeding put behind it.
  */
 export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetOptions = (
   options: Options<GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetData>,
@@ -1453,6 +1493,10 @@ export const deleteRoundApiTournamentsTournamentIdRoundsRoundIdDeleteMutation = 
 
 /**
  * Update Round By Id
+ *
+ * Rename a round, or publish or withdraw a draft. Only Swiss rounds can be drafts: the rounds of
+ * the other formats are published with their stage item, and a withdrawn one couldn't be
+ * published again.
  */
 export const updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation = (
   options?: Partial<Options<UpdateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutData>>,

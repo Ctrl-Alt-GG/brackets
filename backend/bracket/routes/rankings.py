@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbSession
 from bracket.logic.ranking.calculation import (
     recalculate_ranking_for_stage_item,
 )
@@ -17,7 +17,7 @@ from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
 from bracket.routes.auth import (
     user_authenticated_for_tournament,
-    user_authenticated_or_public_dashboard,
+    user_authenticated_or_rate_limited_visitor,
 )
 from bracket.routes.models import (
     RankingsResponse,
@@ -40,18 +40,18 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/rankings")
 async def get_rankings(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
-    _: UserPublic = Depends(user_authenticated_or_public_dashboard),
+    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> RankingsResponse:
     return RankingsResponse(data=await get_all_rankings_in_tournament(conn, tournament_id))
 
 
 @router.get("/tournaments/{tournament_id}/standings")
 async def get_standings(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
-    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> StandingsResponse:
     """
     Get the teams of every stage item, best first. Teams advance to the next stage in this order.
@@ -61,7 +61,7 @@ async def get_standings(
 
 @router.put("/tournaments/{tournament_id}/rankings/{ranking_id}")
 async def update_ranking_by_id(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
     ranking_body: RankingBody,
@@ -87,7 +87,7 @@ async def update_ranking_by_id(
 
 @router.delete("/tournaments/{tournament_id}/rankings/{ranking_id}")
 async def delete_ranking(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -116,7 +116,7 @@ async def delete_ranking(
 
 @router.post("/tournaments/{tournament_id}/rankings")
 async def create_ranking(
-    conn: DbConnection,
+    conn: DbSession,
     ranking_body: RankingCreateBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),

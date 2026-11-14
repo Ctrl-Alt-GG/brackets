@@ -89,17 +89,11 @@ export function LoginPage() {
                 Create account
               </Link>
             ) : null}
-            {authFeatures.data?.data.password_reset_enabled ? (
-              <Link className="link text-sm" to="/password-reset">
-                Password reset
-              </Link>
-            ) : null}
           </div>
-          {authFeatures.data && !authFeatures.data.data.password_reset_enabled ? (
-            <p className="mt-4 text-sm text-base-content/70">
-              Forgot your password? Ask whoever runs this site to set a new one for you.
-            </p>
-          ) : null}
+          {/* The site sends no email, so a forgotten password is set again on the server. */}
+          <p className="mt-4 text-sm text-base-content/70">
+            Forgot your password? Ask whoever runs this site to set a new one for you.
+          </p>
         </form>
       </Surface>
     </PageShell>
@@ -186,19 +180,6 @@ export function RegisterPage() {
             </Link>
           </div>
         </form>
-      </Surface>
-    </PageShell>
-  );
-}
-
-export function PasswordResetStatusPage() {
-  return (
-    <PageShell title="Password reset">
-      <Surface>
-        <p className="text-sm text-base-content/80">
-          Passwords can't be reset by email here. Ask whoever runs this site to set a new one for
-          you.
-        </p>
       </Surface>
     </PageShell>
   );

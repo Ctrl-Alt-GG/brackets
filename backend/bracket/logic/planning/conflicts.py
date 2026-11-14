@@ -1,11 +1,17 @@
 from collections import defaultdict
+from itertools import combinations
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
-from bracket.models.db.match import Match, MatchWithDetailsDefinitive
+from bracket import orm
+from bracket.models.db.match import Match
+from bracket.models.db.stage_item_inputs import StageItemInput
 from bracket.models.db.util import StageWithStageItems
-from bracket.utils.id_types import MatchId
+from bracket.utils.id_types import MatchId, TeamId
+
+ConflictFlags = tuple[bool, bool]
 
 
 def matches_overlap(match1: Match, match2: Match) -> bool:
@@ -16,102 +22,71 @@ def matches_overlap(match1: Match, match2: Match) -> bool:
     return match1.start_time < match2.end_time and match2.start_time < match1.end_time
 
 
-def get_conflicting_matches(
-    stages: list[StageWithStageItems],
-) -> tuple[
-    defaultdict[MatchId, list[bool]],
-    set[MatchId],
-]:
-    matches = [
+def _team_id(stage_item_input: StageItemInput | None) -> TeamId | None:
+    return stage_item_input.team_id if stage_item_input is not None else None
+
+
+def _all_matches(stages: list[StageWithStageItems]) -> list[Match]:
+    return [
         match
         for stage in stages
         for stage_item in stage.stage_items
         for round_ in stage_item.rounds
         for match in round_.matches
-        if isinstance(match, MatchWithDetailsDefinitive)
     ]
 
-    conflicts_to_set: defaultdict[MatchId, list[bool]] = defaultdict(lambda: [False, False])
-    matches_with_conflicts = set()
-    conflicts_to_clear = set()
 
-    for i, match1 in enumerate(matches):
-        for match2 in matches[i + 1 :]:
-            if match1.id == match2.id:
-                continue
+def get_conflicting_matches(stages: list[StageWithStageItems]) -> dict[MatchId, ConflictFlags]:
+    """
+    For every match, whether each of its two teams plays another match at the same time.
 
-            # The same team has a different slot id in each stage item. Compare teams so
-            # simultaneous matches in different groups are detected too; open slots have
-            # no team and cannot conflict.
-            conflicting_team_ids = {
-                input_.team_id for input_ in match1.stage_item_inputs if input_.team_id is not None
-            } & {
-                input_.team_id for input_ in match2.stage_item_inputs if input_.team_id is not None
-            }
-
-            if not conflicting_team_ids:
-                continue
-
-            if matches_overlap(match1, match2):
-                for match in (match1, match2):
-                    if not conflicts_to_set[match.id][0]:
-                        conflicts_to_set[match.id][0] = (
-                            match.stage_item_input1.team_id in conflicting_team_ids
-                        )
-                    if not conflicts_to_set[match.id][1]:
-                        conflicts_to_set[match.id][1] = (
-                            match.stage_item_input2.team_id in conflicting_team_ids
-                        )
-
-                matches_with_conflicts.add(match1.id)
-                matches_with_conflicts.add(match2.id)
-
+    A team has a different slot in every stage item, so matches are compared by team, which also
+    finds simultaneous matches in different groups. A slot without a team can't conflict. Only
+    the matches of one team are compared with each other, rather than every pair of matches.
+    """
+    matches = _all_matches(stages)
+    matches_per_team: defaultdict[TeamId, list[Match]] = defaultdict(list)
     for match in matches:
-        if match.id not in matches_with_conflicts:
-            conflicts_to_clear.add(match.id)
+        for team_id in {_team_id(match.stage_item_input1), _team_id(match.stage_item_input2)}:
+            if team_id is not None:
+                matches_per_team[team_id].append(match)
 
-    assert set(conflicts_to_set.keys()).intersection(conflicts_to_clear) == set()
-    return conflicts_to_set, conflicts_to_clear
+    conflicting_teams: defaultdict[MatchId, set[TeamId]] = defaultdict(set)
+    for team_id, team_matches in matches_per_team.items():
+        for match1, match2 in combinations(team_matches, 2):
+            if matches_overlap(match1, match2):
+                conflicting_teams[match1.id].add(team_id)
+                conflicting_teams[match2.id].add(team_id)
+
+    return {
+        match.id: (
+            _team_id(match.stage_item_input1) in conflicting_teams[match.id],
+            _team_id(match.stage_item_input2) in conflicting_teams[match.id],
+        )
+        for match in matches
+    }
 
 
-async def set_conflicts(
-    conn: AsyncConnection,
-    conflicts_to_set: dict[MatchId, list[bool]],
-    conflicts_to_clear: set[MatchId],
-) -> None:
-    for match_id, conflict in conflicts_to_set.items():
-        await conn.execute(
-            text(
-                """
-                UPDATE matches
-                SET
-                    stage_item_input1_conflict = :conflict1_id,
-                    stage_item_input2_conflict = :conflict2_id
-                WHERE id = :match_id
-                """
-            ),
+async def handle_conflicts(conn: AsyncSession, stages: list[StageWithStageItems]) -> None:
+    """Store only changed conflict flags in one batch."""
+    conflicts = await run_in_threadpool(get_conflicting_matches, stages)
+    changes = [
+        (match.id, *conflicts[match.id])
+        for match in _all_matches(stages)
+        if (match.stage_item_input1_conflict, match.stage_item_input2_conflict)
+        != conflicts[match.id]
+    ]
+    if not changes:
+        return
+
+    await conn.execute(
+        update(orm.Match),
+        [
             {
-                "match_id": match_id,
-                "conflict1_id": conflict[0],
-                "conflict2_id": conflict[1],
-            },
-        )
-
-    for match_id in conflicts_to_clear:
-        await conn.execute(
-            text(
-                """
-                UPDATE matches
-                SET
-                    stage_item_input1_conflict = false,
-                    stage_item_input2_conflict = false
-                WHERE id = :match_id
-                """
-            ),
-            {"match_id": match_id},
-        )
-
-
-async def handle_conflicts(conn: AsyncConnection, stages: list[StageWithStageItems]) -> None:
-    conflicts_to_set, conflicts_to_clear = get_conflicting_matches(stages)
-    await set_conflicts(conn, conflicts_to_set, conflicts_to_clear)
+                "id": match_id,
+                "stage_item_input1_conflict": conflict1,
+                "stage_item_input2_conflict": conflict2,
+            }
+            for match_id, conflict1, conflict2 in changes
+        ],
+    )

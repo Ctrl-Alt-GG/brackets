@@ -23,6 +23,7 @@ import { LogoField } from '../components/logo-field';
 import type { TournamentBundle } from '../types';
 import { CheckboxField, Field, Surface, SurfaceHeading } from '../ui';
 import { cx, teamLogoUrl } from '../utils';
+import { confirm } from '../confirm';
 
 /**
  * Narrows a long list down to what was typed. The rows that don't match are hidden, not removed:
@@ -202,8 +203,16 @@ function PlayerEditor({
           <button
             className="btn btn-error btn-soft"
             disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete ${player.name}?`)) remove.mutate({ path });
+            onClick={async () => {
+              if (
+                await confirm({
+                  confirmLabel: 'Delete player',
+                  destructive: true,
+                  message: `Delete ${player.name}?`,
+                })
+              ) {
+                remove.mutate({ path });
+              }
             }}
             type="button"
           >
@@ -498,8 +507,16 @@ function TeamEditor({
           <button
             className="btn btn-error btn-soft"
             disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete ${team.name}?`)) remove.mutate({ path });
+            onClick={async () => {
+              if (
+                await confirm({
+                  confirmLabel: 'Delete team',
+                  destructive: true,
+                  message: `Delete ${team.name}?`,
+                })
+              ) {
+                remove.mutate({ path });
+              }
             }}
             type="button"
           >

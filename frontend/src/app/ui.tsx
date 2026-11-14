@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, NavLink, useLocation } from 'react-router';
 
+import { LANGUAGES } from './locales';
 import type { Session } from './types';
 import { cx, loginPath } from './utils';
 
@@ -175,11 +177,12 @@ export function TopNav({
   session: Session;
 }) {
   const { pathname } = useLocation();
+  const { t } = useTranslation();
 
   return (
     <header className="border-b border-base-300 bg-base-100/40 backdrop-blur">
       <nav
-        aria-label="Main"
+        aria-label={t('nav.main')}
         className="navbar mx-auto max-w-7xl flex-wrap gap-x-4 gap-y-3 px-5 md:px-8"
       >
         <Link className="flex items-center gap-3" to="/">
@@ -197,8 +200,8 @@ export function TopNav({
         {session ? (
           <div className="order-last flex w-full gap-5 text-sm font-semibold md:order-none md:w-auto">
             {[
-              ['/', 'Tournaments'],
-              ['/events', 'Events'],
+              ['/', t('nav.tournaments')],
+              ['/events', t('nav.events')],
             ].map(([to, label]) => (
               <NavLink
                 className={({ isActive }) =>
@@ -220,10 +223,11 @@ export function TopNav({
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          <LanguageSelect />
           {session ? (
             <>
               <Link className="btn btn-ghost btn-sm" to="/user">
-                {currentUserName ?? 'Account'}
+                {currentUserName ?? t('nav.account')}
               </Link>
               <button
                 className="btn btn-ghost btn-sm"
@@ -231,17 +235,37 @@ export function TopNav({
                 onClick={onLogout}
                 type="button"
               >
-                {logoutPending ? 'Logging out…' : 'Log out'}
+                {logoutPending ? t('nav.loggingOut') : t('nav.logOut')}
               </button>
             </>
           ) : (
             // Players never need an account, so visitors only get a quiet way in for organizers.
             <Link className="link link-hover text-sm font-semibold" to={loginPath(pathname)}>
-              Organizer login
+              {t('nav.organizerLogin')}
             </Link>
           )}
         </div>
       </nav>
     </header>
+  );
+}
+
+/** The language of the pages players open. This browser remembers the choice. */
+function LanguageSelect() {
+  const { i18n, t } = useTranslation();
+
+  return (
+    <select
+      aria-label={t('nav.language')}
+      className="select select-ghost select-sm w-auto"
+      onChange={(event) => void i18n.changeLanguage(event.target.value)}
+      value={i18n.resolvedLanguage}
+    >
+      {Object.entries(LANGUAGES).map(([language, name]) => (
+        <option key={language} lang={language} value={language}>
+          {name}
+        </option>
+      ))}
+    </select>
   );
 }

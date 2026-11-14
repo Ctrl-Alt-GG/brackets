@@ -2,7 +2,7 @@ import random
 from decimal import Decimal
 
 from bracket.logic.scheduling.swiss import get_swiss_pairing
-from bracket.models.db.match import Match, MatchWithDetailsDefinitive
+from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInput, StageItemInputFinal
 from bracket.models.db.team import Team
@@ -40,17 +40,15 @@ def get_round(*pairs: tuple[StageItemInputFinal, StageItemInputFinal]) -> RoundW
         is_draft=False,
         name="",
         matches=[
-            MatchWithDetailsDefinitive(
-                **Match.model_validate(
-                    DUMMY_MATCH1.model_dump()
-                    | {
-                        "id": MatchId(-index),
-                        "stage_item_input1_id": team1.id,
-                        "stage_item_input2_id": team2.id,
-                    }
-                ).model_dump(),
-                stage_item_input1=team1,
-                stage_item_input2=team2,
+            MatchWithDetailsDefinitive.model_validate(
+                DUMMY_MATCH1.model_dump()
+                | {
+                    "id": MatchId(-index),
+                    "stage_item_input1_id": team1.id,
+                    "stage_item_input2_id": team2.id,
+                    "stage_item_input1": team1,
+                    "stage_item_input2": team2,
+                }
             )
             for index, (team1, team2) in enumerate(pairs, start=1)
         ],

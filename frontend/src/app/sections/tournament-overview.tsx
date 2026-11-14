@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import type { FlattenedMatch, TournamentBundle } from '../types';
@@ -22,7 +23,9 @@ import {
   nextMatch,
   pointsPhrase,
   sortTeamsByName,
+  stageItemName,
   stageItemStandings,
+  stageTypeName,
   type MatchOutcome,
 } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
@@ -36,6 +39,7 @@ function MyTeamPanel({
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   teams: OpenApi.FullTeamWithPlayers[];
 }) {
+  const { t } = useTranslation();
   const { myTeamId, publicPath, setMyTeamId } = useTournamentContext();
   const myTeam = teams.find((team) => team.id === myTeamId);
 
@@ -44,19 +48,17 @@ function MyTeamPanel({
   if (!myTeam) {
     return (
       <Surface>
-        <SurfaceHeading title="Find your team" />
-        <p className="text-sm text-base-content/80">
-          Pick your team to see who you play next and when. This browser remembers your choice.
-        </p>
+        <SurfaceHeading title={t('overview.findYourTeam')} />
+        <p className="text-sm text-base-content/80">{t('overview.pickYourTeam')}</p>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <select
-            aria-label="Your team"
+            aria-label={t('common.yourTeam')}
             className="select w-full sm:w-80"
             onChange={(event) => setMyTeamId(Number(event.target.value))}
             value=""
           >
             <option disabled value="">
-              Choose your team…
+              {t('overview.chooseTeam')}
             </option>
             {sortTeamsByName(teams).map((team) => (
               <option key={team.id} value={team.id}>
@@ -65,7 +67,7 @@ function MyTeamPanel({
             ))}
           </select>
           <Link className="link text-sm" to={`${publicPath}/teams`}>
-            Not sure? Search by player name
+            {t('overview.searchByPlayer')}
           </Link>
         </div>
       </Surface>
@@ -79,29 +81,31 @@ function MyTeamPanel({
     <Surface className="border-accent/40">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-accent">Your team</p>
+          <p className="text-sm font-medium text-accent">{t('common.yourTeam')}</p>
           <h2 className="font-display text-2xl font-semibold">{myTeam.name}</h2>
           {players ? <p className="text-sm text-base-content/70">{players}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Link className="btn btn-soft btn-sm" to={teamPath(publicPath, myTeam.id)}>
-            All matches and players
+            {t('overview.allMatchesAndPlayers')}
           </Link>
           <button className="btn btn-ghost btn-sm" onClick={() => setMyTeamId(null)} type="button">
-            Change team
+            {t('overview.changeTeam')}
           </button>
         </div>
       </div>
       {next ? (
         <div className="max-w-xl space-y-2">
           <p className="text-sm font-medium text-base-content/80">
-            {isInProgress(matchStatus(next.match)) ? 'Playing now' : 'Next match'}
+            {isInProgress(matchStatus(next.match))
+              ? t('overview.playingNowMine')
+              : t('overview.nextMatch')}
           </p>
           <MatchCard entry={next} stageItemsById={stageItemsById} />
         </div>
       ) : (
         <p className="text-sm text-base-content/70">
-          No upcoming matches for {myTeam.name} right now.
+          {t('overview.noUpcoming', { team: myTeam.name })}
         </p>
       )}
     </Surface>
@@ -125,6 +129,7 @@ export function OverviewSection({
   /** The organizer's overview, where results are entered. Otherwise the Details page. */
   workspace?: boolean;
 }) {
+  const { t } = useTranslation();
   const { publicPath } = useTournamentContext();
   // A match that has started is in progress until its result is in, however long it runs over.
   const inProgress = matches.filter((entry) => isInProgress(matchStatus(entry.match)));
@@ -161,10 +166,10 @@ export function OverviewSection({
         <SurfaceHeading
           title={
             inProgress.length === 0
-              ? 'Coming up next'
+              ? t('overview.comingUpNext')
               : workspace
                 ? 'Waiting for results'
-                : 'Playing now'
+                : t('overview.playingNow')
           }
         />
         {workspace && inProgress.length > 0 ? (
@@ -174,9 +179,7 @@ export function OverviewSection({
           </p>
         ) : null}
         {inProgress.length === 0 && upcoming.length === 0 ? (
-          <p className="text-sm text-base-content/70">
-            No matches are running or scheduled at the moment.
-          </p>
+          <p className="text-sm text-base-content/70">{t('overview.nothingScheduled')}</p>
         ) : null}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {(inProgress.length > 0 ? inProgress : upcoming).map((entry) => (
@@ -190,7 +193,9 @@ export function OverviewSection({
         </div>
         {inProgress.length > 0 && upcoming.length > 0 ? (
           <>
-            <h3 className="pt-2 text-sm font-medium text-base-content/80">Coming up next</h3>
+            <h3 className="pt-2 text-sm font-medium text-base-content/80">
+              {t('overview.comingUpNext')}
+            </h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {upcoming.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
@@ -202,11 +207,9 @@ export function OverviewSection({
 
       <div className="grid items-start gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Surface>
-          <SurfaceHeading title="Stages and groups" />
+          <SurfaceHeading title={t('overview.stagesAndGroups')} />
           {bundle.stages.length === 0 ? (
-            <p className="text-sm text-base-content/70">
-              The tournament format has not been set up yet.
-            </p>
+            <p className="text-sm text-base-content/70">{t('overview.notSetUp')}</p>
           ) : null}
           <div className="space-y-5">
             {bundle.stages.map((stage) => (
@@ -219,13 +222,16 @@ export function OverviewSection({
                         aria-hidden="true"
                         className="status status-error motion-safe:animate-pulse"
                       />
-                      Happening now
+                      {t('overview.happeningNow')}
                     </span>
                   ) : null}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {stage.stage_items.map((stageItem) => {
-                    const stageItemMatches = stageItem.rounds.flatMap((round) => round.matches);
+                    // Drafts are only shown in the stage editor, until they are published.
+                    const stageItemMatches = stageItem.rounds
+                      .filter((round) => !round.is_draft)
+                      .flatMap((round) => round.matches);
                     const played = stageItemMatches.filter(isScored).length;
 
                     return (
@@ -234,13 +240,16 @@ export function OverviewSection({
                         key={stageItem.id}
                         to={stageItemPath(publicPath, stageItem)}
                       >
-                        <p className="text-xs text-base-content/70">{stageItem.type_name}</p>
-                        <h4 className="mt-2 font-semibold">
-                          {stageItem.name || stageItem.type_name}
-                        </h4>
+                        <p className="text-xs text-base-content/70">
+                          {stageTypeName(stageItem, t)}
+                        </p>
+                        <h4 className="mt-2 font-semibold">{stageItemName(stageItem, t)}</h4>
                         <p className="mt-2 text-sm text-base-content/70">
-                          {stageItem.team_count} teams · {played} of {stageItemMatches.length}{' '}
-                          matches played
+                          {t('common.teamCount', { count: stageItem.team_count })} ·{' '}
+                          {t('common.matchesPlayed', {
+                            played,
+                            total: stageItemMatches.length,
+                          })}
                         </p>
                       </Link>
                     );
@@ -252,9 +261,9 @@ export function OverviewSection({
         </Surface>
 
         <Surface>
-          <SurfaceHeading title="Latest results" />
+          <SurfaceHeading title={t('overview.latestResults')} />
           {finished.length === 0 ? (
-            <p className="text-sm text-base-content/70">No results yet.</p>
+            <p className="text-sm text-base-content/70">{t('overview.noResults')}</p>
           ) : (
             <div className="space-y-3">
               {finished.toReversed().map((entry) => (
@@ -290,16 +299,19 @@ export function StageItemVisualization({
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
   tournamentId: number;
 }) {
+  const { t } = useTranslation();
   const entries = stageItemStandings(stageItem, standings);
   const bracketData = isBracket(stageItem)
-    ? toBracketViewerData(stageItem, stageItemsById, tournamentId)
+    ? toBracketViewerData(stageItem, stageItemsById, tournamentId, t)
     : null;
+  // Drafts are only shown in the stage editor, until they are published.
+  const publishedRounds = stageItem.rounds.filter((round) => !round.is_draft);
 
   return (
     <div className="card border border-base-300 bg-base-100/50 p-4">
-      <h4 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h4>
+      <h4 className="text-lg font-semibold">{stageItemName(stageItem, t)}</h4>
       <p className="mt-1 text-sm text-base-content/70">
-        {stageItem.type_name} · {stageItem.team_count} teams
+        {stageTypeName(stageItem, t)} · {t('common.teamCount', { count: stageItem.team_count })}
       </p>
 
       {isBracket(stageItem) ? (
@@ -307,18 +319,16 @@ export function StageItemVisualization({
           {bracketData ? (
             <BracketViewer data={bracketData} />
           ) : (
-            <p className="text-sm text-base-content/70">
-              The bracket appears here once the matches have been drawn.
-            </p>
+            <p className="text-sm text-base-content/70">{t('overview.bracketPending')}</p>
           )}
         </div>
       ) : (
         <div className={cx('mt-4 grid gap-4', showMatches && 'lg:grid-cols-[0.9fr_1.1fr]')}>
           <div className="space-y-3">
-            <p className="text-sm font-medium text-base-content/80">Table</p>
+            <p className="text-sm font-medium text-base-content/80">{t('overview.table')}</p>
             <div className="space-y-2">
               {entries.length === 0 ? (
-                <p className="text-sm text-base-content/70">No teams have been added yet.</p>
+                <p className="text-sm text-base-content/70">{t('overview.noTeams')}</p>
               ) : null}
               {entries.map(({ input, standing }, index) => {
                 const team = teamMap.get(input.team_id);
@@ -330,12 +340,16 @@ export function StageItemVisualization({
                     <span className="flex items-center gap-3">
                       <span className="w-5 text-base-content/70">{index + 1}</span>
                       <TeamLink className="font-medium" teamId={input.team_id}>
-                        {team?.name ?? inputLabel(input, stageItemsById)}
+                        {team?.name ?? inputLabel(input, stageItemsById, t)}
                       </TeamLink>
                     </span>
                     <span className="text-base-content/70">
-                      {standing.wins} won · {standing.draws} drawn · {standing.losses} lost ·{' '}
-                      {pointsPhrase(stageItem, standing.points)}
+                      {t('common.record', {
+                        draws: standing.draws,
+                        losses: standing.losses,
+                        wins: standing.wins,
+                      })}{' '}
+                      · {pointsPhrase(stageItem, standing.points, t)}
                     </span>
                   </div>
                 );
@@ -344,11 +358,11 @@ export function StageItemVisualization({
           </div>
           {showMatches ? (
             <div className="space-y-3">
-              <p className="text-sm font-medium text-base-content/80">Matches</p>
+              <p className="text-sm font-medium text-base-content/80">{t('overview.matches')}</p>
               {/* Equal team columns keep "vs" in the middle of every row, and sharing one grid
                   between all rounds keeps it in a straight line even next to wider scores. */}
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3">
-                {stageItem.rounds.map((round) => (
+                {publishedRounds.map((round) => (
                   <div
                     className="col-span-3 grid grid-cols-subgrid gap-y-2 rounded-box border border-base-300 bg-base-200/60 p-3"
                     key={round.id}
@@ -365,18 +379,18 @@ export function StageItemVisualization({
                             className={cx('break-words text-right', sideClass(winner, 1))}
                             teamId={inputTeamId(match.stage_item_input1)}
                           >
-                            {inputLabel(match.stage_item_input1, stageItemsById)}
+                            {inputLabel(match.stage_item_input1, stageItemsById, t)}
                           </TeamLink>
                           <span className="text-center font-semibold tabular-nums">
                             {isScored(match)
                               ? `${match.stage_item_input1_score} – ${match.stage_item_input2_score}`
-                              : 'vs'}
+                              : t('common.vs')}
                           </span>
                           <TeamLink
                             className={cx('break-words', sideClass(winner, 2))}
                             teamId={inputTeamId(match.stage_item_input2)}
                           >
-                            {inputLabel(match.stage_item_input2, stageItemsById)}
+                            {inputLabel(match.stage_item_input2, stageItemsById, t)}
                           </TeamLink>
                         </div>
                       );

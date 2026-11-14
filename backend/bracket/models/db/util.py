@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from pydantic import field_validator, model_validator
+from pydantic import model_validator
 
-from bracket.models.db.match import Match, MatchWithDetails, MatchWithDetailsDefinitive
+from bracket.models.db.match import MatchWithDetails, MatchWithDetailsDefinitive
 from bracket.models.db.round import Round
 from bracket.models.db.stage import Stage
 from bracket.models.db.stage_item import StageItem, StageType
@@ -13,13 +14,6 @@ from bracket.models.db.stage_item_inputs import StageItemInput
 
 class RoundWithMatches(Round):
     matches: list[MatchWithDetailsDefinitive | MatchWithDetails]
-
-    @field_validator("matches", mode="before")
-    @staticmethod
-    def handle_matches(values: list[Match]) -> list[Match]:
-        if values == [None]:
-            return []
-        return values
 
 
 class StageItemWithRounds(StageItem):
@@ -30,29 +24,12 @@ class StageItemWithRounds(StageItem):
     @model_validator(mode="before")
     @classmethod
     def fill_type_name(cls, values: Any) -> Any:
-        match values["type"]:
-            case str() as type_:
-                values["type_name"] = type_.lower().capitalize().replace("_", " ")
-            case StageType() as type_:
-                values["type_name"] = str(type_.value).lower().capitalize().replace("_", " ")
-
+        if isinstance(values, Mapping):
+            type_ = values["type"]
+            name = type_.value if isinstance(type_, StageType) else type_
+            return {**values, "type_name": name.lower().capitalize().replace("_", " ")}
         return values
-
-    @field_validator("rounds", "inputs", mode="before")
-    @staticmethod
-    def handle_empty_list_elements(values: list[Any] | None) -> list[Any]:
-        if values is None:
-            return []
-        return [value for value in values if value is not None]
 
 
 class StageWithStageItems(Stage):
     stage_items: list[StageItemWithRounds]
-
-    @field_validator("stage_items", mode="before")
-    @staticmethod
-    def handle_stage_items(
-        values: list[StageItemWithRounds | None],
-    ) -> list[StageItemWithRounds | None]:
-        # Stage items are aggregated with a LEFT JOIN, so a stage without any gives [null].
-        return [] if values == [None] else values

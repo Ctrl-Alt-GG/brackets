@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from heliclockter import datetime_utc
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.scheduling.elimination import (
@@ -27,7 +27,7 @@ from bracket.utils.id_types import StageId, StageItemId, TournamentId
 
 
 async def create_rounds_for_new_stage_item(
-    conn: AsyncConnection, tournament_id: TournamentId, stage_item: StageItem
+    conn: AsyncSession, tournament_id: TournamentId, stage_item: StageItem
 ) -> None:
     rounds_count: int
     match stage_item.type:
@@ -53,7 +53,7 @@ async def create_rounds_for_new_stage_item(
 
 
 async def build_matches_for_stage_item(
-    conn: AsyncConnection, stage_item: StageItem, tournament_id: TournamentId
+    conn: AsyncSession, stage_item: StageItem, tournament_id: TournamentId
 ) -> None:
     await create_rounds_for_new_stage_item(conn, tournament_id, stage_item)
     stage_item_with_rounds = await get_stage_item(conn, tournament_id, stage_item.id)

@@ -4,12 +4,11 @@ import aiofiles.os
 import aiohttp
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.database import engine
 from bracket.models.db.team import Team
-from bracket.schema import players, players_x_teams, teams
-from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT
 from bracket.utils.uploads import build_upload_path
 from tests.integration_tests.api.shared import (
@@ -63,7 +62,7 @@ async def test_create_team(
     body = {"name": "Some new name", "active": True, "player_ids": []}
     response = await send_tournament_request(HTTPMethod.POST, "teams", auth_context, None, body)
     assert response["data"]["name"] == body["name"]
-    await assert_row_count_and_clear(teams, 1)
+    await assert_row_count_and_clear(orm.Team, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -76,13 +75,13 @@ async def test_create_teams(
     )
     assert response["success"] is True
 
-    async with engine.begin() as conn:
+    async with AsyncSession(engine) as session, session.begin():
         members = (
-            await conn.execute(
-                select(teams.c.name, players.c.name)
-                .join(players_x_teams, players_x_teams.c.team_id == teams.c.id)
-                .join(players, players.c.id == players_x_teams.c.player_id)
-                .order_by(players.c.name)
+            await session.execute(
+                select(orm.Team.name, orm.Player.name)
+                .join(orm.PlayerXTeam, orm.PlayerXTeam.team_id == orm.Team.id)
+                .join(orm.Player, orm.Player.id == orm.PlayerXTeam.player_id)
+                .order_by(orm.Player.name)
             )
         ).all()
     assert [tuple(member) for member in members] == [
@@ -90,9 +89,9 @@ async def test_create_teams(
         ("Team -1", "Player 43"),
     ]
 
-    await assert_row_count_and_clear(players_x_teams, 2)
-    await assert_row_count_and_clear(teams, 2)
-    await assert_row_count_and_clear(players, 2)
+    await assert_row_count_and_clear(orm.PlayerXTeam, 2)
+    await assert_row_count_and_clear(orm.Team, 2)
+    await assert_row_count_and_clear(orm.Player, 2)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -112,7 +111,7 @@ async def test_create_teams_invalid_names(
     )
 
     assert [detail["msg"] for detail in response["detail"]] == [f"Value error, {error}"]
-    await assert_row_count_and_clear(teams, 0)
+    await assert_row_count_and_clear(orm.Team, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -128,12 +127,12 @@ async def test_delete_team(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(teams, 0)
+        await assert_row_count_and_clear(orm.Team, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_team(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Some new name", "active": True, "player_ids": []}
     async with inserted_team(
@@ -142,13 +141,17 @@ async def test_update_team(
         response = await send_tournament_request(
             HTTPMethod.PUT, f"teams/{team_inserted.id}", auth_context, None, body
         )
-        updated_team = await fetch_one_parsed_certain(
-            conn, Team, query=teams.select().where(teams.c.id == team_inserted.id)
+        updated_team = Team.model_validate(
+            await session.scalar(
+                (select(orm.Team).where(orm.Team.id == team_inserted.id)).execution_options(
+                    populate_existing=True
+                )
+            )
         )
         assert updated_team.name == body["name"]
         assert response["data"]["name"] == body["name"]
 
-        await assert_row_count_and_clear(teams, 1)
+        await assert_row_count_and_clear(orm.Team, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")

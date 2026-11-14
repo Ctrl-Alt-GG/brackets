@@ -3,19 +3,13 @@
     "schemas": {
       "AuthFeatureFlags": {
         "properties": {
-          "password_reset_enabled": {
-            "default": false,
-            "title": "Password Reset Enabled",
-            "type": "boolean"
-          },
           "user_registration_enabled": {
             "title": "User Registration Enabled",
             "type": "boolean"
           }
         },
         "required": [
-          "user_registration_enabled",
-          "password_reset_enabled"
+          "user_registration_enabled"
         ],
         "title": "AuthFeatureFlags",
         "type": "object"
@@ -232,6 +226,19 @@
           "data"
         ],
         "title": "ClubMembersResponse",
+        "type": "object"
+      },
+      "ClubOwnerUpdateBody": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "ClubOwnerUpdateBody",
         "type": "object"
       },
       "ClubResponse": {
@@ -1274,6 +1281,8 @@
           "draw_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1285,6 +1294,8 @@
           "loss_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1294,12 +1305,15 @@
             "title": "Loss Points"
           },
           "position": {
+            "minimum": 0.0,
             "title": "Position",
             "type": "integer"
           },
           "win_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1329,6 +1343,8 @@
           "draw_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1341,6 +1357,8 @@
           "loss_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1353,6 +1371,8 @@
           "win_points": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
                 "type": "number"
               },
               {
@@ -1973,11 +1993,22 @@
           },
           "team": {
             "$ref": "#/components/schemas/Team"
+          },
+          "tied_team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Team"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "stage_item_input",
-          "team"
+          "team",
+          "tied_team"
         ],
         "title": "StageItemInputUpdate",
         "type": "object"
@@ -2546,6 +2577,11 @@
             "title": "Matches Total",
             "type": "integer"
           },
+          "more_rounds_possible": {
+            "default": false,
+            "title": "More Rounds Possible",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2579,7 +2615,8 @@
           "id",
           "matches_total",
           "matches_played",
-          "last_match_end"
+          "last_match_end",
+          "more_rounds_possible"
         ],
         "title": "Tournament",
         "type": "object"
@@ -2828,11 +2865,133 @@
         "title": "TournamentUpdateBody",
         "type": "object"
       },
+      "TournamentWithAccess": {
+        "properties": {
+          "can_manage": {
+            "title": "Can Manage",
+            "type": "boolean"
+          },
+          "club_id": {
+            "title": "Club Id",
+            "type": "integer"
+          },
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "dashboard_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dashboard Endpoint"
+          },
+          "dashboard_public": {
+            "title": "Dashboard Public",
+            "type": "boolean"
+          },
+          "duration_minutes": {
+            "minimum": 1.0,
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_match_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Match End"
+          },
+          "logo_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Path"
+          },
+          "margin_minutes": {
+            "minimum": 0.0,
+            "title": "Margin Minutes",
+            "type": "integer"
+          },
+          "matches_played": {
+            "default": 0,
+            "title": "Matches Played",
+            "type": "integer"
+          },
+          "matches_total": {
+            "default": 0,
+            "title": "Matches Total",
+            "type": "integer"
+          },
+          "more_rounds_possible": {
+            "default": false,
+            "title": "More Rounds Possible",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "players_can_be_in_multiple_teams": {
+            "title": "Players Can Be In Multiple Teams",
+            "type": "boolean"
+          },
+          "start_time": {
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TournamentStatus",
+            "default": "OPEN"
+          }
+        },
+        "required": [
+          "club_id",
+          "name",
+          "created",
+          "start_time",
+          "duration_minutes",
+          "margin_minutes",
+          "dashboard_public",
+          "dashboard_endpoint",
+          "logo_path",
+          "players_can_be_in_multiple_teams",
+          "status",
+          "id",
+          "matches_total",
+          "matches_played",
+          "last_match_end",
+          "more_rounds_possible",
+          "can_manage"
+        ],
+        "title": "TournamentWithAccess",
+        "type": "object"
+      },
       "TournamentsResponse": {
         "properties": {
           "data": {
             "items": {
-              "$ref": "#/components/schemas/Tournament"
+              "$ref": "#/components/schemas/TournamentWithAccess"
             },
             "title": "Data",
             "type": "array"
@@ -3429,6 +3588,67 @@
         ]
       }
     },
+    "/api/clubs/{club_id}/owner": {
+      "put": {
+        "description": "Hand the event over to another of its organizers, for an owner who leaves the organizing\nteam. The previous owner stays on as an organizer.",
+        "operationId": "transfer_ownership_api_clubs__club_id__owner_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "club_id",
+            "required": true,
+            "schema": {
+              "title": "Club Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClubOwnerUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClubMembersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Transfer Ownership",
+        "tags": [
+          "Clubs"
+        ]
+      }
+    },
     "/api/logout": {
       "post": {
         "description": "Ends the session: its cookie is removed from this browser, and its tokens stop working, also\nfor anyone who copied one.",
@@ -3517,6 +3737,7 @@
     },
     "/api/tournaments": {
       "get": {
+        "description": "The tournaments that everyone may see, and for an organizer also those of their events, with\nwhether the one who asks can manage each.\n\nWith `endpoint_name`, only the tournament whose Details link that is.",
         "operationId": "get_tournaments_api_tournaments_get",
         "parameters": [
           {
@@ -4357,7 +4578,7 @@
     },
     "/api/tournaments/{tournament_id}/next_stage_rankings": {
       "get": {
-        "description": "Get the teams that take the slots of the next stage once it is activated.\n\nA slot that can't be decided yet is left out: its source ranks fewer teams than the position\nthe slot takes.",
+        "description": "Get the teams that take the slots of the next stage once it is activated.\n\nA slot that can't be decided yet is left out: its source ranks fewer teams than the position\nthe slot takes. `tied_team` names a team that is level on every criterion with the one that\ngets the slot, which only seeding put behind it.",
         "operationId": "get_next_stage_rankings_api_tournaments__tournament_id__next_stage_rankings_get",
         "parameters": [
           {
@@ -5125,6 +5346,7 @@
         ]
       },
       "put": {
+        "description": "Rename a round, or publish or withdraw a draft. Only Swiss rounds can be drafts: the rounds of\nthe other formats are published with their stage item, and a withdrawn one couldn't be\npublished again.",
         "operationId": "update_round_by_id_api_tournaments__tournament_id__rounds__round_id__put",
         "parameters": [
           {

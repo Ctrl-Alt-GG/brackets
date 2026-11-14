@@ -6,10 +6,14 @@ export const zLocalDateTime = z
   .min(1, 'Pick a date and time')
   .transform((value) => new Date(value).toISOString());
 
-/** A tournament's Details link: the same rule as the API's, checked while it is typed. */
+/**
+ * A tournament's Details link: the same rule as the API's, checked while it is typed. It is
+ * lowercase like the stored one, so that typing it with capitals doesn't count as a change.
+ */
 export const zDetailsLink = z
   .string()
   .trim()
+  .toLowerCase()
   .max(64, 'The Details link can be at most 64 characters long')
   .regex(
     /^([A-Za-z0-9_-]*[A-Za-z][A-Za-z0-9_-]*)?$/,

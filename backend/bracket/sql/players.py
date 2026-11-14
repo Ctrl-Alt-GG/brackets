@@ -1,121 +1,117 @@
-from decimal import Decimal
-
 from heliclockter import datetime_utc
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import delete, exists, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.logic.ranking.statistics import START_ELO
-from bracket.models.db.player import Player, PlayerBody, PlayerToInsert
-from bracket.schema import players
+from bracket.models.db.player import Player, PlayerBody
 from bracket.utils.id_types import PlayerId, TournamentId
 from bracket.utils.pagination import PaginationPlayers
-from bracket.utils.types import dict_without_none
-
-NOT_IN_TEAM_FILTER = """
-    AND NOT EXISTS (
-        SELECT 1 FROM players_x_teams WHERE players_x_teams.player_id = players.id
-    )
-    """
 
 
 async def get_all_players_in_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
     pagination: PaginationPlayers | None = None,
 ) -> list[Player]:
-    not_in_team_filter = NOT_IN_TEAM_FILTER if not_in_team else ""
-    limit_filter = "LIMIT :limit" if pagination is not None and pagination.limit is not None else ""
-    offset_filter = (
-        "OFFSET :offset" if pagination is not None and pagination.offset is not None else ""
+    query = select(orm.Player).where(orm.Player.tournament_id == tournament_id)
+    if not_in_team:
+        query = query.where(~exists().where(orm.PlayerXTeam.player_id == orm.Player.id))
+    sort_columns = {
+        "name": orm.Player.name,
+        "elo_score": orm.Player.elo_score,
+        "swiss_score": orm.Player.swiss_score,
+        "wins": orm.Player.wins,
+        "draws": orm.Player.draws,
+        "losses": orm.Player.losses,
+        "active": orm.Player.active,
+        "created": orm.Player.created,
+    }
+    sort_column = sort_columns[pagination.sort_by if pagination is not None else "name"]
+    query = query.order_by(
+        sort_column.desc()
+        if pagination is not None and pagination.sort_direction == "desc"
+        else sort_column.asc()
     )
-    sort_by = pagination.sort_by if pagination is not None else "name"
-    sort_direction = pagination.sort_direction if pagination is not None else ""
-    query = f"""
-        SELECT *
-        FROM players
-        WHERE players.tournament_id = :tournament_id
-        {not_in_team_filter}
-        ORDER BY {sort_by} {sort_direction}
-        {limit_filter}
-        {offset_filter}
-        """
-
-    result = await conn.execute(
-        text(query),
-        dict_without_none(
-            {
-                "tournament_id": tournament_id,
-                "offset": pagination.offset if pagination is not None else None,
-                "limit": pagination.limit if pagination is not None else None,
-            }
-        ),
-    )
-
-    return [Player.model_validate(x._mapping) for x in result]
+    if pagination is not None:
+        query = query.limit(pagination.limit).offset(pagination.offset)
+    entities = await conn.scalars(query.execution_options(populate_existing=True))
+    return [Player.model_validate(entity) for entity in entities]
 
 
 async def get_player_by_id(
-    conn: AsyncConnection, player_id: PlayerId, tournament_id: TournamentId
+    conn: AsyncSession, player_id: PlayerId, tournament_id: TournamentId
 ) -> Player | None:
-    query = """
-        SELECT *
-        FROM players
-        WHERE id = :player_id
-        AND tournament_id = :tournament_id
-    """
-    result = (
-        await conn.execute(text(query), {"player_id": player_id, "tournament_id": tournament_id})
-    ).first()
-    return Player.model_validate(result._mapping) if result is not None else None
+    entity = await conn.scalar(
+        select(orm.Player)
+        .where(orm.Player.id == player_id, orm.Player.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
+    )
+    return Player.model_validate(entity) if entity is not None else None
 
 
 async def get_player_count(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
 ) -> int:
-    not_in_team_filter = NOT_IN_TEAM_FILTER if not_in_team else ""
-    query = f"""
-        SELECT count(*)
-        FROM players
-        WHERE players.tournament_id = :tournament_id
-        {not_in_team_filter}
-        """
-    return int(await conn.scalar(text(query), {"tournament_id": tournament_id}) or 0)
+    query = (
+        select(func.count())
+        .select_from(orm.Player)
+        .where(orm.Player.tournament_id == tournament_id)
+    )
+    if not_in_team:
+        query = query.where(~exists().where(orm.PlayerXTeam.player_id == orm.Player.id))
+    return int(await conn.scalar(query) or 0)
+
+
+async def sql_update_player(
+    conn: AsyncSession, tournament_id: TournamentId, player_id: PlayerId, body: PlayerBody
+) -> Player | None:
+    entity = await conn.scalar(
+        select(orm.Player).where(
+            orm.Player.id == player_id, orm.Player.tournament_id == tournament_id
+        )
+    )
+    if entity is None:
+        return None
+    entity.name = body.name
+    entity.active = body.active
+    await conn.flush()
+    return Player.model_validate(entity)
 
 
 async def sql_delete_player(
-    conn: AsyncConnection, tournament_id: TournamentId, player_id: PlayerId
+    conn: AsyncSession, tournament_id: TournamentId, player_id: PlayerId
 ) -> None:
-    query = "DELETE FROM players WHERE id = :player_id AND tournament_id = :tournament_id"
-    await conn.execute(text(query), {"player_id": player_id, "tournament_id": tournament_id})
+    await conn.execute(
+        delete(orm.Player).where(
+            orm.Player.id == player_id, orm.Player.tournament_id == tournament_id
+        )
+    )
 
 
-async def sql_delete_players_of_tournament(
-    conn: AsyncConnection, tournament_id: TournamentId
-) -> None:
-    query = "DELETE FROM players WHERE tournament_id = :tournament_id"
-    await conn.execute(text(query), {"tournament_id": tournament_id})
+async def sql_delete_players_of_tournament(conn: AsyncSession, tournament_id: TournamentId) -> None:
+    await conn.execute(delete(orm.Player).where(orm.Player.tournament_id == tournament_id))
 
 
 async def insert_player(
-    conn: AsyncConnection, player_body: PlayerBody, tournament_id: TournamentId
+    conn: AsyncSession, player_body: PlayerBody, tournament_id: TournamentId
 ) -> PlayerId:
-    return PlayerId(
-        await conn.scalar(
-            players.insert()
-            .values(
-                **PlayerToInsert(
-                    **player_body.model_dump(),
-                    created=datetime_utc.now(),
-                    tournament_id=tournament_id,
-                    elo_score=START_ELO,
-                    swiss_score=Decimal("0.0"),
-                ).model_dump()
-            )
-            .returning(players.c.id)
-        )
+    entity = orm.Player(
+        name=player_body.name,
+        active=player_body.active,
+        created=datetime_utc.now(),
+        tournament_id=tournament_id,
+        elo_score=float(START_ELO),
+        swiss_score=0.0,
+        wins=0,
+        draws=0,
+        losses=0,
     )
+    conn.add(entity)
+    await conn.flush()
+    return PlayerId(entity.id)

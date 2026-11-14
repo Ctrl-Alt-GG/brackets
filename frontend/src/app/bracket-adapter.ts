@@ -1,5 +1,7 @@
+import type { TFunction } from 'i18next';
+
 import * as OpenApi from '../openapi';
-import { inputLabel, isEmptySlot, isScored } from './utils';
+import { inputLabel, isEmptySlot, isScored, stageItemName } from './utils';
 
 // Subset of brackets-model that brackets-viewer's render() consumes.
 type ParticipantResult = {
@@ -102,19 +104,22 @@ export function toBracketViewerData(
   stageItem: OpenApi.StageItemWithRounds,
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>,
   tournamentId: number,
+  t: TFunction,
 ): BracketViewerData | null {
   const participants = stageItem.inputs
     .filter((input) => !isEmptySlot(input))
     .map((input) => ({
       id: input.id,
-      name: inputLabel(input, stageItemsById),
+      name: inputLabel(input, stageItemsById, t),
       tournament_id: tournamentId,
     }));
   const known = new Set(participants.map((participant) => participant.id));
 
   const matches: ViewerMatch[] = [];
 
-  orderRounds(stageItem.rounds).forEach(({ matches: roundMatches }, roundIndex) => {
+  // Drafts are only shown in the stage editor, until they are published.
+  const publishedRounds = stageItem.rounds.filter((round) => !round.is_draft);
+  orderRounds(publishedRounds).forEach(({ matches: roundMatches }, roundIndex) => {
     roundMatches.forEach((match, matchIndex) => {
       const scored = isScored(match);
       const first = match.stage_item_input1_score;
@@ -163,7 +168,7 @@ export function toBracketViewerData(
     stages: [
       {
         id: STAGE_ID,
-        name: stageItem.name || stageItem.type_name,
+        name: stageItemName(stageItem, t),
         number: 1,
         settings: { size: stageItem.team_count },
         tournament_id: tournamentId,
@@ -175,13 +180,15 @@ export function toBracketViewerData(
   };
 }
 
-export function roundLabel({ groupType, roundCount, roundNumber }: RoundNameInfo) {
+export function roundLabel({ groupType, roundCount, roundNumber }: RoundNameInfo, t: TFunction) {
   // A Swiss stage item, drawn as a round-robin group.
-  if (groupType === 'round-robin') return `Round ${roundNumber}`;
+  if (groupType === 'round-robin') return t('round.number', { number: roundNumber });
 
   const fromFinal = roundCount - roundNumber;
-  if (fromFinal === 0) return 'Final';
-  if (fromFinal === 1) return 'Semi-finals';
-  if (fromFinal === 2) return 'Quarter-finals';
-  return `Round of ${2 ** (fromFinal + 1)}`;
+  if (fromFinal === 0) return t('round.final');
+  if (fromFinal === 1) return t('round.semiFinals');
+  if (fromFinal === 2) return t('round.quarterFinals');
+  if (fromFinal === 3) return t('round.roundOf16');
+  if (fromFinal === 4) return t('round.roundOf32');
+  return t('round.roundOf', { count: 2 ** (fromFinal + 1) });
 }

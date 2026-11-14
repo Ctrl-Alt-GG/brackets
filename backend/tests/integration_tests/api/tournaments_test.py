@@ -4,14 +4,18 @@ import aiofiles
 import aiofiles.os
 import aiohttp
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.logic.tournaments import sql_delete_tournament_completely
 from bracket.models.db.tournament import Tournament, TournamentStatus
-from bracket.schema import tournaments
-from bracket.sql.tournaments import sql_delete_tournament, sql_get_tournament_by_endpoint_name
-from bracket.utils.db import fetch_one_parsed_certain
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
+from bracket.sql.tournaments import (
+    sql_delete_tournament,
+    sql_get_tournament_by_endpoint_name,
+    with_progress,
+)
+from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 from bracket.utils.types import assert_some
 from bracket.utils.uploads import build_upload_path
 from tests.integration_tests.api.shared import (
@@ -21,7 +25,7 @@ from tests.integration_tests.api.shared import (
     send_tournament_request,
 )
 from tests.integration_tests.models import AuthContext
-from tests.integration_tests.sql import inserted_tournament
+from tests.integration_tests.sql import inserted_club, inserted_tournament
 from tests.integration_tests.uploads import wait_until_removed
 
 
@@ -47,6 +51,8 @@ async def test_tournaments_endpoint(
                 "matches_total": 0,
                 "matches_played": 0,
                 "last_match_end": None,
+                "more_rounds_possible": False,
+                "can_manage": True,
             }
         ],
     }
@@ -75,13 +81,14 @@ async def test_tournament_endpoint(
             "matches_total": 0,
             "matches_played": 0,
             "last_match_end": None,
+            "more_rounds_possible": False,
         },
     }
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_tournament(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     dashboard_endpoint = "some-new-endpoint"
     body = {
@@ -97,8 +104,8 @@ async def test_create_tournament(
     response = await send_auth_request(HTTPMethod.POST, "tournaments", auth_context, json=body)
 
     # Cleanup
-    tournament = assert_some(await sql_get_tournament_by_endpoint_name(conn, dashboard_endpoint))
-    await sql_delete_tournament_completely(conn, tournament.id)
+    tournament = assert_some(await sql_get_tournament_by_endpoint_name(session, dashboard_endpoint))
+    await sql_delete_tournament_completely(session, tournament.id)
 
     # The answer is the new tournament, so that the frontend can open it.
     assert response["data"]["id"] == tournament.id
@@ -126,7 +133,7 @@ async def test_create_tournament_duplicate_dashboard_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_tournament(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "name": "Some new name",
@@ -140,10 +147,14 @@ async def test_update_tournament(
         await send_tournament_request(HTTPMethod.PUT, "", auth_context, json=body)
         == SUCCESS_RESPONSE
     )
-    updated_tournament = await fetch_one_parsed_certain(
-        conn,
-        Tournament,
-        query=tournaments.select().where(tournaments.c.id == auth_context.tournament.id),
+    updated_tournament = Tournament.model_validate(
+        await session.scalar(
+            (
+                with_progress(
+                    select(orm.Tournament).where(orm.Tournament.id == auth_context.tournament.id)
+                )
+            ).execution_options(populate_existing=True)
+        )
     )
     assert updated_tournament.name == body["name"]
     assert updated_tournament.dashboard_public == body["dashboard_public"]
@@ -163,7 +174,7 @@ async def test_update_tournament(
     ],
 )
 async def test_update_tournament_details_link(
-    conn: AsyncConnection,
+    session: AsyncSession,
     startup_and_shutdown_uvicorn_server: None,
     auth_context: AuthContext,
     dashboard_endpoint: str,
@@ -179,14 +190,18 @@ async def test_update_tournament_details_link(
         "margin_minutes": 3,
     }
     response = await send_tournament_request(HTTPMethod.PUT, "", auth_context, json=body)
-    updated_tournament = await fetch_one_parsed_certain(
-        conn,
-        Tournament,
-        query=tournaments.select().where(tournaments.c.id == auth_context.tournament.id),
+    updated_tournament = Tournament.model_validate(
+        await session.scalar(
+            (
+                with_progress(
+                    select(orm.Tournament).where(orm.Tournament.id == auth_context.tournament.id)
+                )
+            ).execution_options(populate_existing=True)
+        )
     )
-    await conn.execute(
-        tournaments.update()
-        .where(tournaments.c.id == auth_context.tournament.id)
+    await session.execute(
+        update(orm.Tournament)
+        .where(orm.Tournament.id == auth_context.tournament.id)
         .values(dashboard_endpoint=auth_context.tournament.dashboard_endpoint)
     )
 
@@ -200,7 +215,7 @@ async def test_update_tournament_details_link(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_archive_and_unarchive_tournament(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     # A tournament of its own, because other tests change the shared one's dashboard setting.
     async with inserted_tournament(
@@ -209,7 +224,7 @@ async def test_archive_and_unarchive_tournament(
         )
     ) as tournament_inserted:
         tournament_context = auth_context.model_copy(update={"tournament": tournament_inserted})
-        query = tournaments.select().where(tournaments.c.id == tournament_inserted.id)
+        query = select(orm.Tournament).where(orm.Tournament.id == tournament_inserted.id)
         body = {"status": "ARCHIVED"}
         assert (
             await send_tournament_request(
@@ -217,7 +232,9 @@ async def test_archive_and_unarchive_tournament(
             )
             == SUCCESS_RESPONSE
         )
-        updated_tournament = await fetch_one_parsed_certain(conn, Tournament, query)
+        updated_tournament = Tournament.model_validate(
+            await session.scalar((with_progress(query)).execution_options(populate_existing=True))
+        )
         assert updated_tournament.status is TournamentStatus.ARCHIVED
         # A public tournament stays public once archived.
         assert updated_tournament.dashboard_public is True
@@ -235,14 +252,16 @@ async def test_archive_and_unarchive_tournament(
             )
             == SUCCESS_RESPONSE
         )
-        updated_tournament = await fetch_one_parsed_certain(conn, Tournament, query)
+        updated_tournament = Tournament.model_validate(
+            await session.scalar((with_progress(query)).execution_options(populate_existing=True))
+        )
         assert updated_tournament.status is TournamentStatus.OPEN
         assert updated_tournament.dashboard_public is True
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_delete_tournament(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with inserted_tournament(
         DUMMY_TOURNAMENT.model_copy(
@@ -258,7 +277,7 @@ async def test_delete_tournament(
             == SUCCESS_RESPONSE
         )
 
-    await sql_delete_tournament(conn, tournament_inserted.id)
+    await sql_delete_tournament(session, tournament_inserted.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -376,3 +395,66 @@ async def test_archived_public_tournament_stays_public(
         ):
             response = await send_request(HTTPMethod.GET, endpoint)
             assert "data" in response, f"Expected {endpoint!r} to be public, got: {response}"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_details_links_are_found_in_any_case(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """Links printed or shared before Details links were lowercase still work, typed any way."""
+    body = {
+        "name": "Cup",
+        "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
+        "club_id": auth_context.club.id,
+        "dashboard_public": True,
+        "dashboard_endpoint": "Summer-Cup",
+        "players_can_be_in_multiple_teams": False,
+        "duration_minutes": 10,
+        "margin_minutes": 5,
+    }
+    created = await send_auth_request(HTTPMethod.POST, "tournaments", auth_context, json=body)
+    same_but_capitals = await send_auth_request(
+        HTTPMethod.POST,
+        "tournaments",
+        auth_context,
+        json={**body, "dashboard_endpoint": "SUMMER-cup"},
+    )
+    found = await send_request(HTTPMethod.GET, "tournaments?endpoint_name=SUMMER-CUP")
+    unknown = await send_request(HTTPMethod.GET, "tournaments?endpoint_name=winter-cup")
+    await send_auth_request(HTTPMethod.DELETE, f"tournaments/{created['data']['id']}", auth_context)
+
+    assert created["data"]["dashboard_endpoint"] == "summer-cup"
+    assert same_but_capitals == {"detail": "This Details link is already taken"}
+    assert [tournament["id"] for tournament in found["data"]] == [created["data"]["id"]]
+    assert unknown == {"detail": 'No tournament has the Details link "winter-cup"'}
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_organizers_also_see_the_public_tournaments_of_other_events(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """At a LAN party, the organizer of one game follows another game's tournament too."""
+    async with (
+        inserted_club(DUMMY_CLUB.model_copy(update={"name": "Another event"})) as other_club,
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={"club_id": other_club.id, "dashboard_endpoint": None}
+            )
+        ) as public_tournament,
+        inserted_tournament(
+            DUMMY_TOURNAMENT.model_copy(
+                update={
+                    "club_id": other_club.id,
+                    "dashboard_endpoint": None,
+                    "dashboard_public": False,
+                    "status": TournamentStatus.ARCHIVED,
+                }
+            )
+        ) as private_tournament,
+    ):
+        response = await send_auth_request(HTTPMethod.GET, "tournaments?filter_=ALL", auth_context)
+
+    listed = {tournament["id"]: tournament["can_manage"] for tournament in response["data"]}
+    assert listed[auth_context.tournament.id] is True
+    assert listed[public_tournament.id] is False
+    assert private_tournament.id not in listed

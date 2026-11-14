@@ -13,9 +13,11 @@ import {
   getClubsApiClubsGetQueryKey,
   getMembersApiClubsClubIdMembersGetOptions,
   removeMemberApiClubsClubIdMembersUserIdDeleteMutation,
+  transferOwnershipApiClubsClubIdOwnerPutMutation,
   updateClubApiClubsClubIdPutMutation,
 } from '../../openapi/@tanstack/react-query.gen';
 import { zClubCreateBody, zClubMemberCreateBody, zClubUpdateBody } from '../../openapi/zod.gen';
+import { confirm } from '../confirm';
 import { useSession } from '../hooks';
 import { useSavedForm } from '../saved-form';
 import { ErrorState, Field, LoadingState, PageShell, Surface, SurfaceHeading } from '../ui';
@@ -81,8 +83,14 @@ function ClubNameForm({ club }: { club: OpenApi.Club }) {
         <button
           className="btn btn-error btn-soft"
           disabled={remove.isPending}
-          onClick={() => {
-            if (window.confirm(`Delete ${club.name}?`)) {
+          onClick={async () => {
+            if (
+              await confirm({
+                confirmLabel: 'Delete event',
+                destructive: true,
+                message: `Delete ${club.name}?`,
+              })
+            ) {
               remove.mutate({ path: { club_id: club.id } });
             }
           }}
@@ -124,6 +132,10 @@ function ClubMembers({
     // Someone who left can't ask who the organizers are any more.
     meta: { invalidates: [getClubsApiClubsGetQueryKey()], successMessage: 'You left the event.' },
   });
+  const handOver = useMutation({
+    ...transferOwnershipApiClubsClubIdOwnerPutMutation(),
+    meta: { successMessage: 'The event has a new owner.' },
+  });
   const path = { club_id: club.id };
 
   return (
@@ -132,13 +144,15 @@ function ClubMembers({
         <h3 className="font-semibold">Organizers</h3>
         <p className="text-sm text-base-content/70">
           Everyone here can manage the tournaments of this event. Only the owner can rename or
-          delete the event and decide who helps.
+          delete the event and decide who helps. An owner who leaves the organizing team makes
+          someone else the owner first.
         </p>
       </div>
       <ul className="divide-y divide-base-300 rounded-box border border-base-300">
         {members.map((member) => {
           const isMe = member.user_id === userId;
           const canRemove = member.relation !== 'OWNER' && (isOwner || isMe);
+          const canBecomeOwner = isOwner && member.relation !== 'OWNER';
 
           return (
             <li
@@ -154,24 +168,53 @@ function ClubMembers({
                   {member.relation === 'OWNER' ? 'Owner' : 'Organizer'} · {member.email}
                 </p>
               </div>
-              {canRemove ? (
-                <button
-                  className="btn btn-error btn-soft btn-sm"
-                  disabled={remove.isPending || leave.isPending}
-                  onClick={() => {
-                    const question = isMe
-                      ? `Leave ${club.name}? You lose access to its tournaments.`
-                      : `Remove ${member.name} from ${club.name}? They lose access to its tournaments.`;
-                    if (!window.confirm(question)) return;
-                    (isMe ? leave : remove).mutate({
-                      path: { ...path, user_id: member.user_id },
-                    });
-                  }}
-                  type="button"
-                >
-                  {isMe ? 'Leave' : 'Remove'}
-                </button>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {canBecomeOwner ? (
+                  <button
+                    className="btn btn-soft btn-sm"
+                    disabled={handOver.isPending}
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          confirmLabel: 'Make owner',
+                          message: `Make ${member.name} the owner of ${club.name}? You stay on as an organizer, but only ${member.name} can then rename or delete the event and decide who helps.`,
+                        })
+                      ) {
+                        handOver.mutate({ body: { user_id: member.user_id }, path });
+                      }
+                    }}
+                    type="button"
+                  >
+                    Make owner
+                  </button>
+                ) : null}
+                {canRemove ? (
+                  <button
+                    className="btn btn-error btn-soft btn-sm"
+                    disabled={remove.isPending || leave.isPending}
+                    onClick={async () => {
+                      const question = isMe
+                        ? `Leave ${club.name}? You lose access to its tournaments.`
+                        : `Remove ${member.name} from ${club.name}? They lose access to its tournaments.`;
+                      if (
+                        !(await confirm({
+                          confirmLabel: isMe ? 'Leave event' : 'Remove organizer',
+                          destructive: true,
+                          message: question,
+                        }))
+                      ) {
+                        return;
+                      }
+                      (isMe ? leave : remove).mutate({
+                        path: { ...path, user_id: member.user_id },
+                      });
+                    }}
+                    type="button"
+                  >
+                    {isMe ? 'Leave' : 'Remove'}
+                  </button>
+                ) : null}
+              </div>
             </li>
           );
         })}

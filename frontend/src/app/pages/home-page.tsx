@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -21,14 +22,10 @@ function byStartTime(left: OpenApi.Tournament, right: OpenApi.Tournament) {
   return new Date(left.start_time).getTime() - new Date(right.start_time).getTime();
 }
 
-function TournamentCard({
-  canManage,
-  tournament,
-}: {
-  canManage: boolean;
-  tournament: OpenApi.Tournament;
-}) {
+function TournamentCard({ tournament }: { tournament: OpenApi.TournamentWithAccess }) {
+  const { t } = useTranslation();
   const detailsPath = publicTournamentPath(tournament);
+  const canManage = tournament.can_manage;
 
   return (
     <article className="card relative border border-base-300 bg-base-100/50 transition hover:border-primary/50 hover:bg-base-100/80">
@@ -36,11 +33,13 @@ function TournamentCard({
         <div className="space-y-2">
           <TournamentStatusBadge tournament={tournament} />
           <h3 className="card-title font-display text-xl">{tournament.name}</h3>
-          <p className="text-sm text-base-content/70">{tournamentDateLabel(tournament)}</p>
+          <p className="text-sm text-base-content/70">{tournamentDateLabel(tournament, t)}</p>
           {canManage ? (
             <p className="text-sm text-base-content/70">
-              {tournament.duration_minutes}-minute matches, {tournament.margin_minutes}-minute
-              breaks
+              {t('home.timing', {
+                duration: tournament.duration_minutes,
+                margin: tournament.margin_minutes,
+              })}
             </p>
           ) : null}
         </div>
@@ -55,11 +54,11 @@ function TournamentCard({
             className="btn btn-primary btn-sm after:absolute after:inset-0 after:rounded-box active:translate-none"
             to={canManage ? `/tournaments/${tournament.id}` : detailsPath}
           >
-            {canManage ? 'Manage' : 'Details'}
+            {canManage ? t('common.manage') : t('common.details')}
           </Link>
           {canManage && tournament.dashboard_public ? (
             <Link className="btn btn-ghost btn-sm relative z-10" to={detailsPath}>
-              Details
+              {t('common.details')}
             </Link>
           ) : null}
         </div>
@@ -69,25 +68,55 @@ function TournamentCard({
 }
 
 function TournamentGroup({
-  canManage,
+  nested,
   title,
   tournaments,
 }: {
-  canManage: boolean;
+  nested: boolean;
   title: string;
-  tournaments: OpenApi.Tournament[];
+  tournaments: OpenApi.TournamentWithAccess[];
 }) {
   if (tournaments.length === 0) return null;
+  const Heading = nested ? 'h3' : 'h2';
 
   return (
     <section className="space-y-4">
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <Heading className="font-display text-xl font-semibold">{title}</Heading>
       <div className="grid gap-4 md:grid-cols-2">
         {tournaments.map((tournament) => (
-          <TournamentCard canManage={canManage} key={tournament.id} tournament={tournament} />
+          <TournamentCard key={tournament.id} tournament={tournament} />
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * Running and upcoming tournaments in the order they start, then the most recent finished ones.
+ * A tournament that is over belongs with the finished ones whether or not it was archived.
+ */
+function TournamentList({
+  nested = false,
+  tournaments,
+}: {
+  /** Under a heading of its own, which makes the groups subheadings. */
+  nested?: boolean;
+  tournaments: OpenApi.TournamentWithAccess[];
+}) {
+  const { t } = useTranslation();
+  const active = tournaments
+    .filter((tournament) => tournamentPhase(tournament) !== 'finished')
+    .toSorted(byStartTime);
+  const finished = tournaments
+    .filter((tournament) => tournamentPhase(tournament) === 'finished')
+    .toSorted(byStartTime)
+    .toReversed();
+
+  return (
+    <div className="space-y-8">
+      <TournamentGroup nested={nested} title={t('home.runningAndUpcoming')} tournaments={active} />
+      <TournamentGroup nested={nested} title={t('home.finished')} tournaments={finished} />
+    </div>
   );
 }
 
@@ -97,49 +126,61 @@ const NewTournamentForm = lazy(() =>
 );
 
 export function HomePage() {
+  const { t } = useTranslation();
   const [session] = useSession();
   const canManage = Boolean(session);
-  // Visitors see every public tournament: the running ones, and finished ones with the Details
-  // page enabled. Organizers see all tournaments of their events.
+  // Everyone sees the public tournaments: the running ones, and finished ones with the Details
+  // page enabled. Organizers also see all tournaments of their events, and which they manage.
   const tournaments = useQuery(
     getTournamentsApiTournamentsGetOptions({ query: { filter_: 'ALL' } }),
   );
   const clubs = useQuery({ ...getClubsApiClubsGetOptions(), enabled: canManage });
 
   const all = tournaments.data?.data ?? [];
-  // Running and upcoming tournaments in the order they start, then the most recent finished ones.
-  // A tournament that is over belongs with the finished ones whether or not it was archived.
-  const active = all
-    .filter((tournament) => tournamentPhase(tournament) !== 'finished')
-    .toSorted(byStartTime);
-  const finished = all
-    .filter((tournament) => tournamentPhase(tournament) === 'finished')
-    .toSorted(byStartTime)
-    .toReversed();
+  const mine = all.filter((tournament) => tournament.can_manage);
+  const others = all.filter((tournament) => !tournament.can_manage);
 
   const tournamentList = tournaments.isPending ? (
-    <LoadingState title="Loading tournaments…" />
+    <LoadingState title={t('home.loading')} />
   ) : tournaments.error ? (
-    <ErrorState error={getErrorMessage(tournaments.error)} title="Unable to load tournaments" />
+    <ErrorState
+      action={
+        <button className="btn btn-sm" onClick={() => void tournaments.refetch()} type="button">
+          {t('common.retry')}
+        </button>
+      }
+      error={getErrorMessage(tournaments.error)}
+      title={t('home.loadFailed')}
+    />
   ) : all.length === 0 ? (
     <EmptyState
-      text={
-        canManage
-          ? 'Create your first tournament with the form on this page.'
-          : 'Tournaments show up here as soon as the organizers publish them.'
-      }
-      title="No tournaments yet"
+      text={canManage ? t('home.emptyOrganizer') : t('home.emptyVisitor')}
+      title={t('home.emptyTitle')}
     />
-  ) : (
-    <div className="space-y-8">
-      <TournamentGroup canManage={canManage} title="Running and upcoming" tournaments={active} />
-      <TournamentGroup canManage={canManage} title="Finished" tournaments={finished} />
+  ) : canManage ? (
+    <div className="space-y-10">
+      <section className="space-y-6">
+        <h2 className="font-display text-2xl font-semibold">{t('home.yours')}</h2>
+        {mine.length > 0 ? (
+          <TournamentList nested tournaments={mine} />
+        ) : (
+          <p className="text-sm text-base-content/70">{t('home.emptyOrganizer')}</p>
+        )}
+      </section>
+      {others.length > 0 ? (
+        <section className="space-y-6">
+          <h2 className="font-display text-2xl font-semibold">{t('home.others')}</h2>
+          <TournamentList nested tournaments={others} />
+        </section>
+      ) : null}
     </div>
+  ) : (
+    <TournamentList tournaments={all} />
   );
 
   return (
-    <PageShell title="Tournaments">
-      <title>Tournaments · Ctrl-Alt-GG Bracket</title>
+    <PageShell title={t('home.title')}>
+      <title>{`${t('home.title')} · Ctrl-Alt-GG Bracket`}</title>
       {!canManage ? (
         tournamentList
       ) : (

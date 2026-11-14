@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.sql.teams import get_team_by_id
 from bracket.utils.id_types import TeamId, TournamentId
@@ -6,7 +6,7 @@ from bracket.utils.uploads import get_existing_upload_path
 
 
 async def get_team_logo_path(
-    conn: AsyncConnection, tournament_id: TournamentId, team_id: TeamId
+    conn: AsyncSession, tournament_id: TournamentId, team_id: TeamId
 ) -> str | None:
     team = await get_team_by_id(conn, team_id, tournament_id)
     logo_path = await get_existing_upload_path(

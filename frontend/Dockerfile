@@ -18,7 +18,8 @@ LABEL org.opencontainers.image.description="Bracket frontend for the Ctrl-Alt-GG
 # Empty: the API is on the page's own origin, behind the same reverse proxy.
 ENV API_BASE_URL=
 
-COPY --from=builder --chown=101:101 /app/dist/ /usr/share/nginx/html/
+# Owned by root, so that nginx can't change the files it serves.
+COPY --from=builder /app/dist/ /usr/share/nginx/html/
 # The image's entrypoint runs the scripts in /docker-entrypoint.d and fills in the templates.
 COPY ./nginx/templates/ /etc/nginx/templates/
 COPY --chmod=755 ./docker-entrypoint.d/ /docker-entrypoint.d/

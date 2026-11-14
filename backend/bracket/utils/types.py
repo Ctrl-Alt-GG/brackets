@@ -30,7 +30,3 @@ class EnumAutoStr(EnumValues):
 def assert_some[T](result: T | None) -> T:
     assert result is not None
     return result
-
-
-def dict_without_none(input_: dict[Any, Any]) -> dict[Any, Any]:
-    return {k: v for k, v in input_.items() if v is not None}

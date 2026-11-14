@@ -2,7 +2,7 @@ from http import HTTPMethod
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.club import ClubInsertable
 from bracket.models.db.user_x_club import UserXClubInsertable, UserXClubRelation
@@ -35,15 +35,15 @@ async def test_clubs_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_club(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     payload = {"name": f"New club {uuid4()}"}
     response = await send_auth_request(HTTPMethod.POST, "clubs", auth_context, json=payload)
 
-    clubs = await get_clubs_for_user_id(conn, auth_context.user.id)
+    clubs = await get_clubs_for_user_id(session, auth_context.user.id)
     club_id = response["data"]["id"]
 
-    await sql_delete_club(conn, club_id)
+    await sql_delete_club(session, club_id)
 
     assert len(clubs) == 2
     assert response["data"]["name"] == payload["name"]
@@ -51,7 +51,7 @@ async def test_create_club(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_club(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     payload = {"name": f"Renamed club {uuid4()}"}
     async with inserted_club(unique_club()) as club_inserted:
@@ -66,8 +66,8 @@ async def test_update_club(
                 HTTPMethod.PUT, f"clubs/{club_inserted.id}", auth_context, json=payload
             )
 
-    clubs = await get_clubs_for_user_id(conn, auth_context.user.id)
-    await sql_delete_club(conn, response["data"]["id"])
+    clubs = await get_clubs_for_user_id(session, auth_context.user.id)
+    await sql_delete_club(session, response["data"]["id"])
 
     assert len(clubs) == 1
     assert response["data"]["name"] == payload["name"]

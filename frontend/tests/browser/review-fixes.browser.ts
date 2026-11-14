@@ -380,17 +380,21 @@ test('Swiss regeneration uses one atomic request and retains pairings after a fa
       ? route.fulfill({ json: { data: data[endpoint] } })
       : route.fulfill({ status: 404, json: { detail: path } });
   });
-  page.on('dialog', (dialog) => dialog.accept());
   await page.goto('/tournaments/7/stages');
   const pairing = page.locator('li').filter({ hasText: 'Alpha' });
+  const regenerate = async () => {
+    await page.getByRole('button', { name: 'Regenerate pairings', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Regenerate pairings' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  };
   await expect(pairing).toContainText('Bravo');
-  await page.getByRole('button', { name: 'Regenerate pairings', exact: true }).click();
+  await regenerate();
   await expect(
     page.getByText('No replacement pairing is available', { exact: true }),
   ).toBeVisible();
   await expect(pairing).toContainText('Bravo');
   fail = false;
-  await page.getByRole('button', { name: 'Regenerate pairings', exact: true }).click();
+  await regenerate();
   await expect(page.getByText('New pairings generated.', { exact: true })).toBeVisible();
   expect(writes).toEqual([
     'POST /api/tournaments/7/rounds/5/regenerate',

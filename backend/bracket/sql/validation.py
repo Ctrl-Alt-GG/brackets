@@ -3,7 +3,7 @@ from typing import Any, NoReturn, get_args
 
 from fastapi import HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.models.db.util import StageWithStageItems
@@ -24,18 +24,18 @@ from bracket.utils.id_types import (
 )
 
 CheckCallableT = Callable[
-    [AsyncConnection, Any, list[StageWithStageItems], TournamentId], Awaitable[bool]
+    [AsyncSession, Any, list[StageWithStageItems], TournamentId], Awaitable[bool]
 ]
 
 
 async def check_stage_belongs_to_tournament(
-    conn: AsyncConnection, stage_id: StageId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncSession, stage_id: StageId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(stage.id == stage_id for stage in stages)
 
 
 async def check_team_belongs_to_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     team_id: TeamId,
     _: list[StageWithStageItems],
     tournament_id: TournamentId,
@@ -44,7 +44,7 @@ async def check_team_belongs_to_tournament(
 
 
 async def check_stage_item_belongs_to_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     stage_item_id: StageItemId,
     stages: list[StageWithStageItems],
     _: TournamentId,
@@ -55,7 +55,7 @@ async def check_stage_item_belongs_to_tournament(
 
 
 async def check_stage_item_input_belongs_to_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     stage_item_input_id: StageItemInputId,
     stages: list[StageWithStageItems],
     _: TournamentId,
@@ -69,7 +69,7 @@ async def check_stage_item_input_belongs_to_tournament(
 
 
 async def check_round_belongs_to_tournament(
-    conn: AsyncConnection, round_id: RoundId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncSession, round_id: RoundId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(
         round_.id == round_id
@@ -80,7 +80,7 @@ async def check_round_belongs_to_tournament(
 
 
 async def check_match_belongs_to_tournament(
-    conn: AsyncConnection, match_id: MatchId, stages: list[StageWithStageItems], _: TournamentId
+    conn: AsyncSession, match_id: MatchId, stages: list[StageWithStageItems], _: TournamentId
 ) -> bool:
     return any(
         match.id == match_id
@@ -92,7 +92,7 @@ async def check_match_belongs_to_tournament(
 
 
 async def check_player_belongs_to_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     player_id: PlayerId,
     _: list[StageWithStageItems],
     tournament_id: TournamentId,
@@ -101,7 +101,7 @@ async def check_player_belongs_to_tournament(
 
 
 async def check_ranking_belongs_to_tournament(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     ranking_id: RankingId,
     _: list[StageWithStageItems],
     tournament_id: TournamentId,
@@ -113,7 +113,7 @@ async def check_ranking_belongs_to_tournament(
 
 
 async def check_players_belong_to_tournament(
-    conn: AsyncConnection, player_ids: set[PlayerId], tournament_id: TournamentId
+    conn: AsyncSession, player_ids: set[PlayerId], tournament_id: TournamentId
 ) -> bool:
     return player_ids.issubset(
         player.id for player in await get_all_players_in_tournament(conn, tournament_id)
@@ -127,7 +127,7 @@ def raise_exception(field_type: Any, field_value: Any) -> NoReturn:
 
 
 async def check_foreign_keys_belong_to_tournament(
-    conn: AsyncConnection, some_body: BaseModel, tournament_id: TournamentId
+    conn: AsyncSession, some_body: BaseModel, tournament_id: TournamentId
 ) -> None:
     """
     Inspects the types of BaseModel attributes, and based on that checks whether that attribute

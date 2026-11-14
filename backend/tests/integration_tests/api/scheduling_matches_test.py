@@ -2,7 +2,7 @@ from http import HTTPMethod
 
 import pytest
 from heliclockter import timedelta
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
@@ -33,7 +33,7 @@ from tests.integration_tests.sql import (
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_schedule_all_matches(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_stage(
@@ -54,7 +54,7 @@ async def test_schedule_all_matches(
     ):
         tournament_id = auth_context.tournament.id
         stage_item_1 = await sql_create_stage_item_with_inputs(
-            conn,
+            session,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage_inserted_1.id,
@@ -82,7 +82,7 @@ async def test_schedule_all_matches(
             ),
         )
         stage_item_2 = await sql_create_stage_item_with_inputs(
-            conn,
+            session,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage_inserted_1.id,
@@ -103,19 +103,19 @@ async def test_schedule_all_matches(
                 ],
             ),
         )
-        await build_matches_for_stage_item(conn, stage_item_1, tournament_id)
-        await build_matches_for_stage_item(conn, stage_item_2, tournament_id)
+        await build_matches_for_stage_item(session, stage_item_1, tournament_id)
+        await build_matches_for_stage_item(session, stage_item_2, tournament_id)
 
         response = await send_tournament_request(
             HTTPMethod.POST,
             "schedule_matches",
             auth_context,
         )
-        stages = await get_full_tournament_details(conn, tournament_id)
-        tournament = await sql_get_tournament(conn, tournament_id)
+        stages = await get_full_tournament_details(session, tournament_id)
+        tournament = await sql_get_tournament(session, tournament_id)
 
-        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_2.id)
-        await sql_delete_stage_item_with_foreign_keys(conn, stage_item_1.id)
+        await sql_delete_stage_item_with_foreign_keys(session, stage_item_2.id)
+        await sql_delete_stage_item_with_foreign_keys(session, stage_item_1.id)
 
     assert response == SUCCESS_RESPONSE
 
@@ -137,7 +137,7 @@ async def test_schedule_all_matches(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_schedule_matches_with_custom_stage_duration(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     tournament_id = auth_context.tournament.id
 
@@ -156,7 +156,7 @@ async def test_schedule_matches_with_custom_stage_duration(
                 "stage_id": stage_inserted.id,
             },
         )
-        [created_stage] = await get_full_tournament_details(conn, tournament_id)
+        [created_stage] = await get_full_tournament_details(session, tournament_id)
 
         update_response = await send_tournament_request(
             HTTPMethod.PUT,
@@ -164,11 +164,11 @@ async def test_schedule_matches_with_custom_stage_duration(
             auth_context,
             json={"name": stage_inserted.name, "custom_duration_minutes": 45},
         )
-        [updated_stage] = await get_full_tournament_details(conn, tournament_id)
-        tournament = await sql_get_tournament(conn, tournament_id)
+        [updated_stage] = await get_full_tournament_details(session, tournament_id)
+        tournament = await sql_get_tournament(session, tournament_id)
 
         [stage_item] = updated_stage.stage_items
-        await sql_delete_stage_item_with_foreign_keys(conn, stage_item.id)
+        await sql_delete_stage_item_with_foreign_keys(session, stage_item.id)
 
     assert create_response == SUCCESS_RESPONSE
     assert update_response == SUCCESS_RESPONSE

@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 
+from anyio import CapacityLimiter, to_thread
 from email_validator import EmailNotValidError, validate_email
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
@@ -14,6 +15,12 @@ PASSWORD_MAX_LENGTH = 72
 password_hash = PasswordHash((Argon2Hasher(), BcryptHasher()))
 
 
+# Argon2 takes about a tenth of a second and 64 MiB of memory per hash, both on purpose. Requests
+# hash in worker threads, so that the server keeps answering everyone else meanwhile. Only a few
+# at a time, so that many logins arriving together can't exhaust the memory: the others wait.
+PASSWORD_HASHING = CapacityLimiter(2)
+
+
 def hash_password(password: str) -> str:
     return password_hash.hash(password)
 
@@ -21,6 +28,20 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> tuple[bool, str | None]:
     """Whether the password is correct, and its new hash if the stored one is outdated."""
     return password_hash.verify_and_update(plain_password, hashed_password)
+
+
+async def hash_password_in_thread(password: str) -> str:
+    """`hash_password` for request handlers."""
+    return await to_thread.run_sync(hash_password, password, limiter=PASSWORD_HASHING)
+
+
+async def verify_password_in_thread(
+    plain_password: str, hashed_password: str
+) -> tuple[bool, str | None]:
+    """`verify_password` for request handlers."""
+    return await to_thread.run_sync(
+        verify_password, plain_password, hashed_password, limiter=PASSWORD_HASHING
+    )
 
 
 def normalize_email(email: str) -> str:

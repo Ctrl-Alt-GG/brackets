@@ -9,8 +9,10 @@ import {
   useLocation,
   useRouteError,
 } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { Toaster, toast } from 'sonner';
 
+import * as OpenApi from './openapi';
 import { setUnauthorizedHandler } from './app/api';
 import { useSession } from './app/hooks';
 import { HomePage } from './app/pages/home-page';
@@ -30,11 +32,6 @@ const LoginPage = lazy(() =>
 );
 const RegisterPage = lazy(() =>
   import('./app/pages/auth-pages').then((module) => ({ default: module.RegisterPage })),
-);
-const PasswordResetStatusPage = lazy(() =>
-  import('./app/pages/auth-pages').then((module) => ({
-    default: module.PasswordResetStatusPage,
-  })),
 );
 const ClubsPage = lazy(() =>
   import('./app/pages/clubs-page').then((module) => ({ default: module.ClubsPage })),
@@ -78,6 +75,9 @@ function RootLayout() {
     setUnauthorizedHandler(() => {
       setSession(null);
       toast.error('Your session expired. Please log in again.');
+      // The browser would keep sending the session cookie, which the page can't remove, until it
+      // expires. Logging out needs no valid session and always removes it.
+      OpenApi.logoutApiLogoutPost().catch(() => {});
     });
   }, [setSession]);
 
@@ -152,22 +152,23 @@ function RootLayout() {
 }
 
 function RouteError() {
+  const { t } = useTranslation();
   const error = useRouteError();
   const message = isRouteErrorResponse(error)
     ? error.statusText
     : error instanceof Error
       ? error.message
-      : 'An unexpected error occurred.';
+      : t('errors.unexpected');
 
   return (
     <ErrorState
       action={
         <button className="btn btn-sm" onClick={() => window.location.reload()} type="button">
-          Reload the page
+          {t('errors.reload')}
         </button>
       }
       error={message}
-      title="This page failed to render"
+      title={t('errors.renderFailed')}
     />
   );
 }
@@ -183,7 +184,6 @@ export const router = createBrowserRouter([
           { element: <HomePage />, path: '/' },
           { element: <LoginPage />, path: '/login' },
           { element: <RegisterPage />, path: '/create-account' },
-          { element: <PasswordResetStatusPage />, path: '/password-reset' },
           { element: <ClubsPage />, path: '/events' },
           { element: <UserPage />, path: '/user' },
           ...TOURNAMENT_ROUTES.map(([path, section]) => ({

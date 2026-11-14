@@ -1,6 +1,13 @@
 networks:
   bracket_lan:
     driver: bridge
+    # A fixed subnet, so that the gateway is known: the host's reverse proxy reaches the
+    # published ports through it, and the backend trusts its X-Forwarded-For. Pick another
+    # private /24 if this one is taken on the host, and change FORWARDED_ALLOW_IPS to match.
+    ipam:
+      config:
+        - subnet: 172.31.240.0/24
+          gateway: 172.31.240.1
 
 volumes:
   bracket_uploads:
@@ -8,7 +15,7 @@ volumes:
 services:
   bracket-backend:
     container_name: bracket-backend
-    image: ghcr.io/ctrl-alt-gg/bracket-backend:v0.1
+    image: ghcr.io/ctrl-alt-gg/bracket-backend:${APP_IMAGE_TAG:?set APP_IMAGE_TAG}
     depends_on:
       postgres:
         condition: service_healthy
@@ -25,9 +32,9 @@ services:
       ALLOW_USER_REGISTRATION: ${ALLOW_USER_REGISTRATION:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
-      # The reverse proxy whose X-Forwarded-For is trusted, so that rate limits count per client.
-      # See "Reverse proxy" in the README.
-      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # The reverse proxy whose X-Forwarded-For is trusted, so that rate limits count per client:
+      # the gateway of bracket_lan above. See "Reverse proxy" in the README.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.31.240.1}
     healthcheck:
       # Path must include API_PREFIX above.
       test:
@@ -45,12 +52,19 @@ services:
     ports:
       - 127.0.0.1:8400:8400
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - bracket_uploads:/app/uploads
 
   bracket-frontend:
     container_name: bracket-frontend
-    image: ghcr.io/ctrl-alt-gg/bracket-frontend:v0.1
+    image: ghcr.io/ctrl-alt-gg/bracket-frontend:${APP_IMAGE_TAG:?set APP_IMAGE_TAG}
     depends_on:
       - bracket-backend
     environment:
@@ -60,6 +74,16 @@ services:
     ports:
       - 127.0.0.1:3000:8080
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      # nginx keeps its pid file and buffers under /tmp, where the entrypoint also writes the
+      # page's runtime configuration, and it renders the server configuration into conf.d.
+      - /tmp:uid=101,gid=101,mode=1777
+      - /etc/nginx/conf.d:uid=101,gid=101
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   postgres:
     environment:

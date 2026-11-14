@@ -9,10 +9,6 @@ export type ClientOptions = {
  */
 export type AuthFeatureFlags = {
   /**
-   * Password Reset Enabled
-   */
-  password_reset_enabled: boolean;
-  /**
    * User Registration Enabled
    */
   user_registration_enabled: boolean;
@@ -142,6 +138,16 @@ export type ClubMembersResponse = {
    * Data
    */
   data: Array<ClubMember>;
+};
+
+/**
+ * ClubOwnerUpdateBody
+ */
+export type ClubOwnerUpdateBody = {
+  /**
+   * User Id
+   */
+  user_id: number;
 };
 
 /**
@@ -1119,6 +1125,7 @@ export type StageItemInputTentative = {
 export type StageItemInputUpdate = {
   stage_item_input: StageItemInputTentative;
   team: Team;
+  tied_team: Team | null;
 };
 
 /**
@@ -1480,6 +1487,10 @@ export type Tournament = {
    */
   matches_total: number;
   /**
+   * More Rounds Possible
+   */
+  more_rounds_possible: boolean;
+  /**
    * Name
    */
   name: string;
@@ -1641,13 +1652,84 @@ export type TournamentUpdateBody = {
 };
 
 /**
+ * TournamentWithAccess
+ */
+export type TournamentWithAccess = {
+  /**
+   * Can Manage
+   */
+  can_manage: boolean;
+  /**
+   * Club Id
+   */
+  club_id: number;
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Dashboard Endpoint
+   */
+  dashboard_endpoint: string | null;
+  /**
+   * Dashboard Public
+   */
+  dashboard_public: boolean;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Last Match End
+   */
+  last_match_end: string | null;
+  /**
+   * Logo Path
+   */
+  logo_path: string | null;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Matches Played
+   */
+  matches_played: number;
+  /**
+   * Matches Total
+   */
+  matches_total: number;
+  /**
+   * More Rounds Possible
+   */
+  more_rounds_possible: boolean;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Players Can Be In Multiple Teams
+   */
+  players_can_be_in_multiple_teams: boolean;
+  /**
+   * Start Time
+   */
+  start_time: string;
+  status: TournamentStatus;
+};
+
+/**
  * TournamentsResponse
  */
 export type TournamentsResponse = {
   /**
    * Data
    */
-  data: Array<Tournament>;
+  data: Array<TournamentWithAccess>;
 };
 
 /**
@@ -2402,6 +2484,38 @@ export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses = {
 
 export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse =
   RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses[keyof RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses];
+
+export type TransferOwnershipApiClubsClubIdOwnerPutData = {
+  body: ClubOwnerUpdateBody;
+  path: {
+    /**
+     * Club Id
+     */
+    club_id: number;
+  };
+  query?: never;
+  url: '/api/clubs/{club_id}/owner';
+};
+
+export type TransferOwnershipApiClubsClubIdOwnerPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type TransferOwnershipApiClubsClubIdOwnerPutError =
+  TransferOwnershipApiClubsClubIdOwnerPutErrors[keyof TransferOwnershipApiClubsClubIdOwnerPutErrors];
+
+export type TransferOwnershipApiClubsClubIdOwnerPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: ClubMembersResponse;
+};
+
+export type TransferOwnershipApiClubsClubIdOwnerPutResponse =
+  TransferOwnershipApiClubsClubIdOwnerPutResponses[keyof TransferOwnershipApiClubsClubIdOwnerPutResponses];
 
 export type LogoutApiLogoutPostData = {
   body?: never;

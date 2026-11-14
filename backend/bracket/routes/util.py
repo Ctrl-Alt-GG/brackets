@@ -1,20 +1,21 @@
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from starlette import status
 
-from bracket.database import DbConnection
+from bracket import orm
+from bracket.database import DbSession
 from bracket.models.db.match import Match
 from bracket.models.db.ranking import Ranking
 from bracket.models.db.round import Round
 from bracket.models.db.team import FullTeamWithPlayers, Team
 from bracket.models.db.tournament import Tournament, TournamentStatus
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.schema import matches, rankings, rounds, stage_items, stages, teams
 from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_teams_with_members
 from bracket.sql.tournaments import sql_get_tournament
-from bracket.utils.db import fetch_one_parsed
 from bracket.utils.id_types import (
     MatchId,
     RankingId,
@@ -27,19 +28,16 @@ from bracket.utils.id_types import (
 
 
 async def round_dependency(
-    tournament_id: TournamentId, round_id: RoundId, conn: DbConnection
+    tournament_id: TournamentId, round_id: RoundId, conn: DbSession
 ) -> Round:
-    round_ = await fetch_one_parsed(
-        conn,
-        Round,
-        rounds.select()
-        .select_from(
-            rounds.join(stage_items, stage_items.c.id == rounds.c.stage_item_id).join(
-                stages, stages.c.id == stage_items.c.stage_id
-            )
-        )
-        .where((rounds.c.id == round_id) & (stages.c.tournament_id == tournament_id)),
+    entity = await conn.scalar(
+        select(orm.Round)
+        .join(orm.StageItem)
+        .join(orm.Stage)
+        .where(orm.Round.id == round_id, orm.Stage.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
     )
+    round_ = Round.model_validate(entity) if entity is not None else None
 
     if round_ is None:
         raise HTTPException(
@@ -51,13 +49,13 @@ async def round_dependency(
 
 
 async def round_with_matches_dependency(
-    tournament_id: TournamentId, round_id: RoundId, conn: DbConnection
+    tournament_id: TournamentId, round_id: RoundId, conn: DbSession
 ) -> RoundWithMatches:
     return await get_round_by_id(conn, tournament_id, round_id)
 
 
 async def stage_dependency(
-    tournament_id: TournamentId, stage_id: StageId, conn: DbConnection
+    tournament_id: TournamentId, stage_id: StageId, conn: DbSession
 ) -> StageWithStageItems:
     stages_result = await get_full_tournament_details(
         conn, tournament_id, no_draft_rounds=False, stage_id=stage_id
@@ -73,25 +71,27 @@ async def stage_dependency(
 
 
 async def stage_item_dependency(
-    tournament_id: TournamentId, stage_item_id: StageItemId, conn: DbConnection
+    tournament_id: TournamentId, stage_item_id: StageItemId, conn: DbSession
 ) -> StageItemWithRounds:
     return await get_stage_item(conn, tournament_id, stage_item_id=stage_item_id)
 
 
 async def match_dependency(
-    tournament_id: TournamentId, match_id: MatchId, conn: DbConnection
+    tournament_id: TournamentId, match_id: MatchId, conn: DbSession
 ) -> Match:
-    match = await fetch_one_parsed(
-        conn,
-        Match,
-        matches.select()
-        .select_from(
-            matches.join(rounds, rounds.c.id == matches.c.round_id)
-            .join(stage_items, stage_items.c.id == rounds.c.stage_item_id)
-            .join(stages, stages.c.id == stage_items.c.stage_id)
+    entity = await conn.scalar(
+        select(orm.Match)
+        .join(orm.Round)
+        .join(orm.StageItem)
+        .join(orm.Stage)
+        .where(orm.Match.id == match_id, orm.Stage.tournament_id == tournament_id)
+        .options(
+            joinedload(orm.Match.stage_item_input1).joinedload(orm.StageItemInput.team),
+            joinedload(orm.Match.stage_item_input2).joinedload(orm.StageItemInput.team),
         )
-        .where((matches.c.id == match_id) & (stages.c.tournament_id == tournament_id)),
+        .execution_options(populate_existing=True)
     )
+    match = Match.model_validate(entity) if entity is not None else None
 
     if match is None:
         raise HTTPException(
@@ -102,12 +102,13 @@ async def match_dependency(
     return match
 
 
-async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: DbConnection) -> Team:
-    team = await fetch_one_parsed(
-        conn,
-        Team,
-        teams.select().where((teams.c.id == team_id) & (teams.c.tournament_id == tournament_id)),
+async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: DbSession) -> Team:
+    entity = await conn.scalar(
+        select(orm.Team)
+        .where(orm.Team.id == team_id, orm.Team.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
     )
+    team = Team.model_validate(entity) if entity is not None else None
 
     if team is None:
         raise HTTPException(
@@ -119,7 +120,7 @@ async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: Db
 
 
 async def team_with_players_dependency(
-    tournament_id: TournamentId, team_id: TeamId, conn: DbConnection
+    tournament_id: TournamentId, team_id: TeamId, conn: DbSession
 ) -> FullTeamWithPlayers:
     teams_with_members = await get_teams_with_members(conn, tournament_id, team_id=team_id)
 
@@ -133,15 +134,14 @@ async def team_with_players_dependency(
 
 
 async def ranking_dependency(
-    tournament_id: TournamentId, ranking_id: RankingId, conn: DbConnection
+    tournament_id: TournamentId, ranking_id: RankingId, conn: DbSession
 ) -> Ranking:
-    ranking = await fetch_one_parsed(
-        conn,
-        Ranking,
-        rankings.select().where(
-            (rankings.c.id == ranking_id) & (rankings.c.tournament_id == tournament_id)
-        ),
+    entity = await conn.scalar(
+        select(orm.Ranking)
+        .where(orm.Ranking.id == ranking_id, orm.Ranking.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
     )
+    ranking = Ranking.model_validate(entity) if entity is not None else None
 
     if ranking is None:
         raise HTTPException(
@@ -152,9 +152,7 @@ async def ranking_dependency(
     return ranking
 
 
-async def disallow_archived_tournament(
-    tournament_id: TournamentId, conn: DbConnection
-) -> Tournament:
+async def disallow_archived_tournament(tournament_id: TournamentId, conn: DbSession) -> Tournament:
     tournament = await sql_get_tournament(conn, tournament_id)
     if tournament.status is TournamentStatus.ARCHIVED:
         raise HTTPException(

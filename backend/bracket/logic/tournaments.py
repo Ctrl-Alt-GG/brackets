@@ -1,10 +1,11 @@
 from typing import NamedTuple
 
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.ranking.calculation import get_team_rankings_lookup_for_tournament
 from bracket.logic.ranking.players import get_players_with_statistics
 from bracket.models.db.tournament_details import StageItemInputStanding, TournamentDetails
+from bracket.models.db.util import StageWithStageItems
 from bracket.sql.players import sql_delete_players_of_tournament
 from bracket.sql.rankings import get_all_rankings_in_tournament, sql_delete_ranking
 from bracket.sql.shared import sql_delete_stage_item_matches, sql_delete_stage_item_relations
@@ -16,15 +17,13 @@ from bracket.utils.id_types import StageItemId, TournamentId
 from bracket.utils.uploads import get_existing_upload_path, remove_existing_upload
 
 
-async def get_tournament_logo_path(
-    conn: AsyncConnection, tournament_id: TournamentId
-) -> str | None:
+async def get_tournament_logo_path(conn: AsyncSession, tournament_id: TournamentId) -> str | None:
     tournament = await sql_get_tournament(conn, tournament_id)
     logo_path = await get_existing_upload_path("tournament-logos", tournament.logo_path)
     return str(logo_path) if logo_path is not None else None
 
 
-async def delete_tournament_logo(conn: AsyncConnection, tournament_id: TournamentId) -> None:
+async def delete_tournament_logo(conn: AsyncSession, tournament_id: TournamentId) -> None:
     tournament = await sql_get_tournament(conn, tournament_id)
     await remove_existing_upload("tournament-logos", tournament.logo_path)
 
@@ -37,7 +36,7 @@ class TournamentUploads(NamedTuple):
 
 
 async def sql_delete_tournament_completely(
-    conn: AsyncConnection, tournament_id: TournamentId
+    conn: AsyncSession, tournament_id: TournamentId
 ) -> TournamentUploads:
     """
     Delete the tournament and everything in it.
@@ -74,25 +73,37 @@ async def sql_delete_tournament_completely(
 
 
 async def get_tournament_standings(
-    conn: AsyncConnection, tournament_id: TournamentId
+    conn: AsyncSession,
+    tournament_id: TournamentId,
+    stages: list[StageWithStageItems] | None = None,
 ) -> dict[StageItemId, list[StageItemInputStanding]]:
-    """The teams of every stage item, best first. Teams advance to the next stage in this order."""
-    stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
+    """
+    The teams of every stage item, best first. Teams advance to the next stage in this order.
+
+    `stages` (without draft rounds) can be passed by a caller that has them.
+    """
+    if stages is None:
+        stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
     team_rankings = await get_team_rankings_lookup_for_tournament(conn, tournament_id, stages)
     return {
         stage_item_id: [
-            StageItemInputStanding(stage_item_input_id=input_id, **statistics.model_dump())
-            for input_id, statistics in team_ranking
+            StageItemInputStanding(
+                stage_item_input_id=placing.stage_item_input_id,
+                **placing.statistics.model_dump(),
+            )
+            for placing in team_ranking
         ]
         for stage_item_id, team_ranking in team_rankings.items()
     }
 
 
 async def get_tournament_details(
-    conn: AsyncConnection, tournament_id: TournamentId
+    conn: AsyncSession, tournament_id: TournamentId
 ) -> TournamentDetails:
     """Everything the Details pages of a tournament show, as visitors may see it."""
-    stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
+    stages = await get_full_tournament_details(
+        conn, tournament_id, no_draft_rounds=True, with_team_totals=True
+    )
     teams = await get_teams_with_members(conn, tournament_id)
     return TournamentDetails(
         tournament=await sql_get_tournament(conn, tournament_id),
@@ -100,5 +111,5 @@ async def get_tournament_details(
         players=await get_players_with_statistics(conn, tournament_id, stages=stages, teams=teams),
         teams=teams,
         rankings=await get_all_rankings_in_tournament(conn, tournament_id),
-        standings=await get_tournament_standings(conn, tournament_id),
+        standings=await get_tournament_standings(conn, tournament_id, stages),
     )

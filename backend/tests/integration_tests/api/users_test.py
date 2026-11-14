@@ -6,15 +6,14 @@ import aiohttp
 import pytest
 from heliclockter import datetime_utc
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.database import engine
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import User, UserInsertable
 from bracket.routes.auth import SESSION_COOKIE
-from bracket.schema import users
 from bracket.sql.users import create_user, delete_user, get_user_by_id
-from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.rate_limit import get_account_lockout_key, reset_account_failures
 from bracket.utils.security import hash_password, verify_password
 from bracket.utils.types import assert_some
@@ -51,7 +50,7 @@ async def test_users_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_user(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "name": "Some new name",
@@ -62,7 +61,7 @@ async def test_create_user(
     assert "data" in response, response
     assert response["data"]["token_type"] == "bearer"
     assert response["data"]["user_id"]
-    await delete_user(conn, response["data"]["user_id"])
+    await delete_user(session, response["data"]["user_id"])
 
 
 @asynccontextmanager
@@ -76,19 +75,19 @@ async def temporary_user() -> AsyncIterator[tuple[User, dict[str, str]]]:
             created=datetime_utc.now(),
             account_type=UserAccountType.REGULAR,
         )
-        async with engine.begin() as conn:
-            user_created = await create_user(conn, new_user)
+        async with AsyncSession(engine) as session, session.begin():
+            user_created = await create_user(session, new_user)
         headers = {"Authorization": f"Bearer {get_mock_token(user_created)}"}
         yield user_created, headers
     finally:
         if user_created is not None:
-            async with engine.begin() as conn:
-                await delete_user(conn, user_created.id)
+            async with AsyncSession(engine) as session, session.begin():
+                await delete_user(session, user_created.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
         body = {
@@ -102,7 +101,7 @@ async def test_update_user(
             auth_context.model_copy(update={"user": user_created, "headers": headers}),
             json=body,
         )
-        updated_user = assert_some(await get_user_by_id(conn, user_created.id))
+        updated_user = assert_some(await get_user_by_id(session, user_created.id))
         assert response["data"]["name"] == body["name"]
         assert updated_user.name == body["name"]
 
@@ -128,7 +127,7 @@ async def test_update_user_email_already_taken(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user_email_needs_current_password(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     """
     The email is what the account signs in with, so a session alone can't change it. The name
@@ -146,7 +145,7 @@ async def test_update_user_email_needs_current_password(
                 {"name": "Renamed", "email": user_created.email},
             )
         ]
-        updated_user = assert_some(await get_user_by_id(conn, user_created.id))
+        updated_user = assert_some(await get_user_by_id(session, user_created.id))
 
     assert responses[0] == {"detail": "Enter your current password to change your email"}
     assert responses[1] == {"detail": "Enter your current password to change your email"}
@@ -180,7 +179,7 @@ async def test_users_cannot_access_each_other(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user_password(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
         body = {"current_password": "some password", "password": "correct-horse-battery-staple"}
@@ -190,8 +189,12 @@ async def test_update_user_password(
             auth_context.model_copy(update={"user": user_created, "headers": headers}),
             json=body,
         )
-        updated_user = await fetch_one_parsed_certain(
-            conn, User, query=users.select().where(users.c.id == user_created.id)
+        updated_user = User.model_validate(
+            await session.scalar(
+                (select(orm.User).where(orm.User.id == user_created.id)).execution_options(
+                    populate_existing=True
+                )
+            )
         )
 
         assert response.get("success") is True, response
@@ -201,7 +204,7 @@ async def test_update_user_password(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_user_password_needs_current_password(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with temporary_user() as (user_created, headers):
         body = {"current_password": "wrong password", "password": "correct-horse-battery-staple"}
@@ -211,8 +214,8 @@ async def test_update_user_password_needs_current_password(
             auth_context.model_copy(update={"user": user_created, "headers": headers}),
             json=body,
         )
-        password_hash = await conn.scalar(
-            select(users.c.password_hash).where(users.c.id == user_created.id)
+        password_hash = await session.scalar(
+            select(orm.User.password_hash).where(orm.User.id == user_created.id)
         )
 
     assert response == {"detail": "The current password is incorrect"}
@@ -221,7 +224,7 @@ async def test_update_user_password_needs_current_password(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_email_with_wildcards_is_not_a_pattern(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     """
     Regression test: emails were looked up with `ILIKE`, so a token of `%@example.org` belonged to
@@ -245,7 +248,7 @@ async def test_email_with_wildcards_is_not_a_pattern(
             {"username": f"%@{victim_domain}", "password": "a-long-passphrase-42"},
         )
     finally:
-        await delete_user(conn, response["data"]["user_id"])
+        await delete_user(session, response["data"]["user_id"])
 
     assert me["data"]["id"] == response["data"]["user_id"] != auth_context.user.id
     assert login["user_id"] == response["data"]["user_id"]

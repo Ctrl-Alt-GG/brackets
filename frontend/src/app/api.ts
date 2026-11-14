@@ -1,5 +1,6 @@
 import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
+import { syncClock } from './clock';
 import { readSession } from './hooks';
 import type { TournamentBundle } from './types';
 import { getApiBaseUrl, getErrorMessage, isNumericIdentifier } from './utils';
@@ -33,7 +34,10 @@ export function configureApiClient() {
   });
 
   client.instance.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      syncClock(response.headers.date);
+      return response;
+    },
     (error: unknown) => {
       if (getResponseStatus(error) === 401 && readSession()) {
         unauthorizedHandler?.();

@@ -6,7 +6,6 @@ import * as z from 'zod';
  * AuthFeatureFlags
  */
 export const zAuthFeatureFlags = z.object({
-  password_reset_enabled: z.boolean().default(false),
   user_registration_enabled: z.boolean(),
 });
 
@@ -67,6 +66,13 @@ export const zClubCreateBody = z.object({
  */
 export const zClubMemberCreateBody = z.object({
   email: z.email(),
+});
+
+/**
+ * ClubOwnerUpdateBody
+ */
+export const zClubOwnerUpdateBody = z.object({
+  user_id: z.int(),
 });
 
 /**
@@ -204,10 +210,10 @@ export const zRanking = z.object({
  */
 export const zRankingBody = z.object({
   add_score_points: z.boolean(),
-  draw_points: z.union([z.number(), z.string()]),
-  loss_points: z.union([z.number(), z.string()]),
-  position: z.int(),
-  win_points: z.union([z.number(), z.string()]),
+  draw_points: z.union([z.number().gte(-1000).lte(1000), z.string()]),
+  loss_points: z.union([z.number().gte(-1000).lte(1000), z.string()]),
+  position: z.int().gte(0),
+  win_points: z.union([z.number().gte(-1000).lte(1000), z.string()]),
 });
 
 /**
@@ -215,9 +221,9 @@ export const zRankingBody = z.object({
  */
 export const zRankingCreateBody = z.object({
   add_score_points: z.boolean().default(false),
-  draw_points: z.union([z.number(), z.string()]).default('0.5'),
-  loss_points: z.union([z.number(), z.string()]).default('0.0'),
-  win_points: z.union([z.number(), z.string()]).default('1.0'),
+  draw_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('0.5'),
+  loss_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('0.0'),
+  win_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('1.0'),
 });
 
 /**
@@ -571,6 +577,7 @@ export const zSingleMatchResponse = z.object({
 export const zStageItemInputUpdate = z.object({
   stage_item_input: zStageItemInputTentative,
   team: zTeam,
+  tied_team: zTeam.nullable(),
 });
 
 /**
@@ -705,6 +712,7 @@ export const zTournament = z.object({
   margin_minutes: z.int().gte(0),
   matches_played: z.int().default(0),
   matches_total: z.int().default(0),
+  more_rounds_possible: z.boolean().default(false),
   name: z.string(),
   players_can_be_in_multiple_teams: z.boolean(),
   start_time: z.iso.datetime(),
@@ -760,10 +768,33 @@ export const zTournamentUpdateBody = z.object({
 });
 
 /**
+ * TournamentWithAccess
+ */
+export const zTournamentWithAccess = z.object({
+  can_manage: z.boolean(),
+  club_id: z.int(),
+  created: z.iso.datetime(),
+  dashboard_endpoint: z.string().nullable(),
+  dashboard_public: z.boolean(),
+  duration_minutes: z.int().gte(1),
+  id: z.int(),
+  last_match_end: z.iso.datetime().nullable(),
+  logo_path: z.string().nullable(),
+  margin_minutes: z.int().gte(0),
+  matches_played: z.int().default(0),
+  matches_total: z.int().default(0),
+  more_rounds_possible: z.boolean().default(false),
+  name: z.string(),
+  players_can_be_in_multiple_teams: z.boolean(),
+  start_time: z.iso.datetime(),
+  status: zTournamentStatus.default('OPEN'),
+});
+
+/**
  * TournamentsResponse
  */
 export const zTournamentsResponse = z.object({
-  data: z.array(zTournament),
+  data: z.array(zTournamentWithAccess),
 });
 
 /**
@@ -1092,6 +1123,17 @@ export const zRemoveMemberApiClubsClubIdMembersUserIdDeletePath = z.object({
  * Successful Response
  */
 export const zRemoveMemberApiClubsClubIdMembersUserIdDeleteResponse = zClubMembersResponse;
+
+export const zTransferOwnershipApiClubsClubIdOwnerPutBody = zClubOwnerUpdateBody;
+
+export const zTransferOwnershipApiClubsClubIdOwnerPutPath = z.object({
+  club_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zTransferOwnershipApiClubsClubIdOwnerPutResponse = zClubMembersResponse;
 
 /**
  * Successful Response

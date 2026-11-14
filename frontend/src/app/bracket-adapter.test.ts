@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type * as OpenApi from '../openapi';
 import { roundLabel, toBracketViewerData } from './bracket-adapter';
+import { englishI18n } from './locales';
+
+const { t } = englishI18n;
 
 type Match = OpenApi.MatchWithDetailsDefinitive;
 
@@ -39,14 +42,14 @@ function stageItem(
 
 describe('toBracketViewerData', () => {
   it('draws nothing before the matches exist', () => {
-    expect(toBracketViewerData(stageItem([]), new Map(), 7)).toBeNull();
+    expect(toBracketViewerData(stageItem([]), new Map(), 7, t)).toBeNull();
   });
 
   it('keeps real teams whose names equal the placeholder label', () => {
     const item = stageItem([[match(1, { stage_item_input1_id: 1, stage_item_input2_id: 2 })]]);
     const first = item.inputs[0];
     if ('team' in first) first.team.name = 'TBD';
-    const data = toBracketViewerData(item, new Map(), 7);
+    const data = toBracketViewerData(item, new Map(), 7, t);
 
     expect(data?.participants.find((participant) => participant.id === 1)?.name).toBe('TBD');
     expect(data?.matches[0].opponent1?.id).toBe(1);
@@ -69,7 +72,7 @@ describe('toBracketViewerData', () => {
       match(2, { stage_item_input1_id: 3, stage_item_input2_id: 4 }),
     ];
 
-    const data = toBracketViewerData(stageItem([semiFinals, [final]]), new Map(), 7);
+    const data = toBracketViewerData(stageItem([semiFinals, [final]]), new Map(), 7, t);
 
     expect(data?.participants.map((participant) => participant.name)).toEqual([
       'Team 1',
@@ -104,7 +107,7 @@ describe('toBracketViewerData', () => {
       }),
     ];
 
-    const data = toBracketViewerData(stageItem([quarterFinals, semiFinals]), new Map(), 7);
+    const data = toBracketViewerData(stageItem([quarterFinals, semiFinals]), new Map(), 7, t);
 
     expect(data?.matches.filter((entry) => entry.round_id === 2).map((entry) => entry.id)).toEqual([
       22, 21,
@@ -112,14 +115,14 @@ describe('toBracketViewerData', () => {
   });
 
   it('draws a Swiss stage item as a group, which has no connectors', () => {
-    const data = toBracketViewerData(stageItem([[match(1)]], 'SWISS'), new Map(), 7);
+    const data = toBracketViewerData(stageItem([[match(1)]], 'SWISS'), new Map(), 7, t);
 
     expect(data?.stages[0].type).toBe('round_robin');
   });
 });
 
 function knockout(roundNumber: number, roundCount: number) {
-  return roundLabel({ groupType: 'single-bracket', roundCount, roundNumber });
+  return roundLabel({ groupType: 'single-bracket', roundCount, roundNumber }, t);
 }
 
 describe('roundLabel', () => {
@@ -132,6 +135,8 @@ describe('roundLabel', () => {
   });
 
   it('numbers the rounds of a Swiss stage item', () => {
-    expect(roundLabel({ groupType: 'round-robin', roundCount: 5, roundNumber: 3 })).toBe('Round 3');
+    expect(roundLabel({ groupType: 'round-robin', roundCount: 5, roundNumber: 3 }, t)).toBe(
+      'Round 3',
+    );
   });
 });

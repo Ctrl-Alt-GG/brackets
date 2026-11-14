@@ -14,6 +14,7 @@ from secure import (
 from secure.middleware import SecureASGIMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
+from sqlalchemy import func, select
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -37,12 +38,19 @@ from bracket.routes import (
 from bracket.utils.alembic import alembic_run_migrations
 from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
+from bracket.utils.proxy_headers import UntrustedProxyWarning
 from bracket.utils.rate_limit import limiter
+
+# Taken while the database is set up and migrated. Every worker process does that when it starts,
+# and they start together: one of them does the work while the others wait for the lock, and then
+# find nothing left to do.
+DATABASE_SETUP_LOCK = 4_242_001
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     async with engine.begin() as conn:
+        await conn.execute(select(func.pg_advisory_xact_lock(DATABASE_SETUP_LOCK)))
         await init_db_when_empty(conn)
 
         if config.auto_run_migrations:
@@ -98,6 +106,8 @@ async def handle_rate_limit_exceeded(request: Request, exc: Exception) -> Respon
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
+
+app.add_middleware(UntrustedProxyWarning)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -11,20 +13,30 @@ import {
   isBracket,
   pointsLabel,
   pointsPhrase,
+  stageItemName,
   stageItemStandings,
+  stageTypeName,
 } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 /** How the teams of a group earn their place, in a few words next to its table. */
-function pointsRule(stageItem: OpenApi.StageItemWithRounds, rankings: OpenApi.Ranking[]) {
-  if (stageItem.type === 'SWISS') {
-    return 'ranked by a rating that starts at 1200 and moves with every result';
-  }
+function pointsRule(
+  stageItem: OpenApi.StageItemWithRounds,
+  rankings: OpenApi.Ranking[],
+  t: TFunction,
+) {
+  if (stageItem.type === 'SWISS') return t('standings.swissRule');
 
   const ranking = rankings.find((candidate) => candidate.id === stageItem.ranking_id);
-  if (!ranking) return 'ranked by points';
-  const rule = `win ${formatPoints(ranking.win_points)}, draw ${formatPoints(ranking.draw_points)}, loss ${formatPoints(ranking.loss_points)}`;
-  return ranking.add_score_points ? `${rule}, plus the score of every match` : rule;
+  if (!ranking) return t('standings.pointsRule');
+  const points = {
+    draw: formatPoints(ranking.draw_points),
+    loss: formatPoints(ranking.loss_points),
+    win: formatPoints(ranking.win_points),
+  };
+  return ranking.add_score_points
+    ? t('standings.ruleWithScores', points)
+    : t('standings.rule', points);
 }
 
 function ColumnHeading({ long, short }: { long: string; short: string }) {
@@ -53,6 +65,7 @@ export function StandingsSection({
   standings: TournamentBundle['standings'];
   teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
 }) {
+  const { t } = useTranslation();
   const { myTeamId } = useTournamentContext();
   // Results are kept per stage item, and teams only compete for a place within their own group.
   // Knockout brackets have no table: the Bracket page shows them.
@@ -70,16 +83,14 @@ export function StandingsSection({
           actions={
             bigScreenPath ? (
               <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
-                Big screen
+                {t('common.bigScreen')}
               </Link>
             ) : null
           }
-          title="Standings"
+          title={t('tournament.standings')}
         />
         {tables.length === 0 ? (
-          <p className="text-sm text-base-content/70">
-            No standings yet: no team has joined a group.
-          </p>
+          <p className="text-sm text-base-content/70">{t('standings.none')}</p>
         ) : null}
         {tables.map(({ entries, stage, stageItem }) => (
           <section
@@ -88,10 +99,10 @@ export function StandingsSection({
             key={stageItem.id}
           >
             <div>
-              <h3 className="text-lg font-semibold">{stageItem.name || stageItem.type_name}</h3>
+              <h3 className="text-lg font-semibold">{stageItemName(stageItem, t)}</h3>
               <p className="text-sm text-base-content/70">
-                {stage.name} · {stageItem.type_name}
-                {compact ? null : ` · ${pointsRule(stageItem, rankings)}`}
+                {stage.name} · {stageTypeName(stageItem, t)}
+                {compact ? null : ` · ${pointsRule(stageItem, rankings, t)}`}
               </p>
             </div>
             {compact ? (
@@ -109,10 +120,18 @@ export function StandingsSection({
                     </p>
                     <p className="font-display text-2xl font-semibold">{input.team.name}</p>
                     <p className="text-right text-lg text-base-content/80">
-                      <span className="font-semibold text-success">{standing.wins}</span> won ·{' '}
-                      {standing.draws} drawn · {standing.losses} lost ·{' '}
+                      <Trans
+                        components={{ wins: <span className="font-semibold text-success" /> }}
+                        i18nKey="standings.compactRecord"
+                        values={{
+                          draws: standing.draws,
+                          losses: standing.losses,
+                          wins: standing.wins,
+                        }}
+                      />{' '}
+                      ·{' '}
                       <span className="font-semibold text-base-content">
-                        {pointsPhrase(stageItem, standing.points)}
+                        {pointsPhrase(stageItem, standing.points, t)}
                       </span>
                     </p>
                   </div>
@@ -124,14 +143,20 @@ export function StandingsSection({
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Team</th>
-                      <th className="hidden md:table-cell">Players</th>
-                      <ColumnHeading long="Played" short="P" />
-                      <ColumnHeading long="Won" short="W" />
-                      <ColumnHeading long="Drawn" short="D" />
-                      <ColumnHeading long="Lost" short="L" />
-                      <th title="Score difference">+/−</th>
-                      <th>{pointsLabel(stageItem)}</th>
+                      <th>{t('standings.team')}</th>
+                      <th className="hidden md:table-cell">{t('standings.players')}</th>
+                      <ColumnHeading
+                        long={t('standings.played')}
+                        short={t('standings.playedShort')}
+                      />
+                      <ColumnHeading long={t('standings.won')} short={t('standings.wonShort')} />
+                      <ColumnHeading
+                        long={t('standings.drawn')}
+                        short={t('standings.drawnShort')}
+                      />
+                      <ColumnHeading long={t('standings.lost')} short={t('standings.lostShort')} />
+                      <th title={t('standings.scoreDifference')}>+/−</th>
+                      <th>{pointsLabel(stageItem, t)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -155,7 +180,10 @@ export function StandingsSection({
                         <td>{standing.draws}</td>
                         <td>{standing.losses}</td>
                         <td
-                          title={`${standing.score_for} scored, ${standing.score_against} conceded`}
+                          title={t('standings.scores', {
+                            conceded: standing.score_against,
+                            scored: standing.score_for,
+                          })}
                         >
                           {formatScoreDifference(standing)}
                         </td>
@@ -170,11 +198,7 @@ export function StandingsSection({
         ))}
       </Surface>
       {!compact && tables.length > 0 ? (
-        <p className="px-1 text-sm text-base-content/70">
-          Teams with the same points are ranked by score difference, then by their total score, then
-          by the number of wins, and after that by their seeding. Teams go through to the next stage
-          in this order.
-        </p>
+        <p className="px-1 text-sm text-base-content/70">{t('standings.tiebreaks')}</p>
       ) : null}
     </div>
   );

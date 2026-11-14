@@ -13,10 +13,8 @@ from tests.unit_tests.mocks import (
 )
 
 
-def test_get_conflicting_matches_conflicts_to_set() -> None:
-    """
-    Test `get_conflicting_matches` returns the right conflicts to set
-    """
+def test_get_conflicting_matches_simultaneous() -> None:
+    """Two simultaneous matches of the same team conflict, for that team only."""
     tournament_id = TournamentId(-1)
     stage_item_inputs = get_stage_item_inputs_mock(tournament_id)
     match1, match2 = get_2_definitive_matches_mock(stage_item_inputs)
@@ -30,13 +28,11 @@ def test_get_conflicting_matches_conflicts_to_set() -> None:
         stage_items=[get_stage_item_mock(stage_item_inputs, [rounds])],
     )
 
-    assert get_conflicting_matches([stage_item]) == ({-1: [True, False], -2: [True, False]}, set())
+    assert get_conflicting_matches([stage_item]) == {-1: (True, False), -2: (True, False)}
 
 
-def test_get_conflicting_matches_conflicts_to_clear() -> None:
-    """
-    Test `get_conflicting_matches` returns the right conflicts to clear
-    """
+def test_get_conflicting_matches_apart() -> None:
+    """Matches of the same team that don't overlap don't conflict."""
     tournament_id = TournamentId(-1)
     stage_item_inputs = get_stage_item_inputs_mock(tournament_id)
     # The matches take 105 minutes with their break, so two hours apart they don't touch.
@@ -53,7 +49,7 @@ def test_get_conflicting_matches_conflicts_to_clear() -> None:
         stage_items=[get_stage_item_mock(stage_item_inputs, [rounds])],
     )
 
-    assert get_conflicting_matches([stage_item]) == ({}, {-1, -2})
+    assert get_conflicting_matches([stage_item]) == {-1: (False, False), -2: (False, False)}
 
 
 def test_get_conflicting_matches_partial_overlap() -> None:
@@ -76,7 +72,7 @@ def test_get_conflicting_matches_partial_overlap() -> None:
         stage_items=[get_stage_item_mock(stage_item_inputs, [rounds])],
     )
 
-    assert get_conflicting_matches([stage_item]) == ({-1: [True, False], -2: [True, False]}, set())
+    assert get_conflicting_matches([stage_item]) == {-1: (True, False), -2: (True, False)}
 
 
 def test_conflicts_follow_teams_across_different_slots() -> None:
@@ -96,4 +92,4 @@ def test_conflicts_follow_teams_across_different_slots() -> None:
         ],
     )
 
-    assert get_conflicting_matches([stage]) == ({-1: [True, False], -2: [True, False]}, set())
+    assert get_conflicting_matches([stage]) == {-1: (True, False), -2: (True, False)}

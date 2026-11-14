@@ -7,6 +7,8 @@ declare global {
       apiBaseUrl?: string;
     };
     bracketsViewer?: {
+      /** Adds or extends the labels of a language that the viewer writes itself. */
+      addLocale: (name: string, locale: Record<string, unknown>) => Promise<void>;
       render: (
         data: BracketViewerData,
         config: {

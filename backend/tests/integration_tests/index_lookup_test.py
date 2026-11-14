@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.utils.errors import (
     foreign_key_violation_error_lookup,
@@ -9,7 +9,7 @@ from bracket.utils.errors import (
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_all_unique_indices_in_lookup(conn: AsyncConnection) -> None:
+async def test_all_unique_indices_in_lookup(session: AsyncSession) -> None:
     query = """
     SELECT
         idx.relname AS index_name
@@ -23,7 +23,7 @@ async def test_all_unique_indices_in_lookup(conn: AsyncConnection) -> None:
         AND idx.relname NOT LIKE '%_pkey'
         AND idx.relname !='alembic_version_pkc'
     """
-    result = await conn.execute(text(query))
+    result = await session.execute(text(query))
     indices = {ix.index_name for ix in result}
 
     expected_indices = {ix.name for ix in unique_index_violation_error_lookup.keys()}
@@ -31,7 +31,7 @@ async def test_all_unique_indices_in_lookup(conn: AsyncConnection) -> None:
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_known_foreign_keys_in_lookup(conn: AsyncConnection) -> None:
+async def test_known_foreign_keys_in_lookup(session: AsyncSession) -> None:
     query = """
         SELECT conrelid::regclass AS table_name,
                conname AS foreign_key
@@ -40,7 +40,7 @@ async def test_known_foreign_keys_in_lookup(conn: AsyncConnection) -> None:
         AND    connamespace = 'public'::regnamespace
         ORDER  BY conrelid::regclass::text, contype DESC;
     """
-    result = await conn.execute(text(query))
+    result = await session.execute(text(query))
     indices = {ix.foreign_key for ix in result}
 
     for foreign_key in foreign_key_violation_error_lookup.keys():

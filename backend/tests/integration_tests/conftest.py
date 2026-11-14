@@ -5,18 +5,18 @@ from time import sleep
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.database import engine
-from bracket.schema import metadata
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_auth_context
 
 
 async def recreate_tables() -> None:
     async with engine.begin() as connection:
-        await connection.run_sync(metadata.drop_all)
-        await connection.run_sync(metadata.create_all)
+        await connection.run_sync(orm.Base.metadata.drop_all)
+        await connection.run_sync(orm.Base.metadata.create_all)
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
@@ -61,10 +61,12 @@ async def reinit_database(worker_id: str) -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def conn() -> AsyncIterator[AsyncConnection]:
-    """A connection that commits every statement, so the API under test sees changes at once."""
+async def session() -> AsyncIterator[AsyncSession]:
+    """Autocommitted ORM writes are immediately visible to requests served by the test API."""
     async with engine.connect() as connection:
-        yield await connection.execution_options(isolation_level="AUTOCOMMIT")
+        await connection.execution_options(isolation_level="AUTOCOMMIT")
+        async with AsyncSession(bind=connection, expire_on_commit=False) as db_session:
+            yield db_session
 
 
 @pytest.fixture(scope="session")

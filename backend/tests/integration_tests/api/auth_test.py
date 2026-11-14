@@ -5,11 +5,18 @@ import aiohttp
 import jwt
 import pytest
 from heliclockter import datetime_utc, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.config import config
 from bracket.database import engine
 from bracket.models.db.account import UserAccountType
-from bracket.routes.auth import CSRF_HEADER, CSRF_HEADER_VALUE, SESSION_COOKIE, get_auth_hash
+from bracket.routes.auth import (
+    CSRF_HEADER,
+    CSRF_HEADER_VALUE,
+    SESSION_COOKIE,
+    create_access_token,
+    get_auth_hash,
+)
 from bracket.sql.clubs import sql_delete_club
 from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
 from bracket.utils.rate_limit import (
@@ -187,8 +194,8 @@ async def test_session_cookie(startup_and_shutdown_uvicorn_server: None) -> None
         club = await with_csrf_header.json()
         logout = await session.post(f"{url}logout", headers=csrf_headers)
         after_logout = await session.get(f"{url}users/me")
-        async with engine.begin() as conn:
-            await sql_delete_club(conn, club["data"]["id"])
+        async with AsyncSession(engine) as db_session, db_session.begin():
+            await sql_delete_club(db_session, club["data"]["id"])
 
     assert set_cookie.startswith(f"{SESSION_COOKIE}=")
     assert "HttpOnly" in set_cookie
@@ -320,3 +327,25 @@ def test_failed_logins_are_counted_per_account_and_address() -> None:
         assert get_account_lockout_retry_after(organizer) is None
     finally:
         reset_account_failures(attacker)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_session_that_ended_elsewhere_still_sees_public_tournaments(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """
+    A browser keeps sending the cookie of a session that ended elsewhere, such as by a password
+    change on another device, until it expires. The list of tournaments must keep working for it.
+    Pages that need a login still refuse it, which signs the frontend out.
+    """
+    stale_token = create_access_token(
+        auth_context.user.id, "$argon2id$the-password-hash-before-a-change", uuid4().hex
+    )
+    headers = {"Cookie": f"{SESSION_COOKIE}={stale_token}"}
+
+    tournaments = await send_request(HTTPMethod.GET, "tournaments?filter_=ALL", headers=headers)
+    me = await send_request(HTTPMethod.GET, "users/me", headers=headers)
+
+    listed = {tournament["id"]: tournament["can_manage"] for tournament in tournaments["data"]}
+    assert listed[auth_context.tournament.id] is False
+    assert me == {"detail": "Could not validate credentials"}

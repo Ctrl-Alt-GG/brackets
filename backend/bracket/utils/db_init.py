@@ -1,11 +1,12 @@
 import random
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 from heliclockter import datetime_utc
 from pydantic import BaseModel
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import inspect
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
+from bracket import orm
 from bracket.config import Environment, config, environment
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import (
@@ -32,27 +33,11 @@ from bracket.models.db.team import TeamInsertable
 from bracket.models.db.tournament import TournamentInsertable
 from bracket.models.db.user import UserInsertable
 from bracket.models.db.user_x_club import UserXClubInsertable, UserXClubRelation
-from bracket.schema import (
-    clubs,
-    matches,
-    metadata,
-    players,
-    players_x_teams,
-    rankings,
-    rounds,
-    stage_items,
-    stages,
-    teams,
-    tournaments,
-    users,
-    users_x_clubs,
-)
 from bracket.sql.matches import sql_update_match
 from bracket.sql.stage_items import get_stage_item, sql_create_stage_item_with_inputs
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.users import create_user, get_user
 from bracket.utils.alembic import alembic_stamp_head
-from bracket.utils.db import insert_generic
 from bracket.utils.dummy_records import (
     DUMMY_CLUB,
     DUMMY_PLAYER1,
@@ -89,11 +74,8 @@ from bracket.utils.logging import logger
 from bracket.utils.security import hash_password
 from bracket.utils.types import assert_some
 
-if TYPE_CHECKING:
-    from sqlalchemy import Table
 
-
-async def create_admin_user(conn: AsyncConnection) -> UserId:
+async def create_admin_user(conn: AsyncSession) -> UserId:
     assert config.admin_email
     assert config.admin_password
 
@@ -111,67 +93,67 @@ async def create_admin_user(conn: AsyncConnection) -> UserId:
 
 
 async def init_db_when_empty(conn: AsyncConnection) -> UserId | None:
-    table_count = await conn.scalar(
-        text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
-    )
-    if table_count is not None and table_count <= 1:
+    table_names = await conn.run_sync(lambda connection: inspect(connection).get_table_names())
+    empty = len(table_names) <= 1
+    if empty:
         logger.warning("Empty db detected, creating tables...")
-        await conn.run_sync(metadata.create_all)
+        await conn.run_sync(orm.Base.metadata.create_all)
         await conn.run_sync(alembic_stamp_head)
 
-        if config.admin_email and config.admin_password:
-            logger.warning("Empty db detected, creating admin user...")
-            return await create_admin_user(conn)
+    if not (config.admin_email and config.admin_password):
+        return None
 
-    if (
-        config.admin_email
-        and config.admin_password
-        and environment is Environment.DEVELOPMENT
-        and await get_user(conn, config.admin_email) is None
-    ):
-        logger.warning("Admin user missing, creating admin user...")
-        return await create_admin_user(conn)
+    async with AsyncSession(bind=conn, expire_on_commit=False) as session:
+        if empty or (
+            environment is Environment.DEVELOPMENT
+            and await get_user(session, config.admin_email) is None
+        ):
+            logger.warning("Admin user missing, creating admin user...")
+            user_id = await create_admin_user(session)
+            await session.flush()
+            return user_id
 
     return None
 
 
-async def sql_create_dev_db(conn: AsyncConnection) -> UserId:
+async def sql_create_dev_db(conn: AsyncSession) -> UserId:
     # TODO: refactor into smaller functions
     # pylint: disable=too-many-statements
     assert environment is not Environment.PRODUCTION
 
     logger.warning("Initializing database with dummy records")
-    await conn.run_sync(metadata.drop_all)
-    await conn.run_sync(metadata.create_all)
-    real_user_id = await init_db_when_empty(conn)
-    await conn.run_sync(alembic_stamp_head)
+    connection = await conn.connection()
+    await connection.run_sync(orm.Base.metadata.drop_all)
+    await connection.run_sync(orm.Base.metadata.create_all)
+    conn.expunge_all()
+    real_user_id = await init_db_when_empty(connection)
+    await connection.run_sync(alembic_stamp_head)
 
-    table_lookup: dict[type, Table] = {
-        UserInsertable: users,
-        ClubInsertable: clubs,
-        StageInsertable: stages,
-        TeamInsertable: teams,
-        UserXClubInsertable: users_x_clubs,
-        PlayerXTeamInsertable: players_x_teams,
-        PlayerInsertable: players,
-        RoundInsertable: rounds,
-        Match: matches,
-        TournamentInsertable: tournaments,
-        StageItemInsertable: stage_items,
-        RankingInsertable: rankings,
+    entity_lookup: dict[type[BaseModel], type[orm.Base]] = {
+        UserInsertable: orm.User,
+        ClubInsertable: orm.Club,
+        StageInsertable: orm.Stage,
+        TeamInsertable: orm.Team,
+        UserXClubInsertable: orm.UserXClub,
+        PlayerXTeamInsertable: orm.PlayerXTeam,
+        PlayerInsertable: orm.Player,
+        RoundInsertable: orm.Round,
+        Match: orm.Match,
+        TournamentInsertable: orm.Tournament,
+        StageItemInsertable: orm.StageItem,
+        RankingInsertable: orm.Ranking,
     }
 
-    async def insert_dummy[BaseModelT: BaseModel](
-        obj_to_insert: BaseModelT, update_data: dict[str, Any] | None = None
+    async def insert_dummy(
+        obj_to_insert: BaseModel, update_data: dict[str, Any] | None = None
     ) -> int:
-        resolved_update_data = update_data or {}
-        record_id, _ = await insert_generic(
-            conn,
-            obj_to_insert.model_copy(update=resolved_update_data),
-            table_lookup[type(obj_to_insert)],
-            type(obj_to_insert),
-        )
-        return record_id
+        entity_type = entity_lookup[type(obj_to_insert)]
+        values = obj_to_insert.model_copy(update=update_data or {}).model_dump()
+        columns = {attribute.key for attribute in inspect(entity_type).column_attrs}
+        entity = entity_type(**{key: value for key, value in values.items() if key in columns})
+        conn.add(entity)
+        await conn.flush()
+        return cast("int", getattr(entity, "id"))
 
     user_id_1 = UserId(await insert_dummy(DUMMY_USER))
     club_id_1 = ClubId(await insert_dummy(DUMMY_CLUB))

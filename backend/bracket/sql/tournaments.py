@@ -1,195 +1,196 @@
-from typing import Any, Literal
+from collections.abc import Collection
+from typing import Literal
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import Select, delete, exists, func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased, with_expression
+from sqlalchemy.sql.elements import ColumnElement
 
+from bracket import orm
+from bracket.models.db.stage_item import StageType
 from bracket.models.db.tournament import (
     Tournament,
     TournamentBody,
     TournamentChangeStatusBody,
+    TournamentStatus,
     TournamentUpdateBody,
 )
-from bracket.utils.id_types import TournamentId
+from bracket.utils.id_types import ClubId, TournamentId
 
-# A tournament with how far its published matches have got, which tells a running tournament from
-# one that is over but hasn't been archived.
-TOURNAMENTS_WITH_PROGRESS = """
-    SELECT
-        tournaments.*,
-        COALESCE(progress.matches_total, 0) AS matches_total,
-        COALESCE(progress.matches_played, 0) AS matches_played,
-        progress.last_match_end
-    FROM tournaments
-    LEFT JOIN (
-        SELECT
-            stages.tournament_id,
-            count(*) AS matches_total,
-            count(*) FILTER (
-                WHERE matches.stage_item_input1_score <> 0
-                OR matches.stage_item_input2_score <> 0
-                OR matches.scoreless_result
-            ) AS matches_played,
-            max(
-                matches.start_time + make_interval(
-                    mins => COALESCE(matches.duration_minutes, 0)
-                    + COALESCE(matches.margin_minutes, 0)
+TournamentFilter = Literal["ALL", "OPEN", "ARCHIVED"]
+
+
+def with_progress(stmt: Select[orm.Tournament]) -> Select[orm.Tournament]:
+    """Attach published match progress and whether a Swiss stage can still add rounds."""
+    played = or_(
+        orm.Match.stage_item_input1_score != 0,
+        orm.Match.stage_item_input2_score != 0,
+        orm.Match.scoreless_result,
+    )
+    progress = (
+        select(
+            orm.Stage.tournament_id,
+            func.count().label("matches_total"),
+            func.count().filter(played).label("matches_played"),
+            func.max(
+                orm.Match.start_time
+                + func.make_interval(
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    func.coalesce(orm.Match.duration_minutes, 0)
+                    + func.coalesce(orm.Match.margin_minutes, 0),
                 )
-            ) AS last_match_end
-        FROM matches
-        JOIN rounds ON rounds.id = matches.round_id
-        JOIN stage_items ON stage_items.id = rounds.stage_item_id
-        JOIN stages ON stages.id = stage_items.stage_id
-        WHERE rounds.is_draft IS FALSE
-        GROUP BY stages.tournament_id
-    ) AS progress ON progress.tournament_id = tournaments.id
-    """
-
-# Running tournaments first, then the most recent ones.
-TOURNAMENT_ORDER = """
-    ORDER BY tournaments.status = 'ARCHIVED', tournaments.start_time DESC, tournaments.id
-    """
-
-
-async def sql_get_tournament(conn: AsyncConnection, tournament_id: TournamentId) -> Tournament:
-    query = f"""
-        {TOURNAMENTS_WITH_PROGRESS}
-        WHERE tournaments.id = :tournament_id
-        """
-    result = await conn.execute(text(query), {"tournament_id": tournament_id})
-    return Tournament.model_validate(result.one()._mapping)
-
-
-async def sql_get_tournament_by_endpoint_name(
-    conn: AsyncConnection, endpoint_name: str
-) -> Tournament | None:
-    query = f"""
-        {TOURNAMENTS_WITH_PROGRESS}
-        WHERE tournaments.dashboard_endpoint = :endpoint_name
-        AND tournaments.dashboard_public IS TRUE
-        """
-    result = (await conn.execute(text(query), {"endpoint_name": endpoint_name})).first()
-    return Tournament.model_validate(result._mapping) if result is not None else None
-
-
-async def sql_get_tournaments(
-    conn: AsyncConnection,
-    club_ids: tuple[int, ...],
-    endpoint_name: str | None = None,
-    filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "ALL",
-) -> list[Tournament]:
-    query = f"""
-        {TOURNAMENTS_WITH_PROGRESS}
-        WHERE tournaments.club_id = any(:club_ids)
-        """
-
-    params: dict[str, Any] = {"club_ids": club_ids}
-
-    if endpoint_name is not None:
-        query += " AND tournaments.dashboard_endpoint = :endpoint_name"
-        params["endpoint_name"] = endpoint_name
-
-    if filter_ != "ALL":
-        query += " AND tournaments.status = :status"
-        params["status"] = filter_
-
-    result = await conn.execute(text(query + TOURNAMENT_ORDER), params)
-    return [Tournament.model_validate(x._mapping) for x in result]
-
-
-async def sql_get_public_tournaments(
-    conn: AsyncConnection,
-    filter_: Literal["ALL", "OPEN", "ARCHIVED"] = "OPEN",
-) -> list[Tournament]:
-    # Same rule as `user_authenticated_or_public_dashboard`: open tournaments are visible to
-    # everyone, archived ones only when their dashboard is public.
-    query = f"""
-        {TOURNAMENTS_WITH_PROGRESS}
-        WHERE (tournaments.status = 'OPEN' OR tournaments.dashboard_public IS TRUE)
-        """
-    params: dict[str, Any] = {}
-
-    if filter_ != "ALL":
-        query += " AND tournaments.status = :status"
-        params["status"] = filter_
-
-    result = await conn.execute(text(query + TOURNAMENT_ORDER), params)
-    return [Tournament.model_validate(x._mapping) for x in result]
-
-
-async def sql_delete_tournament(conn: AsyncConnection, tournament_id: TournamentId) -> None:
-    query = """
-        DELETE FROM tournaments
-        WHERE id = :tournament_id
-        """
-    await conn.execute(text(query), {"tournament_id": tournament_id})
-
-
-async def sql_update_tournament(
-    conn: AsyncConnection, tournament_id: TournamentId, tournament: TournamentUpdateBody
-) -> None:
-    query = """
-        UPDATE tournaments
-        SET
-            start_time = :start_time,
-            name = :name,
-            dashboard_public = :dashboard_public,
-            dashboard_endpoint = :dashboard_endpoint,
-            players_can_be_in_multiple_teams = :players_can_be_in_multiple_teams,
-            duration_minutes = :duration_minutes,
-            margin_minutes = :margin_minutes
-        WHERE tournaments.id = :tournament_id
-        """
-    await conn.execute(
-        text(query), {"tournament_id": tournament_id, **tournament.model_dump(exclude_none=False)}
+            ).label("last_match_end"),
+        )
+        .select_from(orm.Match)
+        .join(orm.Round)
+        .join(orm.StageItem)
+        .join(orm.Stage)
+        .where(orm.Round.is_draft.is_(False))
+        .group_by(orm.Stage.tournament_id)
+        .subquery()
+    )
+    active_stage = aliased(orm.Stage)
+    active_id = (
+        select(active_stage.id)
+        .where(
+            active_stage.tournament_id == orm.Tournament.id,
+            active_stage.is_active,
+        )
+        .correlate(orm.Tournament)
+        .scalar_subquery()
+    )
+    more_rounds = (
+        exists()
+        .where(
+            orm.StageItem.stage_id == orm.Stage.id,
+            orm.Stage.tournament_id == orm.Tournament.id,
+            orm.StageItem.type == StageType.SWISS,
+            orm.Stage.id >= func.coalesce(active_id, 0),
+        )
+        .correlate(orm.Tournament)
+    )
+    return (
+        stmt.outerjoin(progress, progress.c.tournament_id == orm.Tournament.id)
+        .options(
+            with_expression(
+                orm.Tournament.matches_total, func.coalesce(progress.c.matches_total, 0)
+            ),
+            with_expression(
+                orm.Tournament.matches_played, func.coalesce(progress.c.matches_played, 0)
+            ),
+            with_expression(orm.Tournament.last_match_end, progress.c.last_match_end),
+            with_expression(orm.Tournament.more_rounds_possible, more_rounds),
+        )
+        .execution_options(populate_existing=True)
     )
 
 
-async def sql_move_tournament_start(
-    conn: AsyncConnection, tournament_id: TournamentId, minutes: int
+async def sql_get_tournament(conn: AsyncSession, tournament_id: TournamentId) -> Tournament:
+    entity = (
+        await conn.scalars(
+            with_progress(select(orm.Tournament).where(orm.Tournament.id == tournament_id))
+        )
+    ).one()
+    return Tournament.model_validate(entity)
+
+
+async def sql_get_tournament_by_endpoint_name(
+    conn: AsyncSession, endpoint_name: str
+) -> Tournament | None:
+    entity = await conn.scalar(
+        with_progress(
+            select(orm.Tournament).where(
+                func.lower(orm.Tournament.dashboard_endpoint) == endpoint_name.lower(),
+                orm.Tournament.dashboard_public.is_(True),
+            )
+        )
+    )
+    return Tournament.model_validate(entity) if entity is not None else None
+
+
+async def _get_tournaments_where(
+    conn: AsyncSession, condition: ColumnElement[bool], filter_: TournamentFilter
+) -> list[Tournament]:
+    stmt = select(orm.Tournament).where(condition)
+    if filter_ != "ALL":
+        stmt = stmt.where(orm.Tournament.status == TournamentStatus(filter_))
+    stmt = with_progress(stmt).order_by(
+        orm.Tournament.status == TournamentStatus.ARCHIVED,
+        orm.Tournament.start_time.desc(),
+        orm.Tournament.id,
+    )
+    return [Tournament.model_validate(entity) for entity in await conn.scalars(stmt)]
+
+
+async def sql_get_tournaments(
+    conn: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "ALL"
+) -> list[Tournament]:
+    return await _get_tournaments_where(conn, orm.Tournament.club_id.in_(club_ids), filter_)
+
+
+async def sql_get_visible_tournaments(
+    conn: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "OPEN"
+) -> list[Tournament]:
+    return await _get_tournaments_where(
+        conn,
+        or_(
+            orm.Tournament.status == TournamentStatus.OPEN,
+            orm.Tournament.dashboard_public.is_(True),
+            orm.Tournament.club_id.in_(club_ids),
+        ),
+        filter_,
+    )
+
+
+async def sql_delete_tournament(conn: AsyncSession, tournament_id: TournamentId) -> None:
+    await conn.execute(delete(orm.Tournament).where(orm.Tournament.id == tournament_id))
+
+
+async def sql_update_tournament(
+    conn: AsyncSession, tournament_id: TournamentId, tournament: TournamentUpdateBody
 ) -> None:
-    query = """
-        UPDATE tournaments
-        SET start_time = start_time + make_interval(mins => :minutes)
-        WHERE tournaments.id = :tournament_id
-        """
-    await conn.execute(text(query), {"tournament_id": tournament_id, "minutes": minutes})
+    entity = await conn.get(orm.Tournament, tournament_id)
+    if entity is not None:
+        for name, value in tournament.model_dump().items():
+            setattr(entity, name, value)
+        await conn.flush()
+
+
+async def sql_update_tournament_logo(
+    conn: AsyncSession, tournament_id: TournamentId, logo_path: str | None
+) -> None:
+    entity = await conn.get(orm.Tournament, tournament_id)
+    if entity is not None:
+        entity.logo_path = logo_path
+        await conn.flush()
+
+
+async def sql_move_tournament_start(
+    conn: AsyncSession, tournament_id: TournamentId, minutes: int
+) -> None:
+    await conn.execute(
+        update(orm.Tournament)
+        .where(orm.Tournament.id == tournament_id)
+        .values(start_time=orm.Tournament.start_time + func.make_interval(0, 0, 0, 0, 0, minutes))
+        .execution_options(synchronize_session=False)
+    )
 
 
 async def sql_update_tournament_status(
-    conn: AsyncConnection, tournament_id: TournamentId, body: TournamentChangeStatusBody
+    conn: AsyncSession, tournament_id: TournamentId, body: TournamentChangeStatusBody
 ) -> None:
-    # The public dashboard setting is left alone, so a public tournament stays public once
-    # archived and its results remain available.
-    query = """
-        UPDATE tournaments
-        SET status = :state
-        WHERE tournaments.id = :tournament_id
-        """
-    await conn.execute(text(query), {"tournament_id": tournament_id, "state": body.status.value})
+    entity = await conn.get(orm.Tournament, tournament_id)
+    if entity is not None:
+        entity.status = body.status
+        await conn.flush()
 
 
-async def sql_create_tournament(conn: AsyncConnection, tournament: TournamentBody) -> TournamentId:
-    query = """
-        INSERT INTO tournaments (
-            name,
-            start_time,
-            club_id,
-            dashboard_public,
-            dashboard_endpoint,
-            players_can_be_in_multiple_teams,
-            duration_minutes,
-            margin_minutes
-        )
-        VALUES (
-            :name,
-            :start_time,
-            :club_id,
-            :dashboard_public,
-            :dashboard_endpoint,
-            :players_can_be_in_multiple_teams,
-            :duration_minutes,
-            :margin_minutes
-        )
-        RETURNING id
-        """
-    return TournamentId(await conn.scalar(text(query), tournament.model_dump(exclude_none=False)))
+async def sql_create_tournament(conn: AsyncSession, tournament: TournamentBody) -> TournamentId:
+    entity = orm.Tournament(**tournament.model_dump())
+    conn.add(entity)
+    await conn.flush()
+    return TournamentId(entity.id)

@@ -36,6 +36,11 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
 
+    # Written at startup by /docker-entrypoint.d/05-bracket-runtime-config.envsh.
+    location = /runtime-config.js {
+        alias /tmp/runtime-config.js;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

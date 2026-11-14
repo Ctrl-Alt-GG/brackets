@@ -1,11 +1,14 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
+import { I18nextProvider, useTranslation } from 'react-i18next';
 import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router';
 
 import * as OpenApi from '../../openapi';
 import { fetchTournamentBundle, TOURNAMENT_BUNDLE_QUERY_KEY } from '../api';
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { useMyTeam, useSession } from '../hooks';
+import { englishI18n } from '../locales';
 import { TournamentContext } from '../tournament-context';
 import type { TournamentBundle, TournamentSection } from '../types';
 import {
@@ -59,19 +62,28 @@ const MANAGEMENT_SECTIONS: ReadonlySet<TournamentSection> = new Set([
   'teams',
 ]);
 
-/** The Details page that shows a workspace page's information, for people who can't manage. */
+/**
+ * The Details page that shows a workspace page's information, for people who can't manage. The
+ * standings send a tournament without groups on to its bracket.
+ */
 const DETAILS_SUFFIXES: Partial<Record<TournamentSection, string>> = {
   overview: '',
   schedule: '/schedule',
+  stages: '/standings',
+  teams: '/teams',
 };
 
-const SECTION_TITLES: Partial<Record<TournamentSection, string>> = {
-  'dashboard-bracket': 'Bracket',
-  'dashboard-present-schedule': 'Now and next',
-  'dashboard-present-standings': 'Standings',
-  'dashboard-schedule': 'Schedule',
-  'dashboard-standings': 'Standings',
-  'dashboard-teams': 'Teams',
+const DETAILS_TITLES = {
+  'dashboard-bracket': 'tournament.bracket',
+  'dashboard-present-schedule': 'tournament.nowAndNext',
+  'dashboard-present-standings': 'tournament.standings',
+  'dashboard-schedule': 'tournament.schedule',
+  'dashboard-standings': 'tournament.standings',
+  'dashboard-teams': 'tournament.teams',
+} as const satisfies Partial<Record<TournamentSection, string>>;
+
+// The workspace is English only.
+const WORKSPACE_TITLES: Partial<Record<TournamentSection, string>> = {
   players: 'Players',
   rankings: 'Rankings',
   schedule: 'Schedule',
@@ -82,16 +94,22 @@ const SECTION_TITLES: Partial<Record<TournamentSection, string>> = {
 
 type Tab = { end?: boolean; label: string; to: string };
 
-function detailsTabs(publicPath: string, stages: OpenApi.StageWithStageItems[]): Tab[] {
+function detailsTabs(
+  publicPath: string,
+  stages: OpenApi.StageWithStageItems[],
+  t: TFunction,
+): Tab[] {
   const stageItems = stages.flatMap((stage) => stage.stage_items);
   return [
-    { end: true, label: 'Overview', to: publicPath },
-    { label: 'Schedule', to: `${publicPath}/schedule` },
+    { end: true, label: t('tournament.overview'), to: publicPath },
+    { label: t('tournament.schedule'), to: `${publicPath}/schedule` },
     ...(stageItems.some((stageItem) => !isBracket(stageItem))
-      ? [{ label: 'Standings', to: `${publicPath}/standings` }]
+      ? [{ label: t('tournament.standings'), to: `${publicPath}/standings` }]
       : []),
-    ...(stageItems.some(hasBracketView) ? [{ label: 'Bracket', to: `${publicPath}/bracket` }] : []),
-    { label: 'Teams', to: `${publicPath}/teams` },
+    ...(stageItems.some(hasBracketView)
+      ? [{ label: t('tournament.bracket'), to: `${publicPath}/bracket` }]
+      : []),
+    { label: t('tournament.teams'), to: `${publicPath}/teams` },
   ];
 }
 
@@ -123,6 +141,7 @@ function TournamentHeader({
   teamCount: number;
   tournament: OpenApi.Tournament;
 }) {
+  const { t } = useTranslation();
   const logoUrl = tournamentLogoUrl(tournament);
 
   return (
@@ -143,19 +162,19 @@ function TournamentHeader({
             </h1>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-base-content/70">
               <TournamentStatusBadge tournament={tournament} />
-              <span>{tournamentDateLabel(tournament)}</span>
+              <span>{tournamentDateLabel(tournament, t)}</span>
               {/* The line wraps on phones, where a separator would dangle at a line end. */}
               <span aria-hidden="true" className="hidden sm:inline">
                 ·
               </span>
-              <span>{teamCount === 1 ? '1 team' : `${teamCount} teams`}</span>
+              <span>{t('common.teamCount', { count: teamCount })}</span>
               {matchCount > 0 ? (
                 <>
                   <span aria-hidden="true" className="hidden sm:inline">
                     ·
                   </span>
                   <span>
-                    {matchesPlayed} of {matchCount} matches played
+                    {t('common.matchesPlayed', { played: matchesPlayed, total: matchCount })}
                   </span>
                 </>
               ) : null}
@@ -164,7 +183,7 @@ function TournamentHeader({
           {actions}
         </div>
         <nav
-          aria-label="Tournament pages"
+          aria-label={t('tournament.pages')}
           className="tabs tabs-border flex-nowrap overflow-x-auto [scrollbar-width:none]"
         >
           {tabs.map((tab) => (
@@ -197,6 +216,7 @@ function TournamentView({
   teamId: number | null;
   tournamentKey: string;
 }) {
+  const { t } = useTranslation();
   const { canManage, tournament } = bundle;
   const dashboardMode = section.startsWith('dashboard');
   const isBigScreen = section.startsWith('dashboard-present');
@@ -231,7 +251,13 @@ function TournamentView({
   const hasGroups = stageItems.some((stageItem) => !isBracket(stageItem));
   const hasBrackets = stageItems.some(hasBracketView);
   const team = teamMap.get(teamId ?? -1);
-  const pageTitle = section === 'dashboard-team' ? team?.name : SECTION_TITLES[section];
+  const detailsTitle = DETAILS_TITLES[section as keyof typeof DETAILS_TITLES];
+  const pageTitle =
+    section === 'dashboard-team'
+      ? team?.name
+      : detailsTitle
+        ? t(detailsTitle)
+        : WORKSPACE_TITLES[section];
   // A remembered team can have been deleted since, and a screen at the venue is for everyone.
   const shownTeamId = !isBigScreen && teamMap.has(myTeamId ?? -1) ? myTeamId : null;
   // The same object until something in it changes, so a refresh of the tournament doesn't make
@@ -291,10 +317,7 @@ function TournamentView({
       ) : hasGroups ? (
         <Navigate replace to={`${publicPath}/standings`} />
       ) : (
-        <EmptyState
-          text="The bracket appears here once the organizers have set up the tournament."
-          title="No bracket yet"
-        />
+        <EmptyState text={t('tournament.noBracketText')} title={t('tournament.noBracketTitle')} />
       );
       break;
     case 'dashboard-teams':
@@ -370,7 +393,7 @@ function TournamentView({
               className="link link-hover text-sm text-base-content/70"
               to={section === 'dashboard-present-schedule' ? `${publicPath}/schedule` : publicPath}
             >
-              Exit big screen
+              {t('tournament.exitBigScreen')}
             </Link>
           </header>
           {content}
@@ -382,24 +405,26 @@ function TournamentView({
               dashboardMode ? (
                 canManage ? (
                   <Link className="btn btn-ghost btn-sm" to={`/tournaments/${tournament.id}`}>
-                    Manage
+                    {t('common.manage')}
                   </Link>
                 ) : null
               ) : (
                 <Link className="btn btn-ghost btn-sm" to={publicPath}>
-                  Details
+                  {t('common.details')}
                 </Link>
               )
             }
             matchCount={matches.length}
             matchesPlayed={matches.filter((entry) => isScored(entry.match)).length}
             tabs={
-              dashboardMode ? detailsTabs(publicPath, bundle.stages) : workspaceTabs(tournament.id)
+              dashboardMode
+                ? detailsTabs(publicPath, bundle.stages, t)
+                : workspaceTabs(tournament.id)
             }
             teamCount={bundle.teams.length}
             tournament={tournament}
           />
-          <Suspense fallback={<LoadingState title="Loading…" />}>{content}</Suspense>
+          <Suspense fallback={<LoadingState title={t('common.loading')} />}>{content}</Suspense>
         </section>
       )}
     </TournamentContext.Provider>
@@ -407,6 +432,21 @@ function TournamentView({
 }
 
 export function TournamentPage({ section }: { section: TournamentSection }) {
+  const page = <TournamentPageContent section={section} />;
+  // The workspace is English only, like everything organizers use.
+  return section.startsWith('dashboard') ? (
+    page
+  ) : (
+    <I18nextProvider i18n={englishI18n}>
+      <div className="contents" lang="en">
+        {page}
+      </div>
+    </I18nextProvider>
+  );
+}
+
+function TournamentPageContent({ section }: { section: TournamentSection }) {
+  const { t } = useTranslation();
   const params = useParams();
   const { pathname } = useLocation();
   const [session] = useSession();
@@ -439,17 +479,17 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
       <ErrorState
         action={
           <Link className="btn btn-primary btn-sm" to={loginPath(pathname)}>
-            Organizer login
+            {t('nav.organizerLogin')}
           </Link>
         }
-        error="This area is only available to organizers."
-        title="Organizers only"
+        error={t('tournament.organizersOnlyText')}
+        title={t('tournament.organizersOnlyTitle')}
       />
     );
   }
 
   if (workspace.isPending) {
-    return <LoadingState title="Loading tournament…" />;
+    return <LoadingState title={t('tournament.loading')} />;
   }
 
   if (!workspace.data) {
@@ -457,11 +497,11 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
       <ErrorState
         action={
           <button className="btn btn-sm" onClick={() => void workspace.refetch()} type="button">
-            Retry
+            {t('common.retry')}
           </button>
         }
         error={getErrorMessage(workspace.error)}
-        title="Unable to load tournament"
+        title={t('tournament.loadFailed')}
       />
     );
   }
@@ -477,11 +517,11 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
       <ErrorState
         action={
           <Link className="btn btn-primary btn-sm" to={publicTournamentPath(tournament)}>
-            Open the Details page
+            {t('tournament.openDetails')}
           </Link>
         }
-        error="You can follow this tournament, but you can't manage it."
-        title="Read-only access"
+        error={t('tournament.readOnlyText')}
+        title={t('tournament.readOnlyTitle')}
       />
     );
   }
@@ -491,9 +531,11 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
       {workspace.isRefetchError || workspace.fetchStatus === 'paused' ? (
         <div className="alert alert-warning alert-soft flex-wrap" role="alert">
           <div>
-            <p className="font-semibold">Updates are unavailable. This view may be out of date.</p>
+            <p className="font-semibold">{t('tournament.stale')}</p>
             <p className="text-sm">
-              Last updated {new Date(workspace.dataUpdatedAt).toLocaleString()}.
+              {t('tournament.lastUpdated', {
+                time: new Date(workspace.dataUpdatedAt).toLocaleString(),
+              })}
             </p>
           </div>
           <button
@@ -502,7 +544,7 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
             onClick={() => void workspace.refetch()}
             type="button"
           >
-            {workspace.isFetching ? 'Retrying…' : 'Retry updates'}
+            {workspace.isFetching ? t('tournament.retrying') : t('tournament.retryUpdates')}
           </button>
         </div>
       ) : null}
@@ -518,16 +560,17 @@ export function TournamentPage({ section }: { section: TournamentSection }) {
 }
 
 export function NotFoundPage() {
+  const { t } = useTranslation();
   return (
-    <PageShell title="Page not found">
+    <PageShell title={t('errors.pageNotFound')}>
       <EmptyState
         action={
           <Link className="btn btn-primary btn-sm" to="/">
-            Back to the tournaments
+            {t('errors.backToTournaments')}
           </Link>
         }
-        text="The link may be mistyped, or the page has moved."
-        title="There's nothing here"
+        text={t('errors.nothingHereText')}
+        title={t('errors.nothingHereTitle')}
       />
     </PageShell>
   );

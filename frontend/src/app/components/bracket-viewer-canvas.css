@@ -83,8 +83,9 @@
   text-underline-offset: 4px;
 }
 
-/* An undecided slot renders with an empty name. */
+/* An undecided slot renders with an empty name. BracketViewerCanvas sets the label in the page's
+   language. */
 .brackets-viewer .participant .name:empty::before {
-  content: 'TBD';
+  content: var(--undecided-label, 'TBD');
   color: var(--hint-color);
 }

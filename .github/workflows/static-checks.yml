@@ -68,6 +68,9 @@ jobs:
           uv run alembic stamp head
           uv run pytest
 
+      - name: Check ORM schema against the database
+        run: uv run alembic check
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest

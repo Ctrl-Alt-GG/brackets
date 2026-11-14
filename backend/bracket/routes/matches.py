@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbSession
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import delay_upcoming_matches, schedule_all_matches
 from bracket.logic.ranking.calculation import (
@@ -41,7 +41,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.delete("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def delete_match(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
@@ -67,7 +67,7 @@ async def delete_match(
 
 @router.post("/tournaments/{tournament_id}/matches", response_model=SingleMatchResponse)
 async def create_match(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     match_body: MatchCreateBodyFrontend,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -127,7 +127,7 @@ async def create_match(
 
 @router.post("/tournaments/{tournament_id}/schedule_matches", response_model=SuccessResponse)
 async def schedule_matches(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
@@ -138,7 +138,7 @@ async def schedule_matches(
 
 @router.post("/tournaments/{tournament_id}/delay_schedule", response_model=SuccessResponse)
 async def delay_schedule(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     body: ScheduleDelayBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -154,20 +154,39 @@ async def delay_schedule(
 
 @router.put("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def update_match_by_id(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     match_id: MatchId,
     match_body: MatchBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    tournament: Tournament = Depends(disallow_archived_tournament),
     match: Match = Depends(match_dependency),
 ) -> SuccessResponse:
-    round_ = await get_round_by_id(conn, tournament_id, match.round_id)
-    stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
+    stages = await get_full_tournament_details(conn, tournament_id)
+    stage_item, round_ = next(
+        (stage_item, round_)
+        for stage in stages
+        for stage_item in stage.stage_items
+        for round_ in stage_item.rounds
+        if round_.id == match.round_id
+    )
+    current_match = next(candidate for candidate in round_.matches if candidate.id == match_id)
     is_knockout = stage_item.type == StageType.SINGLE_ELIMINATION
 
+    has_result = (
+        match_body.stage_item_input1_score != 0
+        or match_body.stage_item_input2_score != 0
+        or match_body.scoreless_result
+    )
+    match_inputs = (current_match.stage_item_input1, current_match.stage_item_input2)
+    # Saving 0-0 takes a result back, which is always possible.
+    if has_result and not all(isinstance(input_, StageItemInputFinal) for input_ in match_inputs):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A match can only get a result once both of its teams are known",
+        )
+
     is_draw = match_body.stage_item_input1_score == match_body.stage_item_input2_score
-    has_result = match_body.stage_item_input1_score != 0 or match_body.scoreless_result
     if is_knockout and is_draw and has_result:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -177,22 +196,28 @@ async def update_match_by_id(
         )
 
     await sql_update_match(conn, match_id, match_body)
+    current_match.stage_item_input1_score = match_body.stage_item_input1_score
+    current_match.stage_item_input2_score = match_body.stage_item_input2_score
+    current_match.scoreless_result = match_body.scoreless_result and not (
+        match_body.stage_item_input1_score or match_body.stage_item_input2_score
+    )
+    current_match.custom_duration_minutes = match_body.custom_duration_minutes
+    current_match.custom_margin_minutes = match_body.custom_margin_minutes
+
+    if is_knockout:
+        # Propagation updates both the stored competitors and this loaded tree, so conflict and
+        # ranking calculations see cleared downstream results without fetching the tree again.
+        await update_inputs_in_subsequent_elimination_rounds(
+            conn, round_.id, stage_item, {match_id}
+        )
 
     if (
         match_body.custom_duration_minutes != match.custom_duration_minutes
         or match_body.custom_margin_minutes != match.custom_margin_minutes
     ):
-        await schedule_all_matches(conn, tournament_id)
-
-    stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
-    if is_knockout:
-        # A changed winner changes who plays the next match, which discards results further
-        # down the bracket. The statistics below are worked out after that.
-        await update_inputs_in_subsequent_elimination_rounds(
-            conn, round_.id, stage_item, {match_id}
-        )
-        stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
-        await handle_conflicts(conn, await get_full_tournament_details(conn, tournament_id))
+        await schedule_all_matches(conn, tournament_id, stages=stages, tournament=tournament)
+    elif is_knockout:
+        await handle_conflicts(conn, stages)
 
     await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
     return SuccessResponse()

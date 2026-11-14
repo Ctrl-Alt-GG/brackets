@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbSession
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.models.db.match import is_played
@@ -23,7 +22,7 @@ from bracket.routes.auth import (
 )
 from bracket.routes.models import SuccessResponse
 from bracket.routes.util import disallow_archived_tournament, stage_item_dependency
-from bracket.sql.stage_item_inputs import get_stage_item_input_by_id
+from bracket.sql.stage_item_inputs import get_stage_item_input_by_id, sql_update_stage_item_input
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_team_by_id
@@ -39,7 +38,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 
 async def validate_stage_item_update(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     stage_item_input_db: StageItemInput | None,
     stage_item_input_body: StageItemInputUpdateBody,
     tournament_id: TournamentId,
@@ -83,7 +82,7 @@ async def validate_stage_item_update(
     response_model=SuccessResponse,
 )
 async def update_stage_item_input(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_input_id: StageItemInputId,
@@ -121,15 +120,6 @@ async def update_stage_item_input(
             "Recorded results must stay with the teams that played them.",
         )
 
-    query = """
-        UPDATE stage_item_inputs
-        SET team_id = :team_id,
-            winner_position = :winner_position,
-            winner_from_stage_item_id = :winner_from_stage_item_id
-        WHERE stage_item_inputs.id = :stage_item_input_id
-        AND stage_item_inputs.tournament_id = :tournament_id
-        AND stage_item_inputs.stage_item_id = :stage_item_id
-    """
     with (
         check_unique_constraint_violation(
             {
@@ -139,22 +129,8 @@ async def update_stage_item_input(
         ),
         check_foreign_key_violation({ForeignKey.stage_item_inputs_team_id_fkey}),
     ):
-        await conn.execute(
-            text(query),
-            {
-                "tournament_id": tournament_id,
-                "stage_item_input_id": stage_item_input_id,
-                "stage_item_id": stage_item_id,
-                "team_id": stage_item_body.team_id
-                if isinstance(stage_item_body, StageItemInputUpdateBodyFinal)
-                else None,
-                "winner_position": stage_item_body.winner_position
-                if isinstance(stage_item_body, StageItemInputUpdateBodyTentative)
-                else None,
-                "winner_from_stage_item_id": stage_item_body.winner_from_stage_item_id
-                if isinstance(stage_item_body, StageItemInputUpdateBodyTentative)
-                else None,
-            },
+        await sql_update_stage_item_input(
+            conn, tournament_id, stage_item_id, stage_item_input_id, stage_item_body
         )
     await recalculate_ranking_for_stage_item(
         conn, tournament_id, await get_stage_item(conn, tournament_id, stage_item_id)

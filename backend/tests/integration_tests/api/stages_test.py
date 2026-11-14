@@ -1,9 +1,9 @@
 from http import HTTPMethod
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.schema import rounds, stage_items, stages
+from bracket import orm
 from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.dummy_records import (
     DUMMY_MOCK_TIME,
@@ -107,9 +107,9 @@ async def test_create_stage(
             == SUCCESS_RESPONSE
         )
         # A new stage starts out empty.
-        await assert_row_count_and_clear(rounds, 0)
-        await assert_row_count_and_clear(stage_items, 0)
-        await assert_row_count_and_clear(stages, 1)
+        await assert_row_count_and_clear(orm.Round, 0)
+        await assert_row_count_and_clear(orm.StageItem, 0)
+        await assert_row_count_and_clear(orm.Stage, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -128,13 +128,13 @@ async def test_delete_stage(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(stages, 0)
+        await assert_row_count_and_clear(orm.Stage, 0)
 
 
 @pytest.mark.parametrize(("custom_duration_minutes",), [(25,), (None,)])
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_stage(
-    conn: AsyncConnection,
+    session: AsyncSession,
     startup_and_shutdown_uvicorn_server: None,
     auth_context: AuthContext,
     custom_duration_minutes: int | None,
@@ -159,13 +159,13 @@ async def test_update_stage(
             )
             == SUCCESS_RESPONSE
         )
-        [updated_stage] = await get_full_tournament_details(conn, auth_context.tournament.id)
+        [updated_stage] = await get_full_tournament_details(session, auth_context.tournament.id)
         assert len(updated_stage.stage_items) == 1
         assert updated_stage.name == body["name"]
         assert updated_stage.custom_duration_minutes == body["custom_duration_minutes"]
 
-        await assert_row_count_and_clear(stage_items, 1)
-        await assert_row_count_and_clear(stages, 1)
+        await assert_row_count_and_clear(orm.StageItem, 1)
+        await assert_row_count_and_clear(orm.Stage, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -188,8 +188,8 @@ async def test_activate_stage(
             == SUCCESS_RESPONSE
         )
 
-        await assert_row_count_and_clear(stage_items, 0)
-        await assert_row_count_and_clear(stages, 2)
+        await assert_row_count_and_clear(orm.StageItem, 0)
+        await assert_row_count_and_clear(orm.Stage, 2)
 
 
 @pytest.mark.asyncio(loop_scope="session")

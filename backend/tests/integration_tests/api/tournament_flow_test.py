@@ -2,7 +2,9 @@ from datetime import timedelta
 from http import HTTPMethod
 
 import pytest
+from limits import RateLimitItemPerMinute
 
+from bracket.utils import rate_limit
 from tests.integration_tests.api.flows import api_tournament, names, parse_time, result
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE
 from tests.integration_tests.models import AuthContext
@@ -481,3 +483,178 @@ async def test_tournament_keeps_a_ranking_and_brackets_a_power_of_two(
     assert six_teams["detail"][0]["msg"].endswith(
         "A single elimination bracket has 2, 4, 8, 16, 32 teams"
     )
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_going_back_before_any_stage_is_active_is_refused(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """Going back without an active stage would jump to the last stage, past every other one."""
+    async with api_tournament(auth_context) as flow:
+        await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 2, "Group")
+        await flow.add_stage_item(await flow.add_stage(), "SINGLE_ELIMINATION", 2, "Final")
+
+        refused = await flow.activate("previous")
+        stages = await flow.stages()
+
+    assert refused == {
+        "detail": "No stage is active yet, so there is no previous stage to go back to"
+    }
+    assert [stage["is_active"] for stage in stages] == [False, False]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_place_that_seeding_decided_is_pointed_out(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """
+    Teams that are level on every criterion are separated by their slots. The organizer sees it
+    before activating the next stage, where it decides who goes through.
+    """
+    async with api_tournament(auth_context) as flow:
+        teams = await flow.add_teams("Alpha", "Bravo", "Charlie")
+        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 3, "Group")
+        final = await flow.add_stage_item(await flow.add_stage(), "SINGLE_ELIMINATION", 2, "Final")
+        await flow.fill(group, *teams.values())
+        await flow.feed(final, group, 1, 2)
+        await flow.activate()
+        for round_matches in await flow.matches(group):
+            for match in round_matches:
+                await flow.score(match, 1, 1)
+
+        preview = await flow.call(HTTPMethod.GET, "next_stage_rankings")
+
+    # The first two both reach the final, so their tie decides nothing. The second one goes
+    # through instead of the third only by seeding.
+    assert [
+        (update["team"]["name"], (update["tied_team"] or {}).get("name"))
+        for update in preview["data"][str(final)]
+    ] == [("Alpha", None), ("Bravo", "Charlie")]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_team_that_would_take_two_slots_of_a_stage_item_stops_the_activation(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """A team that was put into two groups can win both, but can't take two slots of the final."""
+    async with api_tournament(auth_context) as flow:
+        teams = await flow.add_teams("Alpha", "Bravo", "Charlie")
+        groups = await flow.add_stage()
+        group_a = await flow.add_stage_item(groups, "ROUND_ROBIN", 2, "Group A")
+        group_b = await flow.add_stage_item(groups, "ROUND_ROBIN", 2, "Group B")
+        final = await flow.add_stage_item(await flow.add_stage(), "SINGLE_ELIMINATION", 2, "Final")
+        await flow.fill(group_a, teams["Alpha"], teams["Bravo"])
+        await flow.fill(group_b, teams["Alpha"], teams["Charlie"])
+        await flow.set_slot(final, 1, {"winner_from_stage_item_id": group_a, "winner_position": 1})
+        await flow.set_slot(final, 2, {"winner_from_stage_item_id": group_b, "winner_position": 1})
+        await flow.activate()
+        for group in (group_a, group_b):
+            match = (await flow.matches(group))[0][0]
+            alpha_first = names(match)[0] == "Alpha"
+            await flow.score(match, 1 if alpha_first else 0, 0 if alpha_first else 1)
+
+        refused = await flow.activate()
+        stages = await flow.stages()
+
+    assert refused == {
+        "detail": (
+            "Alpha would take slot 1 (Group A #1) and slot 2 (Group B #1) of Final, but a team "
+            "can have only one slot in it. Change one of those slots, then activate the stage."
+        )
+    }
+    assert [stage["is_active"] for stage in stages] == [True, False]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_match_gets_a_result_once_both_teams_are_known(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """A score against an open slot would count against nobody, or let a team through unplayed."""
+    async with api_tournament(auth_context) as flow:
+        teams = await flow.add_teams("Alpha", "Bravo")
+        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 2, "Group")
+        await flow.fill(group, teams["Alpha"])
+        match = (await flow.matches(group))[0][0]
+
+        refused = [
+            await flow.score(match, 1, 0),
+            await flow.score(match, 0, 0, scoreless_result=True),
+        ]
+        cleared = await flow.score(match, 0, 0)
+
+    expected = {"detail": "A match can only get a result once both of its teams are known"}
+    assert refused == [expected, expected]
+    assert cleared == SUCCESS_RESPONSE
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_only_swiss_rounds_can_be_drafts(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """A withdrawn round robin round would vanish from the Details pages for good."""
+    async with api_tournament(auth_context) as flow:
+        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 2, "Group")
+        round_ = (await flow.stage_item(group))["rounds"][0]
+        path = f"rounds/{round_['id']}"
+
+        refused = await flow.call(HTTPMethod.PUT, path, {"name": round_["name"], "is_draft": True})
+        renamed = await flow.call(HTTPMethod.PUT, path, {"name": "Opening", "is_draft": False})
+        after = (await flow.stage_item(group))["rounds"][0]
+
+    assert refused == {
+        "detail": (
+            "The rounds of a round robin are always published. Only Swiss rounds can be drafts."
+        )
+    }
+    assert renamed == SUCCESS_RESPONSE
+    assert (after["name"], after["is_draft"]) == ("Opening", False)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_saving_a_player_answers_with_their_results(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """The result columns of the players table are never updated, so they must not be returned."""
+    async with api_tournament(auth_context) as flow:
+        teams = await flow.add_teams("Alpha,Ann", "Bravo,Ben")
+        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 2, "Group")
+        await flow.fill(group, *teams.values())
+        match = (await flow.matches(group))[0][0]
+        alpha_first = names(match)[0] == "Alpha"
+        await flow.score(match, 2 if alpha_first else 0, 0 if alpha_first else 2)
+        players = (await flow.call(HTTPMethod.GET, "players"))["data"]["players"]
+        ann = next(player for player in players if player["name"] == "Ann")
+
+        saved = await flow.call(
+            HTTPMethod.PUT, f"players/{ann['id']}", {"name": "Ann", "active": True}
+        )
+
+    assert (saved["data"]["wins"], saved["data"]["losses"]) == (1, 0)
+    assert saved["data"]["elo_score"] == ann["elo_score"]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_visitors_who_keep_asking_for_replayed_matches_are_limited(
+    startup_and_shutdown_uvicorn_server: None,
+    auth_context: AuthContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Those answers replay every match. The Details pages read one cached answer instead, so only
+    a visitor who asks for them directly, again and again, reaches the limit. Organizers don't.
+    """
+    monkeypatch.setattr(
+        rate_limit, "VISITOR_READ_LIMIT", RateLimitItemPerMinute(3, namespace="visitor_reads_test")
+    )
+    async with api_tournament(auth_context) as flow:
+        visitor = [
+            await flow.call(HTTPMethod.GET, endpoint, anonymous=True)
+            for endpoint in ("players", "teams", "standings", "stages?no_draft_rounds=true")
+        ]
+        organizer = [await flow.call(HTTPMethod.GET, "players") for _ in range(4)]
+        details = await flow.call(HTTPMethod.GET, "details", anonymous=True)
+
+    assert all("data" in response for response in visitor[:3])
+    assert visitor[3] == {"detail": "Too many requests. Try again in a minute."}
+    assert all("data" in response for response in organizer)
+    assert "data" in details

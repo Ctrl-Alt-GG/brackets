@@ -1,12 +1,12 @@
 from http import HTTPMethod
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputCreateBodyFinal
 from bracket.models.db.tournament import TournamentStatus
-from bracket.schema import matches, rounds, stage_items, stages
 from bracket.sql.stage_items import get_stage_item
 from bracket.utils.dummy_records import (
     DUMMY_RANKING1,
@@ -65,10 +65,10 @@ async def test_create_stage_item(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(matches, 1)
-        await assert_row_count_and_clear(rounds, 1)
-        await assert_row_count_and_clear(stage_items, 1)
-        await assert_row_count_and_clear(stages, 1)
+        await assert_row_count_and_clear(orm.Match, 1)
+        await assert_row_count_and_clear(orm.Round, 1)
+        await assert_row_count_and_clear(orm.StageItem, 1)
+        await assert_row_count_and_clear(orm.Stage, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -92,13 +92,13 @@ async def test_delete_stage_item(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(stage_items, 0)
-        await assert_row_count_and_clear(stages, 1)
+        await assert_row_count_and_clear(orm.StageItem, 0)
+        await assert_row_count_and_clear(orm.Stage, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_stage_item(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Optimus", "ranking_id": auth_context.ranking.id}
     async with (
@@ -120,7 +120,7 @@ async def test_update_stage_item(
 
         assert auth_context.tournament.id
         updated_stage_item = await get_stage_item(
-            conn, auth_context.tournament.id, stage_item_inserted.id
+            session, auth_context.tournament.id, stage_item_inserted.id
         )
         assert updated_stage_item.name == body["name"]
 
@@ -165,7 +165,7 @@ async def test_stage_items_of_archived_tournament_are_read_only(
         deleted = await send_tournament_request(
             HTTPMethod.DELETE, f"stage_items/{stage_item_inserted.id}", archived_context
         )
-        await assert_row_count_and_clear(stage_items, 1)
+        await assert_row_count_and_clear(orm.StageItem, 1)
 
     assert created == deleted == {"detail": "Can't update archived tournament"}
 
@@ -202,6 +202,6 @@ async def test_create_stage_item_with_ranking_of_other_tournament(
                 "ranking_id": other_ranking.id,
             },
         )
-        await assert_row_count_and_clear(stage_items, 0)
+        await assert_row_count_and_clear(orm.StageItem, 0)
 
     assert response == {"detail": f"Could not find Ranking(s) with ID {other_ranking.id}"}

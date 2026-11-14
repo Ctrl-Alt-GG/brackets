@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbSession
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.ranking.elimination import (
@@ -42,7 +42,7 @@ router = APIRouter(prefix=config.api_prefix)
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def delete_stage_item(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -83,7 +83,7 @@ async def delete_stage_item(
 
 @router.post("/tournaments/{tournament_id}/stage_items", response_model=SuccessResponse)
 async def create_stage_item(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     stage_body: StageItemCreateBody,
     user: UserPublic = Depends(user_authenticated_for_tournament),
@@ -105,7 +105,7 @@ async def create_stage_item(
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def update_stage_item(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_body: StageItemUpdateBody,

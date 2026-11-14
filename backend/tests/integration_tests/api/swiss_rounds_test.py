@@ -2,7 +2,7 @@ from contextlib import AsyncExitStack
 from http import HTTPMethod
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
 from bracket.models.db.stage_item_inputs import (
@@ -28,7 +28,7 @@ def get_pairs(round_: RoundWithMatches) -> set[frozenset[StageItemInputId | None
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_generate_and_publish_swiss_rounds(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     tournament_id = auth_context.tournament.id
     async with AsyncExitStack() as stack:
@@ -46,7 +46,7 @@ async def test_generate_and_publish_swiss_rounds(
             for index in range(5)
         ]
         stage_item = await sql_create_stage_item_with_inputs(
-            conn,
+            session,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage.id,
@@ -59,7 +59,7 @@ async def test_generate_and_publish_swiss_rounds(
                 ],
             ),
         )
-        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, conn, stage_item.id)
+        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, session, stage_item.id)
         round_body = {"stage_item_id": stage_item.id}
 
         response = await send_tournament_request(
@@ -67,7 +67,7 @@ async def test_generate_and_publish_swiss_rounds(
         )
         assert response == SUCCESS_RESPONSE
 
-        generated = await get_stage_item(conn, tournament_id, stage_item.id)
+        generated = await get_stage_item(session, tournament_id, stage_item.id)
         [first_round] = generated.rounds
         assert first_round.is_draft
         assert len(first_round.matches) == 2
@@ -93,7 +93,7 @@ async def test_generate_and_publish_swiss_rounds(
         assert response == SUCCESS_RESPONSE
 
         rounds = sorted(
-            (await get_stage_item(conn, tournament_id, stage_item.id)).rounds,
+            (await get_stage_item(session, tournament_id, stage_item.id)).rounds,
             key=lambda round_: round_.id,
         )
         assert [round_.is_draft for round_ in rounds] == [False, True]
@@ -112,7 +112,7 @@ async def test_generate_and_publish_swiss_rounds(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_generate_round_needs_swiss_stage_item_with_teams(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     tournament_id = auth_context.tournament.id
     async with (
@@ -120,7 +120,7 @@ async def test_generate_round_needs_swiss_stage_item_with_teams(
         inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": tournament_id})) as team,
     ):
         round_robin = await sql_create_stage_item_with_inputs(
-            conn,
+            session,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage.id,
@@ -134,7 +134,7 @@ async def test_generate_round_needs_swiss_stage_item_with_teams(
             ),
         )
         swiss = await sql_create_stage_item_with_inputs(
-            conn,
+            session,
             tournament_id,
             StageItemWithInputsCreate(
                 stage_id=stage.id,
@@ -155,5 +155,5 @@ async def test_generate_round_needs_swiss_stage_item_with_teams(
                 HTTPMethod.POST, "rounds", auth_context, json={"stage_item_id": swiss.id}
             ) == {"detail": "Assign at least two active teams to this stage item first"}
         finally:
-            await sql_delete_stage_item_with_foreign_keys(conn, swiss.id)
-            await sql_delete_stage_item_with_foreign_keys(conn, round_robin.id)
+            await sql_delete_stage_item_with_foreign_keys(session, swiss.id)
+            await sql_delete_stage_item_with_foreign_keys(session, round_robin.id)

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from heliclockter import datetime_utc
 from starlette import status
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 
 from bracket.config import config
-from bracket.database import DbConnection
+from bracket.database import DbSession
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import (
     UserInDB,
@@ -38,7 +39,11 @@ from bracket.utils.rate_limit import (
     record_account_failure,
     reset_account_failures,
 )
-from bracket.utils.security import hash_password, validate_password_strength, verify_password
+from bracket.utils.security import (
+    hash_password_in_thread,
+    validate_password_strength,
+    verify_password_in_thread,
+)
 from bracket.utils.types import assert_some
 
 router = APIRouter(prefix=config.api_prefix)
@@ -51,12 +56,13 @@ def check_is_same_user(user_public: UserPublic, user_id: UserId) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only manage your own account")
 
 
-def current_password_is_valid(request: Request, user: UserInDB, password: str | None) -> bool:
+async def current_password_is_valid(request: Request, user: UserInDB, password: str | None) -> bool:
     key = get_account_lockout_key(user.email, request)
     enforce_account_lockout(key)
     if password is None:
         return False
-    if verify_password(password, user.password_hash)[0]:
+    is_valid, _ = await verify_password_in_thread(password, user.password_hash)
+    if is_valid:
         reset_account_failures(key)
         return True
     record_account_failure(key)
@@ -78,7 +84,7 @@ async def get_me(
 
 @router.put("/users/{user_id}", response_model=UserPublicResponse)
 async def update_user_details(
-    conn: DbConnection,
+    conn: DbSession,
     request: Request,
     user_id: UserId,
     user_to_update: UserToUpdate,
@@ -90,7 +96,7 @@ async def update_user_details(
     # takes the password as well.
     if user_to_update.email != user_public.email:
         user = assert_some(await get_user_in_db(conn, user_public.id))
-        if not current_password_is_valid(request, user, user_to_update.current_password):
+        if not await current_password_is_valid(request, user, user_to_update.current_password):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Enter your current password to change your email"
             )
@@ -107,7 +113,7 @@ async def update_user_details(
 async def put_user_password(
     request: Request,
     response: Response,
-    conn: DbConnection,
+    conn: DbSession,
     user_id: UserId,
     user_to_update: UserPasswordToUpdate,
     user_public: UserPublic = Depends(user_authenticated),
@@ -120,15 +126,17 @@ async def put_user_password(
     check_is_same_user(user_public, user_id)
 
     user = assert_some(await get_user_in_db(conn, user_public.id))
-    if not current_password_is_valid(request, user, user_to_update.current_password):
+    if not await current_password_is_valid(request, user, user_to_update.current_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "The current password is incorrect")
 
     try:
-        validate_password_strength(user_to_update.password, (user.email, user.name))
+        await run_in_threadpool(
+            validate_password_strength, user_to_update.password, (user.email, user.name)
+        )
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
-    password_hash = hash_password(user_to_update.password)
+    password_hash = await hash_password_in_thread(user_to_update.password)
     await update_user_password(conn, user.id, password_hash)
     issue_token(response, user.id, user.name, password_hash)
     return SuccessResponse()
@@ -141,14 +149,14 @@ async def put_user_password(
 )
 @limiter.limit("5/15minutes")
 async def register_user(
-    conn: DbConnection, request: Request, response: Response, user_to_register: UserToRegister
+    conn: DbSession, request: Request, response: Response, user_to_register: UserToRegister
 ) -> TokenResponse:
     if not config.allow_user_registration:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account creation is unavailable for now")
 
     user = UserInsertable(
         email=user_to_register.email,
-        password_hash=hash_password(user_to_register.password),
+        password_hash=await hash_password_in_thread(user_to_register.password),
         name=user_to_register.name,
         created=datetime_utc.now(),
         account_type=UserAccountType.REGULAR,

@@ -2,12 +2,11 @@ from http import HTTPMethod
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.database import engine
 from bracket.models.db.player import Player
-from bracket.schema import players
-from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
@@ -52,7 +51,7 @@ async def test_create_player(
     body = {"name": "Some new name", "active": True}
     response = await send_tournament_request(HTTPMethod.POST, "players", auth_context, json=body)
     assert response["success"] is True
-    await assert_row_count_and_clear(players, 1)
+    await assert_row_count_and_clear(orm.Player, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -65,10 +64,10 @@ async def test_create_players(
     )
     assert response["success"] is True
 
-    async with engine.begin() as conn:
-        names = (await conn.scalars(select(players.c.name).order_by(players.c.name))).all()
+    async with AsyncSession(engine) as session, session.begin():
+        names = (await session.scalars(select(orm.Player.name).order_by(orm.Player.name))).all()
     assert names == ["Player x", "Player y"]
-    await assert_row_count_and_clear(players, 2)
+    await assert_row_count_and_clear(orm.Player, 2)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -83,7 +82,7 @@ async def test_create_players_with_too_long_name(
     assert response["detail"][0]["msg"] == (
         f'Value error, "{"y" * 31}" is longer than the 30 characters a name can have'
     )
-    await assert_row_count_and_clear(players, 0)
+    await assert_row_count_and_clear(orm.Player, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -102,12 +101,12 @@ async def test_delete_player(
                 )
                 == SUCCESS_RESPONSE
             )
-            await assert_row_count_and_clear(players, 0)
+            await assert_row_count_and_clear(orm.Player, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_player(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {"name": "Some new name", "active": True}
     async with inserted_team(
@@ -119,10 +118,14 @@ async def test_update_player(
             response = await send_tournament_request(
                 HTTPMethod.PUT, f"players/{player_inserted.id}", auth_context, json=body
             )
-            updated_player = await fetch_one_parsed_certain(
-                conn, Player, query=players.select().where(players.c.id == player_inserted.id)
+            updated_player = Player.model_validate(
+                await session.scalar(
+                    (
+                        select(orm.Player).where(orm.Player.id == player_inserted.id)
+                    ).execution_options(populate_existing=True)
+                )
             )
             assert updated_player.name == body["name"]
             assert response["data"]["name"] == body["name"]
 
-            await assert_row_count_and_clear(players, 1)
+            await assert_row_count_and_clear(orm.Player, 1)

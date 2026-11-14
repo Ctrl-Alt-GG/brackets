@@ -3,15 +3,15 @@ from http import HTTPMethod
 from unittest.mock import ANY
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.models.db.ranking import Ranking
-from bracket.schema import rankings
 from bracket.sql.rankings import (
     get_all_rankings_in_tournament,
     sql_delete_ranking,
 )
-from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
@@ -43,15 +43,15 @@ async def test_rankings_endpoint(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_ranking(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     response = await send_tournament_request(HTTPMethod.POST, "rankings", auth_context, json={})
     assert response.get("success") is True, response
 
     tournament_id = auth_context.tournament.id
-    for ranking in await get_all_rankings_in_tournament(conn, tournament_id):
+    for ranking in await get_all_rankings_in_tournament(session, tournament_id):
         if ranking.position != 0:
-            await sql_delete_ranking(conn, tournament_id, ranking.id)
+            await sql_delete_ranking(session, tournament_id, ranking.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -74,7 +74,7 @@ async def test_delete_ranking(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_ranking(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     body = {
         "win_points": "7.5",
@@ -92,10 +92,12 @@ async def test_update_ranking(
             response = await send_tournament_request(
                 HTTPMethod.PUT, f"rankings/{ranking_inserted.id}", auth_context, json=body
             )
-            updated_ranking = await fetch_one_parsed_certain(
-                conn,
-                Ranking,
-                query=rankings.select().where(rankings.c.id == ranking_inserted.id),
+            updated_ranking = Ranking.model_validate(
+                await session.scalar(
+                    (
+                        select(orm.Ranking).where(orm.Ranking.id == ranking_inserted.id)
+                    ).execution_options(populate_existing=True)
+                )
             )
             assert response["success"] is True
             assert updated_ranking.win_points == Decimal("7.5")
@@ -131,3 +133,47 @@ async def test_ranking_of_other_tournament_is_not_found(
 
     expected = {"detail": f"Could not find ranking with id {other_ranking.id}"}
     assert updated == deleted == expected
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_ranking_points_are_bounded(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    body = {"win_points": "1000000", "draw_points": "1", "loss_points": "-1000"}
+    response = await send_tournament_request(HTTPMethod.POST, "rankings", auth_context, json=body)
+
+    assert [error["loc"] for error in response["detail"]] == [["body", "win_points"]]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_rankings_keep_a_position_each(
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """
+    New stage items take the first ranking, so two rankings must never share a position. Moving
+    one makes room for it, and deleting one closes the gap.
+    """
+    tournament_id = auth_context.tournament.id
+    for _ in range(2):
+        await send_tournament_request(HTTPMethod.POST, "rankings", auth_context, json={})
+    first, second, third = await get_all_rankings_in_tournament(session, tournament_id)
+    body = {
+        "win_points": "3",
+        "draw_points": "1",
+        "loss_points": "0",
+        "add_score_points": False,
+        "position": 0,
+    }
+
+    await send_tournament_request(HTTPMethod.PUT, f"rankings/{third.id}", auth_context, json=body)
+    moved = await get_all_rankings_in_tournament(session, tournament_id)
+    await send_tournament_request(HTTPMethod.DELETE, f"rankings/{third.id}", auth_context)
+    await send_tournament_request(HTTPMethod.DELETE, f"rankings/{second.id}", auth_context)
+    after = await get_all_rankings_in_tournament(session, tournament_id)
+
+    assert [(ranking.id, ranking.position) for ranking in moved] == [
+        (third.id, 0),
+        (first.id, 1),
+        (second.id, 2),
+    ]
+    assert [(ranking.id, ranking.position) for ranking in after] == [(first.id, 0)]

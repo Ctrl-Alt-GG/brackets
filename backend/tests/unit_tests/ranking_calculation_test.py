@@ -399,7 +399,7 @@ def test_determine_team_ranking_for_stage_item_breaks_ties() -> None:
     # The first four have a point each: the first has the best score difference, the third
     # scored more than the second and fourth, and those two are still level, so their slots
     # decide.
-    assert [input_id for input_id, _ in ranking] == [1, 3, 2, 4, 5]
+    assert [placing.stage_item_input_id for placing in ranking] == [1, 3, 2, 4, 5]
 
 
 def test_determine_team_ranking_for_stage_item_prefers_wins_over_draws() -> None:
@@ -416,7 +416,71 @@ def test_determine_team_ranking_for_stage_item_prefers_wins_over_draws() -> None
     ranking = determine_team_ranking_for_stage_item(stage_item, DEFAULT_RANKING)
 
     # The drawer and the winner have the same points and scores, but the winner won a match.
-    assert [input_id for input_id, _ in ranking] == [3, 2, 1]
+    assert [placing.stage_item_input_id for placing in ranking] == [3, 2, 1]
+
+
+def test_two_teams_level_on_points_are_ranked_by_their_match() -> None:
+    first, second, third, fourth = (
+        make_input(input_id, slot) for input_id, slot in ((1, 1), (2, 2), (3, 4), (4, 3))
+    )
+    stage_item = make_stage_item(
+        StageType.ROUND_ROBIN,
+        [first, second, third, fourth],
+        [
+            [make_match(1, second, first, 1, 0), make_match(2, third, fourth, 1, 0)],
+            [make_match(3, first, third, 4, 0), make_match(4, second, fourth, 0, 1)],
+            [make_match(5, first, fourth, 4, 0), make_match(6, second, third, 1, 0)],
+        ],
+    )
+
+    ranking = determine_team_ranking_for_stage_item(stage_item, DEFAULT_RANKING)
+
+    # The first two teams have two wins each, and the last two one each. The first team has the
+    # better score difference and the earlier slot, but lost to the second. The fourth team has
+    # the earlier slot of the last two, but lost to the third.
+    assert [placing.stage_item_input_id for placing in ranking] == [2, 1, 3, 4]
+
+
+def test_three_teams_level_on_points_are_ranked_by_their_matches() -> None:
+    a, b, c, d, e = (
+        make_input(input_id, slot) for input_id, slot in ((1, 3), (2, 2), (3, 1), (4, 4), (5, 5))
+    )
+    stage_item = make_stage_item(
+        StageType.ROUND_ROBIN,
+        [a, b, c, d, e],
+        [
+            [make_match(1, a, b, 1, 0), make_match(2, a, c, 1, 0), make_match(3, b, c, 1, 0)],
+            [make_match(4, d, a, 1, 0), make_match(5, e, a, 1, 0), make_match(6, b, d, 5, 0)],
+            [make_match(7, e, b, 1, 0), make_match(8, c, d, 9, 0), make_match(9, c, e, 9, 0)],
+            [make_match(10, d, e, 1, 1)],
+        ],
+    )
+
+    ranking = determine_team_ranking_for_stage_item(stage_item, DEFAULT_RANKING)
+
+    # A, B and C have two points each. Against each other A won twice and B once, although C has
+    # by far the best score difference overall and the earliest slot.
+    assert [placing.stage_item_input_id for placing in ranking] == [5, 1, 2, 3, 4]
+    level = [placing.tiebreak for placing in ranking[1:4]]
+    assert level[0] < level[1] < level[2]
+
+
+def test_teams_level_on_every_criterion_share_their_tiebreak() -> None:
+    first, second, third = make_input(1, 1), make_input(2, 2), make_input(3, 3)
+    stage_item = make_stage_item(
+        StageType.ROUND_ROBIN,
+        [first, second, third],
+        [
+            [make_match(1, first, second, 1, 1), make_match(2, first, third, 1, 1)],
+            [make_match(3, second, third, 1, 1)],
+        ],
+    )
+
+    ranking = determine_team_ranking_for_stage_item(stage_item, DEFAULT_RANKING)
+
+    # Only their slots separate them, which activating the next stage warns about.
+    assert [placing.stage_item_input_id for placing in ranking] == [1, 2, 3]
+    assert len({placing.tiebreak for placing in ranking}) == 1
 
 
 def test_determine_ranking_for_stage_item_swiss_replays_matches_in_order() -> None:

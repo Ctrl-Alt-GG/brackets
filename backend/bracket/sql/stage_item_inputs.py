@@ -1,162 +1,127 @@
 from pydantic import TypeAdapter
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
+from bracket import orm
 from bracket.models.db.stage_item_inputs import (
     StageItemInput,
     StageItemInputBase,
     StageItemInputCreateBody,
     StageItemInputCreateBodyFinal,
     StageItemInputCreateBodyTentative,
-    StageItemInputFinal,
+    StageItemInputUpdateBody,
+    StageItemInputUpdateBodyFinal,
+    StageItemInputUpdateBodyTentative,
 )
-from bracket.sql.teams import get_team_by_id
 from bracket.utils.id_types import RankingId, StageItemId, StageItemInputId, TeamId, TournamentId
 
 
 async def get_stage_item_input_by_id(
-    conn: AsyncConnection, tournament_id: TournamentId, stage_item_input_id: StageItemInputId
+    conn: AsyncSession, tournament_id: TournamentId, stage_item_input_id: StageItemInputId
 ) -> StageItemInput | None:
-    query = """
-        SELECT *
-        FROM stage_item_inputs
-        WHERE id = :stage_item_input_id
-        AND tournament_id = :tournament_id
-    """
-    result = (
-        await conn.execute(
-            text(query),
-            {"stage_item_input_id": stage_item_input_id, "tournament_id": tournament_id},
+    entity = await conn.scalar(
+        select(orm.StageItemInput)
+        .where(
+            orm.StageItemInput.id == stage_item_input_id,
+            orm.StageItemInput.tournament_id == tournament_id,
         )
-    ).first()
-    if result is None:
+        .options(joinedload(orm.StageItemInput.team))
+        .execution_options(populate_existing=True)
+    )
+    if entity is None:
         return None
-
-    if result.team_id is not None:
-        data = dict(result._mapping)
-        data["team"] = await get_team_by_id(conn, data["team_id"], tournament_id)
-        return StageItemInputFinal.model_validate(data)
-
-    return TypeAdapter(StageItemInput).validate_python(dict(result._mapping))
+    return TypeAdapter(StageItemInput).validate_python(entity, from_attributes=True)
 
 
 async def get_stage_item_ids_by_ranking_id(
-    conn: AsyncConnection, tournament_id: TournamentId, ranking_id: RankingId
+    conn: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
 ) -> list[StageItemId]:
-    query = """
-        SELECT stage_items.id
-        FROM stage_items
-        JOIN stages ON stages.id = stage_items.stage_id
-        WHERE stage_items.ranking_id = :ranking_id
-        AND stages.tournament_id = :tournament_id
-    """
-    results = await conn.execute(
-        text(query), {"ranking_id": ranking_id, "tournament_id": tournament_id}
+    ids = await conn.scalars(
+        select(orm.StageItem.id)
+        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
+        .where(orm.StageItem.ranking_id == ranking_id, orm.Stage.tournament_id == tournament_id)
     )
-    return [StageItemId(result.id) for result in results]
+    return [StageItemId(id_) for id_ in ids]
 
 
 async def sql_set_team_id_for_stage_item_input(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     stage_item_input_id: StageItemInputId,
     team_id: TeamId | None,
 ) -> None:
-    query = """
-        UPDATE stage_item_inputs
-        SET team_id = :team_id
-        WHERE tournament_id = :tournament_id
-        AND stage_item_inputs.id = :stage_item_input_id
-        """
     await conn.execute(
-        text(query),
-        {
-            "team_id": team_id,
-            "stage_item_input_id": stage_item_input_id,
-            "tournament_id": tournament_id,
-        },
+        update(orm.StageItemInput)
+        .where(
+            orm.StageItemInput.tournament_id == tournament_id,
+            orm.StageItemInput.id == stage_item_input_id,
+        )
+        .values(team_id=team_id)
     )
 
 
-async def sql_delete_stage_item_inputs(conn: AsyncConnection, stage_item_id: StageItemId) -> None:
-    """
-    Delete the slots of a stage item, and empty the slots of other stage items that it fed.
-
-    Those other slots stay: deleting them would leave a stage item with fewer slots than teams,
-    and there is no way to add one back.
-    """
+async def sql_delete_stage_item_inputs(conn: AsyncSession, stage_item_id: StageItemId) -> None:
+    """Delete these slots, emptying the downstream slots that took their winners."""
     await conn.execute(
-        text(
-            """
-            UPDATE stage_item_inputs
-            SET team_id = NULL,
-                winner_from_stage_item_id = NULL,
-                winner_position = NULL
-            WHERE winner_from_stage_item_id = :stage_item_id
-            """
-        ),
-        {"stage_item_id": stage_item_id},
+        update(orm.StageItemInput)
+        .where(orm.StageItemInput.winner_from_stage_item_id == stage_item_id)
+        .values(team_id=None, winner_from_stage_item_id=None, winner_position=None)
     )
     await conn.execute(
-        text("DELETE FROM stage_item_inputs WHERE stage_item_id = :stage_item_id"),
-        {"stage_item_id": stage_item_id},
+        delete(orm.StageItemInput).where(orm.StageItemInput.stage_item_id == stage_item_id)
     )
 
 
 async def sql_create_stage_item_input(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_input: StageItemInputCreateBody,
 ) -> StageItemInputBase:
-    query = """
-        INSERT INTO stage_item_inputs
-        (
-            slot,
-            tournament_id,
-            stage_item_id,
-            team_id,
-            winner_from_stage_item_id,
-            winner_position
-        )
-        VALUES
-        (
-            :slot,
-            :tournament_id,
-            :stage_item_id,
-            :team_id,
-            :winner_from_stage_item_id,
-            :winner_position
-        )
-        RETURNING *
-        """
-    result = (
-        await conn.execute(
-            text(query),
-            {
-                "slot": stage_item_input.slot,
-                "tournament_id": tournament_id,
-                "stage_item_id": stage_item_id,
-                "team_id": (
-                    stage_item_input.team_id
-                    if isinstance(stage_item_input, StageItemInputCreateBodyFinal)
-                    else None
-                ),
-                "winner_from_stage_item_id": (
-                    stage_item_input.winner_from_stage_item_id
-                    if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
-                    else None
-                ),
-                "winner_position": (
-                    stage_item_input.winner_position
-                    if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
-                    else None
-                ),
-            },
-        )
-    ).first()
+    entity = orm.StageItemInput(
+        slot=stage_item_input.slot,
+        tournament_id=tournament_id,
+        stage_item_id=stage_item_id,
+        team_id=stage_item_input.team_id
+        if isinstance(stage_item_input, StageItemInputCreateBodyFinal)
+        else None,
+        winner_from_stage_item_id=stage_item_input.winner_from_stage_item_id
+        if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
+        else None,
+        winner_position=stage_item_input.winner_position
+        if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
+        else None,
+    )
+    conn.add(entity)
+    await conn.flush()
+    return StageItemInputBase.model_validate(entity)
 
-    if result is None:
-        raise ValueError("Could not create stage")
 
-    return StageItemInputBase.model_validate(result._mapping)
+async def sql_update_stage_item_input(
+    conn: AsyncSession,
+    tournament_id: TournamentId,
+    stage_item_id: StageItemId,
+    stage_item_input_id: StageItemInputId,
+    body: StageItemInputUpdateBody,
+) -> None:
+    entity = await conn.scalar(
+        select(orm.StageItemInput)
+        .where(
+            orm.StageItemInput.id == stage_item_input_id,
+            orm.StageItemInput.tournament_id == tournament_id,
+            orm.StageItemInput.stage_item_id == stage_item_id,
+        )
+        .execution_options(populate_existing=True)
+    )
+    if entity is not None:
+        entity.team_id = body.team_id if isinstance(body, StageItemInputUpdateBodyFinal) else None
+        entity.winner_from_stage_item_id = (
+            body.winner_from_stage_item_id
+            if isinstance(body, StageItemInputUpdateBodyTentative)
+            else None
+        )
+        entity.winner_position = (
+            body.winner_position if isinstance(body, StageItemInputUpdateBodyTentative) else None
+        )
+        await conn.flush()

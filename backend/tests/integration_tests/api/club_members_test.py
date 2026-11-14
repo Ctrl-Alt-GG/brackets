@@ -4,11 +4,15 @@ from http import HTTPMethod
 
 import pytest
 from heliclockter import datetime_utc
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.database import engine
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import User, UserInsertable
-from bracket.sql.users import create_user, delete_user
+from bracket.sql.clubs import get_club_members
+from bracket.sql.users import create_user, delete_user, delete_user_and_owned_clubs
 from bracket.utils.security import hash_password
 from tests.integration_tests.api.shared import send_auth_request, send_tournament_request
 from tests.integration_tests.mocks import get_mock_token
@@ -18,9 +22,9 @@ from tests.integration_tests.models import AuthContext
 @asynccontextmanager
 async def helper_account(auth_context: AuthContext) -> AsyncIterator[tuple[User, AuthContext]]:
     """A second organizer account, and the auth context that signs requests as them."""
-    async with engine.begin() as conn:
+    async with AsyncSession(engine) as session, session.begin():
         helper = await create_user(
-            conn,
+            session,
             UserInsertable(
                 email="helper@example.org",
                 password_hash=hash_password("some password"),
@@ -33,8 +37,8 @@ async def helper_account(auth_context: AuthContext) -> AsyncIterator[tuple[User,
         headers = {"Authorization": f"Bearer {get_mock_token(helper)}"}
         yield helper, auth_context.model_copy(update={"headers": headers})
     finally:
-        async with engine.begin() as conn:
-            await delete_user(conn, helper.id)
+        async with AsyncSession(engine) as session, session.begin():
+            await delete_user(session, helper.id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -120,3 +124,104 @@ async def test_event_names_are_unique_per_organizer(
 
     assert same_name_other_owner["data"]["name"] == auth_context.club.name
     assert same_name_same_owner == {"detail": "You already have an event with this name"}
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_the_owner_hands_the_event_over(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """An owner who leaves the organizing team hands the event over, so that someone runs it."""
+    club = f"clubs/{auth_context.club.id}"
+
+    async with helper_account(auth_context) as (helper, as_helper):
+        not_an_organizer = await send_auth_request(
+            HTTPMethod.PUT, f"{club}/owner", auth_context, json={"user_id": helper.id}
+        )
+        await send_auth_request(
+            HTTPMethod.POST, f"{club}/members", auth_context, json={"email": helper.email}
+        )
+        by_helper = await send_auth_request(
+            HTTPMethod.PUT, f"{club}/owner", as_helper, json={"user_id": helper.id}
+        )
+        handed_over = await send_auth_request(
+            HTTPMethod.PUT, f"{club}/owner", auth_context, json={"user_id": helper.id}
+        )
+        rename_by_former_owner = await send_auth_request(
+            HTTPMethod.PUT, club, auth_context, json={"name": "Mine now"}
+        )
+        handed_back = await send_auth_request(
+            HTTPMethod.PUT, f"{club}/owner", as_helper, json={"user_id": auth_context.user.id}
+        )
+        removed = await send_auth_request(
+            HTTPMethod.DELETE, f"{club}/members/{helper.id}", auth_context
+        )
+
+    assert not_an_organizer == {
+        "detail": "Only an organizer of the event can become its owner. Add them first."
+    }
+    assert by_helper == {"detail": "Only the owner of this event can do that"}
+    assert [(member["name"], member["relation"]) for member in handed_over["data"]] == [
+        ("Helper", "OWNER"),
+        (auth_context.user.name, "COLLABORATOR"),
+    ]
+    assert rename_by_former_owner == {"detail": "Only the owner of this event can do that"}
+    assert [member["relation"] for member in handed_back["data"]] == ["OWNER", "COLLABORATOR"]
+    assert [member["relation"] for member in removed["data"]] == ["OWNER"]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_only_the_events_an_organizer_owns_need_different_names(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """
+    A helper can name their own event like one they help with, but can't be handed that one
+    while they own an event of the same name.
+    """
+    club = f"clubs/{auth_context.club.id}"
+
+    async with helper_account(auth_context) as (helper, as_helper):
+        await send_auth_request(
+            HTTPMethod.POST, f"{club}/members", auth_context, json={"email": helper.email}
+        )
+        own_event = await send_auth_request(
+            HTTPMethod.POST, "clubs", as_helper, json={"name": auth_context.club.name}
+        )
+        handed_over = await send_auth_request(
+            HTTPMethod.PUT, f"{club}/owner", auth_context, json={"user_id": helper.id}
+        )
+        await send_auth_request(HTTPMethod.DELETE, f"clubs/{own_event['data']['id']}", as_helper)
+        await send_auth_request(HTTPMethod.DELETE, f"{club}/members/{helper.id}", auth_context)
+
+    assert own_event["data"]["name"] == auth_context.club.name
+    assert handed_over == {
+        "detail": (
+            f"Helper already owns an event called {auth_context.club.name}. Rename one of them "
+            "first."
+        )
+    }
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_deleting_an_account_keeps_the_events_it_only_helps_run(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    """The events a helper only helps with belong to their owner, with all their tournaments."""
+    async with helper_account(auth_context) as (helper, as_helper):
+        await send_auth_request(
+            HTTPMethod.POST,
+            f"clubs/{auth_context.club.id}/members",
+            auth_context,
+            json={"email": helper.email},
+        )
+        own_event = await send_auth_request(
+            HTTPMethod.POST, "clubs", as_helper, json={"name": "The helper's own event"}
+        )
+
+        async with AsyncSession(engine) as session, session.begin():
+            await delete_user_and_owned_clubs(session, helper.id)
+            remaining_clubs = set(await session.scalars(select(orm.Club.id)))
+            members = await get_club_members(session, auth_context.club.id)
+
+    assert auth_context.club.id in remaining_clubs
+    assert own_event["data"]["id"] not in remaining_clubs
+    assert [member.user_id for member in members] == [auth_context.user.id]

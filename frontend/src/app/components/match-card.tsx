@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import { useTournamentContext } from '../tournament-context';
@@ -8,9 +9,9 @@ import {
   formatMatchTime,
   inputLabel,
   inputTeamId,
-  MATCH_STATUS_LABELS,
   matchStatus,
   matchWinner,
+  stageItemName,
   type MatchStatus,
 } from '../utils';
 import { TeamLink } from './team-link';
@@ -42,6 +43,7 @@ function Side({
   size: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={cx(
@@ -64,7 +66,7 @@ function Side({
         )}
         teamId={inputTeamId(input)}
       >
-        {inputLabel(input, stageItemsById)}
+        {inputLabel(input, stageItemsById, t)}
       </TeamLink>
       <span
         className={cx(
@@ -93,6 +95,7 @@ export function MatchCard({
   size?: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
 }) {
+  const { t } = useTranslation();
   const { myTeamId } = useTournamentContext();
   const { match, round, stageItem } = entry;
   const status = matchStatus(match);
@@ -111,13 +114,13 @@ export function MatchCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-base-content/70">
-          {stageItem.name || stageItem.type_name} · {round.name}
+          {stageItemName(stageItem, t)} · {round.name}
         </p>
         <span className={cx('badge badge-soft badge-sm', STATUS_BADGES[status])}>
           {status === 'live' ? (
             <span aria-hidden="true" className="status status-error motion-safe:animate-pulse" />
           ) : null}
-          {MATCH_STATUS_LABELS[status]}
+          {t(`matchStatus.${status}`)}
         </span>
       </div>
 
@@ -149,7 +152,7 @@ export function MatchCard({
       )}
 
       {showTime ? (
-        <p className="mt-3 text-xs text-base-content/70">{formatMatchTime(match.start_time)}</p>
+        <p className="mt-3 text-xs text-base-content/70">{formatMatchTime(match.start_time, t)}</p>
       ) : null}
     </div>
   );

@@ -2,7 +2,8 @@ import math
 from collections import defaultdict
 from decimal import Decimal
 
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from bracket.logic.ranking.statistics import START_ELO, D, K, PlayerStatistics
 from bracket.models.db.match import MatchWithDetailsDefinitive, is_played
@@ -95,7 +96,7 @@ def determine_player_statistics(
 
 
 async def get_player_statistics(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     *,
     stages: list[StageWithStageItems] | None = None,
@@ -106,11 +107,21 @@ async def get_player_statistics(
         stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
     if teams is None:
         teams = await get_teams_with_members(conn, tournament_id)
-    return determine_player_statistics(stages, teams)
+    # Replaying every match is the longest step of a tournament's pages. In a worker thread, other
+    # requests are still answered while it runs.
+    return await run_in_threadpool(determine_player_statistics, stages, teams)
+
+
+def with_statistics(player: Player, statistics: dict[PlayerId, PlayerStatistics]) -> Player:
+    """
+    The player with their results. The result columns of the players table are never updated,
+    so they must not be shown.
+    """
+    return player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
 
 
 async def get_players_with_statistics(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -126,7 +137,4 @@ async def get_players_with_statistics(
     players = await get_all_players_in_tournament(
         conn, tournament_id, not_in_team=not_in_team, pagination=pagination
     )
-    return [
-        player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
-        for player in players
-    ]
+    return [with_statistics(player, statistics) for player in players]

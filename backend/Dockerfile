@@ -29,5 +29,9 @@ RUN install --directory --owner=10001 --group=10001 uploads
 USER 10001:10001
 EXPOSE 8400
 
+# Worker processes, which uvicorn reads from WEB_CONCURRENCY: while one of them works out a long
+# answer, the others keep serving. They share the rate limits through Redis.
+ENV WEB_CONCURRENCY=4
+
 # uvicorn trusts the `X-Forwarded-For` of the proxies listed in `FORWARDED_ALLOW_IPS`.
 CMD ["uvicorn", "bracket.app:app", "--host", "0.0.0.0", "--port", "8400", "--no-server-header"]

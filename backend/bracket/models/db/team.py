@@ -4,7 +4,7 @@ import csv
 from decimal import Decimal
 
 from heliclockter import datetime_utc
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from bracket.logic.ranking.statistics import START_ELO
 from bracket.models.db.player import Player
@@ -30,7 +30,7 @@ class Team(TeamInsertable):
     id: TeamId
 
 
-class TeamWithPlayers(BaseModel):
+class TeamWithPlayers(BaseModelORM):
     id: TeamId
     players: list[Player]
     elo_score: Decimal = START_ELO
@@ -44,12 +44,6 @@ class TeamWithPlayers(BaseModel):
     @property
     def player_ids(self) -> list[PlayerId]:
         return [player.id for player in self.players]
-
-    @field_validator("players", mode="before")
-    @staticmethod
-    def handle_players(values: list[Player | None]) -> list[Player | None]:
-        # The query aggregates players with a LEFT JOIN, so a team without any gives [null].
-        return [] if values == [None] else values
 
 
 class FullTeamWithPlayers(TeamWithPlayers, Team):

@@ -3,7 +3,7 @@ from http import HTTPMethod
 
 import pytest
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.sql.stages import get_full_tournament_details
@@ -146,7 +146,7 @@ async def test_statistic_sorting_happens_before_pagination(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate_items(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with api_tournament(auth_context) as flow:
         teams = await flow.add_teams("Alpha", "Bravo")
@@ -165,7 +165,9 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
         ordinary = await team_totals(flow)
         assert_totals(ordinary["Alpha"], wins=3, elo=1244)
         assert_totals(ordinary["Bravo"], losses=3, elo=1156)
-        single = await get_team_by_id(conn, TeamId(teams["Alpha"]), TournamentId(flow.id))
+        single = await get_team_by_id(
+            session, TeamId(teams["Alpha"]), TournamentId(flow.id), with_totals=True
+        )
         assert single is not None
         assert_totals(single.model_dump(mode="json"), wins=3, elo=1244)
 
@@ -176,30 +178,43 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
             if statement.lstrip().lower().startswith(("select", "with")):
                 query_count += 1
 
-        event.listen(conn.sync_connection, "before_cursor_execute", count_queries)
+        connection = (await session.connection()).sync_connection
+        event.listen(connection, "before_cursor_execute", count_queries)
         try:
-            both = await get_full_tournament_details(
-                conn,
+            # Checks and planning only need the stages: the totals replay every match.
+            await get_full_tournament_details(
+                session,
                 TournamentId(flow.id),
                 stage_item_ids={StageItemId(group_a), StageItemId(group_b)},
             )
+            assert query_count == 5
+            query_count = 0
+            both = await get_full_tournament_details(
+                session,
+                TournamentId(flow.id),
+                stage_item_ids={StageItemId(group_a), StageItemId(group_b)},
+                with_team_totals=True,
+            )
         finally:
-            event.remove(conn.sync_connection, "before_cursor_execute", count_queries)
-        assert query_count <= 2
+            event.remove(connection, "before_cursor_execute", count_queries)
+        assert query_count <= 6
         assert len(both) == 1
         assert [item.id for item in both[0].stage_items] == [group_a, group_b]
         round_id = (await flow.stage_item(group_a))["rounds"][0]["id"]
         filtered_results = [
             both,
-            await get_full_tournament_details(conn, TournamentId(flow.id), stage_id=StageId(stage)),
             await get_full_tournament_details(
-                conn, TournamentId(flow.id), round_id=RoundId(round_id)
+                session, TournamentId(flow.id), stage_id=StageId(stage), with_team_totals=True
             ),
             await get_full_tournament_details(
-                conn,
+                session, TournamentId(flow.id), round_id=RoundId(round_id), with_team_totals=True
+            ),
+            await get_full_tournament_details(
+                session,
                 TournamentId(flow.id),
                 stage_item_ids={StageItemId(group_a)},
                 no_draft_rounds=True,
+                with_team_totals=True,
             ),
         ]
         for stages in filtered_results:

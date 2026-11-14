@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import * as OpenApi from '../../openapi';
 import { updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
-import { isEmptySlot } from '../utils';
+import { isBracket, isEmptySlot } from '../utils';
 
 type StageItemInput =
   | OpenApi.StageItemInputTentative
@@ -59,6 +59,24 @@ export function StageItemSlots({
   tournamentId: number;
 }) {
   const filled = stageItem.inputs.filter((input) => !isEmptySlot(input)).length;
+  const slot = (input: StageItemInput) => (
+    <SlotSelect
+      input={input}
+      key={input.id}
+      options={options}
+      stageItemId={stageItem.id}
+      stageItemsById={stageItemsById}
+      teamLookup={teamLookup}
+      tournamentId={tournamentId}
+    />
+  );
+  // The first round of a bracket pairs the slots in order: slot 1 plays slot 2, slot 3 plays slot
+  // 4, and so on. Seeding a bracket from groups needs to know that.
+  const firstRound = isBracket(stageItem)
+    ? Array.from({ length: Math.ceil(stageItem.inputs.length / 2) }, (_, index) =>
+        stageItem.inputs.slice(2 * index, 2 * index + 2),
+      )
+    : null;
 
   return (
     <details
@@ -72,25 +90,40 @@ export function StageItemSlots({
         </span>
       </summary>
       <div className="collapse-content grid gap-3 md:grid-cols-2">
-        {stageItem.inputs.map((input) => (
-          <SlotSelect
-            input={input}
-            key={input.id}
-            options={options}
-            stageItemId={stageItem.id}
-            stageItemsById={stageItemsById}
-            teamLookup={teamLookup}
-            tournamentId={tournamentId}
-          />
-        ))}
+        {firstRound
+          ? firstRound.map((pair, index) => (
+              <fieldset
+                className="space-y-2 rounded-box border border-base-300 p-3"
+                key={pair[0].id}
+              >
+                <legend className="px-1 text-sm font-semibold">
+                  Match {index + 1} of the first round
+                </legend>
+                {pair.map(slot)}
+              </fieldset>
+            ))
+          : stageItem.inputs.map(slot)}
         {nextStageEntries ? (
           <div className="rounded-box border border-base-300 bg-base-100/50 p-4 md:col-span-2">
             <p className="text-sm text-base-content/70">Teams moving in when this stage starts</p>
             <div className="mt-3 space-y-2 text-sm">
               {nextStageEntries.map((entry) => (
-                <div className="flex items-center justify-between" key={entry.stage_item_input.id}>
-                  <span>{entry.team.name}</span>
-                  <span className="text-base-content/70">slot {entry.stage_item_input.slot}</span>
+                <div
+                  className="flex items-start justify-between gap-3"
+                  key={entry.stage_item_input.id}
+                >
+                  <span>
+                    {entry.team.name}
+                    {entry.tied_team ? (
+                      <span className="block text-warning">
+                        Level with {entry.tied_team.name} on every criterion: only seeding puts{' '}
+                        {entry.team.name} ahead.
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-base-content/70">
+                    slot {entry.stage_item_input.slot}
+                  </span>
                 </div>
               ))}
             </div>

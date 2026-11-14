@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { matchSorter } from 'match-sorter';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -13,6 +14,7 @@ import {
   nextMatch,
   pointsPhrase,
   sortTeamsByName,
+  stageItemName,
   stageItemStandings,
   teamLogoUrl,
 } from '../utils';
@@ -32,6 +34,7 @@ function playerNames(team: OpenApi.FullTeamWithPlayers) {
 }
 
 export function TeamDirectorySection({ teams }: { teams: OpenApi.FullTeamWithPlayers[] }) {
+  const { t } = useTranslation();
   const { myTeamId, publicPath } = useTournamentContext();
   const [query, setQuery] = useState('');
   // Players often know their own name better than their team's, so both are searched.
@@ -42,23 +45,29 @@ export function TeamDirectorySection({ teams }: { teams: OpenApi.FullTeamWithPla
   return (
     <Surface>
       <SurfaceHeading
-        actions={<span className="text-sm text-base-content/70">{teams.length} teams</span>}
-        title="Teams"
+        actions={
+          <span className="text-sm text-base-content/70">
+            {t('common.teamCount', { count: teams.length })}
+          </span>
+        }
+        title={t('tournament.teams')}
       />
       {teams.length === 0 ? (
-        <p className="text-sm text-base-content/70">No teams have signed up yet.</p>
+        <p className="text-sm text-base-content/70">{t('teams.noneYet')}</p>
       ) : (
         <input
-          aria-label="Search teams and players"
+          aria-label={t('teams.search')}
           className="input w-full sm:max-w-md"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by team or player name"
+          placeholder={t('teams.searchPlaceholder')}
           type="search"
           value={query}
         />
       )}
       {teams.length > 0 && shown.length === 0 ? (
-        <p className="text-sm text-base-content/70">No team or player matches “{query.trim()}”.</p>
+        <p className="text-sm text-base-content/70">
+          {t('teams.noMatch', { query: query.trim() })}
+        </p>
       ) : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {shown.map((team) => (
@@ -73,11 +82,13 @@ export function TeamDirectorySection({ teams }: { teams: OpenApi.FullTeamWithPla
                 {team.name}
               </h3>
               {team.id === myTeamId ? (
-                <span className="badge badge-soft badge-accent badge-sm">Your team</span>
+                <span className="badge badge-soft badge-accent badge-sm">
+                  {t('common.yourTeam')}
+                </span>
               ) : null}
             </div>
             <p className="mt-1 text-sm text-base-content/70">
-              {playerNames(team) || 'No players listed'}
+              {playerNames(team) || t('teams.noPlayers')}
             </p>
           </Link>
         ))}
@@ -97,6 +108,7 @@ export function TeamDetailSection({
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   teamId: number | null;
 }) {
+  const { t } = useTranslation();
   const { myTeamId, publicPath, setMyTeamId } = useTournamentContext();
   const team = bundle.teams.find((candidate) => candidate.id === teamId);
 
@@ -105,11 +117,11 @@ export function TeamDetailSection({
       <EmptyState
         action={
           <Link className="btn btn-soft btn-sm" to={`${publicPath}/teams`}>
-            See all teams
+            {t('teams.allTeams')}
           </Link>
         }
-        text="This team isn't part of the tournament, or it has been removed."
-        title="Team not found"
+        text={t('teams.notFoundText')}
+        title={t('teams.notFoundTitle')}
       />
     );
   }
@@ -140,7 +152,7 @@ export function TeamDetailSection({
         to={`${publicPath}/teams`}
       >
         <span aria-hidden="true">←</span>
-        All teams
+        {t('teams.allTeams')}
       </Link>
 
       <Surface className={isMine ? 'border-accent/40' : undefined}>
@@ -150,22 +162,24 @@ export function TeamDetailSection({
               <TeamLogo className="size-12" team={team} />
               {team.name}
             </h2>
-            {isMine ? <span className="badge badge-soft badge-accent">Your team</span> : null}
+            {isMine ? (
+              <span className="badge badge-soft badge-accent">{t('common.yourTeam')}</span>
+            ) : null}
           </div>
           <button
             className={isMine ? 'btn btn-ghost btn-sm' : 'btn btn-soft btn-sm'}
             onClick={() => setMyTeamId(isMine ? null : team.id)}
             type="button"
           >
-            {isMine ? 'This is not my team' : 'This is my team'}
+            {isMine ? t('teams.notMine') : t('teams.mine')}
           </button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           <section className="space-y-2">
-            <SectionLabel>Players</SectionLabel>
+            <SectionLabel>{t('teams.players')}</SectionLabel>
             {team.players.length === 0 ? (
-              <p className="text-sm text-base-content/70">No players listed.</p>
+              <p className="text-sm text-base-content/70">{t('teams.noPlayers')}</p>
             ) : (
               <ul className="grid gap-1 sm:grid-cols-2">
                 {team.players.map((player) => (
@@ -176,14 +190,15 @@ export function TeamDetailSection({
           </section>
           {placements.length > 0 ? (
             <section className="space-y-2">
-              <SectionLabel>Standing</SectionLabel>
+              <SectionLabel>{t('teams.standing')}</SectionLabel>
               <ul className="space-y-1 text-sm">
                 {placements.map(({ entry, position, size, stageItem }) => (
                   <li key={stageItem.id}>
                     <Link className="link font-medium" to={stageItemPath(publicPath, stageItem)}>
-                      {stageItem.name || stageItem.type_name}
+                      {stageItemName(stageItem, t)}
                     </Link>
-                    : #{position} of {size} · {pointsPhrase(stageItem, entry.standing.points)}
+                    : {t('teams.place', { position, size })} ·{' '}
+                    {pointsPhrase(stageItem, entry.standing.points, t)}
                   </li>
                 ))}
               </ul>
@@ -193,13 +208,15 @@ export function TeamDetailSection({
       </Surface>
 
       <Surface>
-        <SurfaceHeading title="Matches" />
+        <SurfaceHeading title={t('teams.matches')} />
         {teamMatches.length === 0 ? (
-          <p className="text-sm text-base-content/70">{team.name} has no matches yet.</p>
+          <p className="text-sm text-base-content/70">
+            {t('teams.noMatches', { team: team.name })}
+          </p>
         ) : null}
         {comingUp.length > 0 ? (
           <section className="space-y-3">
-            <SectionLabel>Coming up</SectionLabel>
+            <SectionLabel>{t('teams.comingUp')}</SectionLabel>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {comingUp.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />
@@ -209,7 +226,7 @@ export function TeamDetailSection({
         ) : null}
         {played.length > 0 ? (
           <section className="space-y-3">
-            <SectionLabel>Results</SectionLabel>
+            <SectionLabel>{t('teams.results')}</SectionLabel>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {played.map((entry) => (
                 <MatchCard entry={entry} key={entry.match.id} stageItemsById={stageItemsById} />

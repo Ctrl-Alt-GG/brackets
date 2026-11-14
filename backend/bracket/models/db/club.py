@@ -34,6 +34,11 @@ class ClubMember(BaseModelORM):
     relation: UserXClubRelation
 
 
+class ClubOwnerUpdateBody(BaseModelORM):
+    # One of the event's organizers.
+    user_id: UserId
+
+
 class ClubMemberCreateBody(BaseModelORM):
     email: EmailStr
 

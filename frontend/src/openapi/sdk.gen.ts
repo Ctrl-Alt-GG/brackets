@@ -156,6 +156,9 @@ import type {
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostData,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostErrors,
   ScheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostResponses,
+  TransferOwnershipApiClubsClubIdOwnerPutData,
+  TransferOwnershipApiClubsClubIdOwnerPutErrors,
+  TransferOwnershipApiClubsClubIdOwnerPutResponses,
   UpdateClubApiClubsClubIdPutData,
   UpdateClubApiClubsClubIdPutErrors,
   UpdateClubApiClubsClubIdPutResponses,
@@ -439,6 +442,41 @@ export const removeMemberApiClubsClubIdMembersUserIdDelete = <ThrowOnError exten
   });
 
 /**
+ * Transfer Ownership
+ *
+ * Hand the event over to another of its organizers, for an owner who leaves the organizing
+ * team. The previous owner stays on as an organizer.
+ */
+export const transferOwnershipApiClubsClubIdOwnerPut = <ThrowOnError extends boolean = false>(
+  options: Options<TransferOwnershipApiClubsClubIdOwnerPutData, ThrowOnError>,
+): RequestResult<
+  TransferOwnershipApiClubsClubIdOwnerPutResponses,
+  TransferOwnershipApiClubsClubIdOwnerPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    TransferOwnershipApiClubsClubIdOwnerPutResponses,
+    TransferOwnershipApiClubsClubIdOwnerPutErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/clubs/{club_id}/owner',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Logout
  *
  * Ends the session: its cookie is removed from this browser, and its tokens stop working, also
@@ -499,6 +537,11 @@ export const loginForAccessTokenApiTokenPost = <ThrowOnError extends boolean = f
 
 /**
  * Get Tournaments
+ *
+ * The tournaments that everyone may see, and for an organizer also those of their events, with
+ * whether the one who asks can manage each.
+ *
+ * With `endpoint_name`, only the tournament whose Details link that is.
  */
 export const getTournamentsApiTournamentsGet = <ThrowOnError extends boolean = false>(
   options?: Options<GetTournamentsApiTournamentsGetData, ThrowOnError>,
@@ -989,7 +1032,8 @@ export const updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPut = <
  * Get the teams that take the slots of the next stage once it is activated.
  *
  * A slot that can't be decided yet is left out: its source ranks fewer teams than the position
- * the slot takes.
+ * the slot takes. `tied_team` names a team that is level on every criterion with the one that
+ * gets the slot, which only seeding put behind it.
  */
 export const getNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet = <
   ThrowOnError extends boolean = false,
@@ -1391,6 +1435,10 @@ export const deleteRoundApiTournamentsTournamentIdRoundsRoundIdDelete = <
 
 /**
  * Update Round By Id
+ *
+ * Rename a round, or publish or withdraw a draft. Only Swiss rounds can be drafts: the rounds of
+ * the other formats are published with their stage item, and a withdrawn one couldn't be
+ * published again.
  */
 export const updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPut = <
   ThrowOnError extends boolean = false,

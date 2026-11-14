@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.match import (
     MatchCreateBody,
@@ -38,7 +38,7 @@ def get_round_robin_combinations(team_count: int) -> list[list[tuple[int, int]]]
 
 
 async def build_round_robin_stage_item(
-    conn: AsyncConnection, tournament_id: TournamentId, stage_item: StageItemWithRounds
+    conn: AsyncSession, tournament_id: TournamentId, stage_item: StageItemWithRounds
 ) -> None:
     matches = get_round_robin_combinations(stage_item.team_count)
     tournament = await sql_get_tournament(conn, tournament_id)

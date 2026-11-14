@@ -1,9 +1,11 @@
 import type { AxiosError } from 'axios';
 import { clsx, type ClassValue } from 'clsx';
-import { format, isThisYear, isToday, isValid, parseISO } from 'date-fns';
+import { format, isSameDay, isSameYear, isValid, parseISO } from 'date-fns';
+import type { TFunction } from 'i18next';
 import { twMerge } from 'tailwind-merge';
 
 import * as OpenApi from '../openapi';
+import { serverNow } from './clock';
 import type { FlattenedMatch } from './types';
 
 export function cx(...values: ClassValue[]) {
@@ -46,8 +48,7 @@ export function teamLogoUrl(team: Pick<OpenApi.Team, 'id' | 'logo_path' | 'tourn
 
 /** The login page, which brings the organizer back to `from` once they are signed in. */
 export function loginPath(from: string) {
-  const isWorthReturningTo =
-    from !== '/' && !/^\/(login|create-account|password-reset)\b/.test(from);
+  const isWorthReturningTo = from !== '/' && !/^\/(login|create-account)\b/.test(from);
   return isWorthReturningTo ? `/login?next=${encodeURIComponent(from)}` : '/login';
 }
 
@@ -110,20 +111,19 @@ export function formatTime(date: Date) {
   return TIME_FORMAT.format(date);
 }
 
-export function formatDateTime(value: string | null) {
-  if (!value) return 'Not scheduled yet';
-
+export function formatDateTime(value: string) {
   const date = parseISO(value);
   if (!isValid(date)) return value;
-  const day = (isThisYear(date) ? DATE_FORMAT : DATE_WITH_YEAR_FORMAT).format(date);
+  const day = (isSameYear(date, serverNow()) ? DATE_FORMAT : DATE_WITH_YEAR_FORMAT).format(date);
   return `${day}, ${formatTime(date)}`;
 }
 
 /** Like `formatDateTime`, but an event mostly runs on one day, so today's matches show the time. */
-export function formatMatchTime(value: string | null) {
-  const date = value ? parseISO(value) : null;
-  if (!date || !isValid(date) || !isToday(date)) return formatDateTime(value);
-  return `Today, ${formatTime(date)}`;
+export function formatMatchTime(value: string | null, t: TFunction) {
+  if (!value) return t('time.notScheduled');
+  const date = parseISO(value);
+  if (!isValid(date) || !isSameDay(date, serverNow())) return formatDateTime(value);
+  return t('time.today', { time: formatTime(date) });
 }
 
 /** The value of a `datetime-local` input for an ISO timestamp, in the viewer's time zone. */
@@ -148,15 +148,19 @@ export function publicTournamentPath(tournament: OpenApi.Tournament) {
 
 export type TournamentPhase = 'finished' | 'running' | 'upcoming';
 
-// How long after its last match a tournament still counts as running. Swiss rounds are drawn one
-// at a time, so between two of them every match has a result for a while.
+// How long after its last match a tournament still counts as running.
 const FINISHED_AFTER_MS = 3 * 60 * 60 * 1000;
 
 /**
  * Archiving a tournament is the organizer's call and easily forgotten, so a tournament whose
- * matches all have a result is finished too, a few hours after the last one.
+ * matches all have a result is finished too, a few hours after the last one. Not while a Swiss
+ * stage is active or still to come: its rounds are drawn one at a time, so between two of them,
+ * or overnight at an event of several days, every published match has a result.
  */
-export function tournamentPhase(tournament: OpenApi.Tournament, now = Date.now()): TournamentPhase {
+export function tournamentPhase(
+  tournament: OpenApi.Tournament,
+  now = serverNow(),
+): TournamentPhase {
   if (tournament.status !== 'OPEN') return 'finished';
   if (new Date(tournament.start_time).getTime() > now) return 'upcoming';
 
@@ -165,21 +169,22 @@ export function tournamentPhase(tournament: OpenApi.Tournament, now = Date.now()
   const lastMatchEnd = tournament.last_match_end
     ? new Date(tournament.last_match_end).getTime()
     : null;
-  if (allPlayed && lastMatchEnd != null && now - lastMatchEnd > FINISHED_AFTER_MS) {
+  if (
+    allPlayed &&
+    !tournament.more_rounds_possible &&
+    lastMatchEnd != null &&
+    now - lastMatchEnd > FINISHED_AFTER_MS
+  ) {
     return 'finished';
   }
   return 'running';
 }
 
-export const TOURNAMENT_PHASE_LABELS: Record<TournamentPhase, string> = {
-  finished: 'Finished',
-  running: 'Running',
-  upcoming: 'Upcoming',
-};
-
-export function tournamentDateLabel(tournament: OpenApi.Tournament) {
+export function tournamentDateLabel(tournament: OpenApi.Tournament, t: TFunction) {
   const date = formatDateTime(tournament.start_time);
-  return tournamentPhase(tournament) === 'upcoming' ? `Starts ${date}` : `Started ${date}`;
+  return tournamentPhase(tournament) === 'upcoming'
+    ? t('time.starts', { date })
+    : t('time.started', { date });
 }
 
 // Mirrors the backend: open tournaments are always public, archived ones only with this setting,
@@ -213,6 +218,19 @@ export function involvesTeam(
 
 export function isBracket(stageItem: OpenApi.StageItemWithRounds) {
   return stageItem.type === 'SINGLE_ELIMINATION';
+}
+
+/** "Round robin", "Swiss" and so on, in the language of the page. */
+export function stageTypeName(stageItem: Pick<OpenApi.StageItemWithRounds, 'type'>, t: TFunction) {
+  return t(`stageType.${stageItem.type}`);
+}
+
+/** The name the organizers gave the stage item, or else its format. */
+export function stageItemName(
+  stageItem: Pick<OpenApi.StageItemWithRounds, 'name' | 'type'>,
+  t: TFunction,
+) {
+  return stageItem.name || stageTypeName(stageItem, t);
 }
 
 /** Whether the Bracket page draws the stage item: its knockout bracket, or its Swiss rounds. */
@@ -250,8 +268,8 @@ export function stageItemStandings(
 }
 
 /** Swiss stage items rank teams by an ELO rating instead of points. */
-export function pointsLabel(stageItem: OpenApi.StageItemWithRounds) {
-  return stageItem.type === 'SWISS' ? 'Rating' : 'Points';
+export function pointsLabel(stageItem: OpenApi.StageItemWithRounds, t: TFunction) {
+  return stageItem.type === 'SWISS' ? t('points.rating') : t('points.points');
 }
 
 export function formatPoints(points: string) {
@@ -267,24 +285,26 @@ export function formatScoreDifference(standing: OpenApi.StageItemInputStanding) 
 }
 
 /** For running text, such as "2.5 points" or "rating 1216". */
-export function pointsPhrase(stageItem: OpenApi.StageItemWithRounds, points: string) {
-  if (stageItem.type === 'SWISS') return `rating ${formatPoints(points)}`;
-  return `${formatPoints(points)} ${Number(points) === 1 ? 'point' : 'points'}`;
+export function pointsPhrase(stageItem: OpenApi.StageItemWithRounds, points: string, t: TFunction) {
+  const value = formatPoints(points);
+  if (stageItem.type === 'SWISS') return t('points.ratingPhrase', { value });
+  return t('points.phrase', { count: Number(points), value });
 }
 
+/** Who plays in a slot: the team, the place of an earlier stage item it takes, or undecided. */
 export function inputLabel(
   input: StageItemInput | null,
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>,
+  t: TFunction,
 ) {
-  if (!input) return 'TBD';
   if (hasTeam(input)) return input.team.name;
-  if (input.winner_from_stage_item_id != null) {
-    const stageItem = stageItemsById.get(input.winner_from_stage_item_id);
-    const sourceName = stageItem?.name || stageItem?.type_name;
-    return sourceName ? `${sourceName} #${input.winner_position}` : 'TBD';
-  }
-
-  return 'TBD';
+  const source =
+    input?.winner_from_stage_item_id != null
+      ? stageItemsById.get(input.winner_from_stage_item_id)
+      : undefined;
+  return source && input?.winner_position != null
+    ? t('common.place', { position: input.winner_position, source: stageItemName(source, t) })
+    : t('common.undecided');
 }
 
 /** Whether the match has a result. An unplayed match reads 0-0, so the API says which it is. */
@@ -312,7 +332,7 @@ export type MatchStatus = 'awaiting' | 'finished' | 'live' | 'scheduled' | 'wait
  */
 export function matchStatus(
   match: OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive,
-  now = Date.now(),
+  now = serverNow(),
 ): MatchStatus {
   if (isScored(match)) return 'finished';
   // A slot that takes "Group A #1" has no team until that group is decided, so its match can't
@@ -332,30 +352,31 @@ export function isInProgress(status: MatchStatus) {
   return status === 'live' || status === 'awaiting';
 }
 
-export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
-  awaiting: 'Awaiting result',
-  finished: 'Finished',
-  live: 'Playing now',
-  scheduled: 'Scheduled',
-  waiting: 'Waiting for teams',
-};
+// How long a Swiss stage whose matches all have a result still counts as happening after its
+// latest round was drawn: the time a round takes, and the break before the next one.
+const SWISS_ROUND_RECENT_MS = 3 * 60 * 60 * 1000;
 
 /**
- * Only activating another stage changes `is_active`, so the last stage stays active after its
- * final match and after the tournament is archived.
+ * Whether the stage is being played: it has matches without a result. Only activating another
+ * stage changes `is_active`, so the last stage stays active after its final match and after the
+ * tournament is archived. Swiss rounds are drawn one at a time, so between two of them every match
+ * has a result: a Swiss stage also counts while its latest round is recent.
  */
 export function isStageHappeningNow(
   stage: OpenApi.StageWithStageItems,
   tournament: OpenApi.Tournament,
+  now = serverNow(),
 ) {
   if (tournament.status !== 'OPEN' || !stage.is_active) return false;
   return stage.stage_items.some(
     (stageItem) =>
-      // Swiss rounds are drawn one at a time, so a Swiss stage can always get another round.
-      stageItem.type === 'SWISS' ||
       stageItem.rounds.some(
         (round) => !round.is_draft && round.matches.some((match) => !isScored(match)),
-      ),
+      ) ||
+      (stageItem.type === 'SWISS' &&
+        stageItem.rounds.some(
+          (round) => now - new Date(round.created).getTime() < SWISS_ROUND_RECENT_MS,
+        )),
   );
 }
 

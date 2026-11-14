@@ -22,17 +22,19 @@ def validate_dashboard_endpoint(value: str | None) -> str | None:
     A tournament's custom Details link, or `None` without one.
 
     It is a segment of the page's URL, so only URL-safe characters are allowed. It also needs a
-    letter: the frontend reads a link of only digits as a tournament id.
+    letter: the frontend reads a link of only digits as a tournament id. It is stored in lowercase
+    and looked up in any case, so a link typed with other capitals still works, and two links
+    can't differ only by case.
     """
     if value is None or not value.strip():
         return None
 
-    value = value.strip()
+    value = value.strip().lower()
     if len(value) > DASHBOARD_ENDPOINT_MAX_LENGTH:
         raise ValueError(
             f"The Details link can be at most {DASHBOARD_ENDPOINT_MAX_LENGTH} characters long"
         )
-    if not re.fullmatch(r"[A-Za-z0-9_-]*[A-Za-z][A-Za-z0-9_-]*", value):
+    if not re.fullmatch(r"[a-z0-9_-]*[a-z][a-z0-9_-]*", value):
         raise ValueError(
             'Use only letters, numbers, "-" and "_" in the Details link, with at least one letter'
         )

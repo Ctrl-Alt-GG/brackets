@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import type { FlattenedMatch } from '../types';
@@ -19,13 +20,14 @@ export function MatchScoreEditor({
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   tournamentId: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Suspense fallback={<span className="loading loading-spinner loading-sm" />}>
       <ScoreForm
         allowsDraw={!isBracket(entry.stageItem)}
         key={`${entry.match.id}:${inputTeamId(entry.match.stage_item_input1)}:${inputTeamId(entry.match.stage_item_input2)}`}
-        label1={inputLabel(entry.match.stage_item_input1, stageItemsById)}
-        label2={inputLabel(entry.match.stage_item_input2, stageItemsById)}
+        label1={inputLabel(entry.match.stage_item_input1, stageItemsById, t)}
+        label2={inputLabel(entry.match.stage_item_input2, stageItemsById, t)}
         match={entry.match}
         tournamentId={tournamentId}
       />

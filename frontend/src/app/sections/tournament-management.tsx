@@ -1,8 +1,11 @@
 import { useSavedForm } from '../saved-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
+import { QRCodeSVG } from 'qrcode.react';
+import { useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
+import { toast } from 'sonner';
 
 import * as OpenApi from '../../openapi';
 import {
@@ -32,6 +35,7 @@ import {
 } from '../../openapi/zod.gen';
 import { LogoField } from '../components/logo-field';
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
+import { confirm } from '../confirm';
 import { StageItemRounds, stageItemStatus } from './stage-item-rounds';
 import { StageItemSlots } from './stage-item-slots';
 import { StageItemVisualization } from './tournament-overview';
@@ -187,8 +191,16 @@ function RankingEditor({
           <button
             className="btn btn-error btn-soft"
             disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete ranking #${ranking.position}?`)) remove.mutate({ path });
+            onClick={async () => {
+              if (
+                await confirm({
+                  confirmLabel: 'Delete ranking',
+                  destructive: true,
+                  message: `Delete ranking #${ranking.position}?`,
+                })
+              ) {
+                remove.mutate({ path });
+              }
             }}
             type="button"
           >
@@ -279,14 +291,15 @@ function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament
 
   return (
     <form
-      onSubmit={form.handleSubmit((body) => {
+      onSubmit={form.handleSubmit(async (body) => {
         // The link is on posters and in chats by now, and nothing redirects the old one.
         if (
           sharedLink != null &&
           sharedLink !== normalizeDashboardEndpoint(body.dashboard_endpoint) &&
-          !window.confirm(
-            `Links and QR codes with "${sharedLink}" will stop working. Change the Details link?`,
-          )
+          !(await confirm({
+            confirmLabel: 'Change the Details link',
+            message: `Links and QR codes with "${sharedLink}" will stop working. Change the Details link?`,
+          }))
         ) {
           return;
         }
@@ -356,11 +369,67 @@ function TournamentSettingsForm({ tournament }: { tournament: OpenApi.Tournament
   );
 }
 
+/** The Details link in full, to copy into a chat or print as a QR code at the venue. */
+function DetailsLink({ tournament }: { tournament: OpenApi.Tournament }) {
+  const detailsUrl = new URL(publicTournamentPath(tournament), window.location.origin).href;
+  const qrCode = useRef<SVGSVGElement>(null);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(detailsUrl);
+      toast.success('Link copied.');
+    } catch {
+      toast.error("The link couldn't be copied. Select it and copy it yourself.");
+    }
+  };
+
+  // An SVG file, which prints sharp at any size.
+  const download = () => {
+    if (!qrCode.current) return;
+    const svg = new XMLSerializer().serializeToString(qrCode.current);
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const link = document.createElement('a');
+    link.download = `${tournament.name} - Details.svg`;
+    link.href = url;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-base-content/80">Share this link with players:</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link className="link break-all text-sm" to={publicTournamentPath(tournament)}>
+          {detailsUrl}
+        </Link>
+        <button className="btn btn-soft btn-sm" onClick={() => void copy()} type="button">
+          Copy link
+        </button>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Dark on light with a margin around it, as phone cameras read QR codes best. */}
+        <QRCodeSVG
+          bgColor="#ffffff"
+          className="rounded-box"
+          fgColor="#000000"
+          marginSize={2}
+          ref={qrCode}
+          size={160}
+          title={`QR code of ${detailsUrl}`}
+          value={detailsUrl}
+        />
+        <button className="btn btn-ghost btn-sm" onClick={download} type="button">
+          Download QR code
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsSection({ bundle }: { bundle: TournamentBundle }) {
   const navigate = useNavigate();
   const tournament = bundle.tournament;
   const isOpen = tournament.status === 'OPEN';
-  const detailsPath = publicTournamentPath(tournament);
   const path = { tournament_id: tournament.id };
   const changeStatus = useMutation({
     ...changeStatusApiTournamentsTournamentIdChangeStatusPostMutation(),
@@ -397,9 +466,21 @@ export function SettingsSection({ bundle }: { bundle: TournamentBundle }) {
           <button
             className="btn btn-soft"
             disabled={changeStatus.isPending}
-            onClick={() =>
-              changeStatus.mutate({ body: { status: isOpen ? 'ARCHIVED' : 'OPEN' }, path })
-            }
+            onClick={async () => {
+              // Archiving during an event by mistake would take the tournament away from players.
+              if (
+                isOpen &&
+                !(await confirm({
+                  confirmLabel: 'Archive tournament',
+                  message: tournament.dashboard_public
+                    ? `Archive ${tournament.name}? It can't be changed until it is reopened. Players can still follow it on its Details page.`
+                    : `Archive ${tournament.name}? Players can no longer see it, because its Details page isn't enabled, and it can't be changed until it is reopened.`,
+                }))
+              ) {
+                return;
+              }
+              changeStatus.mutate({ body: { status: isOpen ? 'ARCHIVED' : 'OPEN' }, path });
+            }}
             type="button"
           >
             {isOpen ? 'Archive tournament' : 'Reopen tournament'}
@@ -409,12 +490,7 @@ export function SettingsSection({ bundle }: { bundle: TournamentBundle }) {
         <section className="space-y-2 border-t border-base-300 pt-5">
           <h3 className="text-sm font-medium">Details page</h3>
           {tournament.dashboard_public ? (
-            <p className="text-sm text-base-content/80">
-              Share this link with players:{' '}
-              <Link className="link break-all" to={detailsPath}>
-                {detailsPath}
-              </Link>
-            </p>
+            <DetailsLink tournament={tournament} />
           ) : (
             <p className="text-sm text-base-content/70">
               Turn on “Details page enabled” to share a link to it, and to keep it visible after the
@@ -431,8 +507,14 @@ export function SettingsSection({ bundle }: { bundle: TournamentBundle }) {
           <button
             className="btn btn-error"
             disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete ${tournament.name}? This cannot be undone.`)) {
+            onClick={async () => {
+              if (
+                await confirm({
+                  confirmLabel: 'Delete tournament',
+                  destructive: true,
+                  message: `Delete ${tournament.name}? This cannot be undone.`,
+                })
+              ) {
                 remove.mutate({ path });
               }
             }}
@@ -496,8 +578,16 @@ function StageForm({
       <button
         className="btn btn-error btn-soft mb-1"
         disabled={remove.isPending}
-        onClick={() => {
-          if (window.confirm(`Delete stage ${stage.name}?`)) remove.mutate({ path });
+        onClick={async () => {
+          if (
+            await confirm({
+              confirmLabel: 'Delete stage',
+              destructive: true,
+              message: `Delete stage ${stage.name}?`,
+            })
+          ) {
+            remove.mutate({ path });
+          }
         }}
         type="button"
       >
@@ -507,7 +597,24 @@ function StageForm({
   );
 }
 
+// A bracket halves every round, so it starts from a power of two.
 const SINGLE_ELIMINATION_TEAM_COUNTS = [2, 4, 8, 16, 32];
+
+const newStageItemSchema = zStageItemCreateBody.refine(
+  (body) =>
+    body.type !== 'SINGLE_ELIMINATION' || SINGLE_ELIMINATION_TEAM_COUNTS.includes(body.team_count),
+  {
+    message: `A single elimination bracket has ${SINGLE_ELIMINATION_TEAM_COUNTS.join(', ')} teams`,
+    path: ['team_count'],
+  },
+);
+
+/** The bracket size closest to the number of teams the organizer had in mind. */
+function nearestBracketSize(teamCount: number) {
+  return SINGLE_ELIMINATION_TEAM_COUNTS.reduce((nearest, count) =>
+    Math.abs(count - teamCount) < Math.abs(nearest - teamCount) ? count : nearest,
+  );
+}
 
 function NewStageItemForm({
   rankings,
@@ -526,7 +633,7 @@ function NewStageItemForm({
       team_count: 8,
       type: 'ROUND_ROBIN' as const,
     },
-    resolver: zodResolver(zStageItemCreateBody),
+    resolver: zodResolver(newStageItemSchema),
   });
   const create = useMutation({
     ...createStageItemApiTournamentsTournamentIdStageItemsPostMutation(),
@@ -551,7 +658,19 @@ function NewStageItemForm({
         <input className="input w-full" placeholder="Upper bracket" {...form.register('name')} />
       </Field>
       <Field label="Type">
-        <select className="select w-full" {...form.register('type')}>
+        <select
+          className="select w-full"
+          {...form.register('type', {
+            // The bracket's sizes are the only choices then, so the count becomes one of them.
+            onChange: (event: { target: { value: string } }) => {
+              if (event.target.value === 'SINGLE_ELIMINATION') {
+                form.setValue('team_count', nearestBracketSize(form.getValues('team_count')), {
+                  shouldValidate: true,
+                });
+              }
+            },
+          })}
+        >
           <option value="ROUND_ROBIN">Round robin</option>
           <option value="SINGLE_ELIMINATION">Single elimination</option>
           <option value="SWISS">Swiss</option>
@@ -559,7 +678,6 @@ function NewStageItemForm({
       </Field>
       <Field error={form.formState.errors.team_count?.message} label="Team count">
         {type === 'SINGLE_ELIMINATION' ? (
-          // A bracket halves every round, so it starts from a power of two.
           <select
             className="select w-full"
             {...form.register('team_count', { valueAsNumber: true })}
@@ -647,15 +765,17 @@ function StageItemNameForm({
       <button
         className="btn btn-error btn-soft"
         disabled={remove.isPending}
-        onClick={() => {
+        onClick={async () => {
           const fed = fedStageItems.map((item) => item.name || item.type_name).join(', ');
           const consequence = fed
             ? ` The slots of ${fed} that take a team from it become open.`
             : '';
           if (
-            window.confirm(
-              `Delete stage item ${stageItem.name || stageItem.type_name} with its matches and results?${consequence}`,
-            )
+            await confirm({
+              confirmLabel: 'Delete stage item',
+              destructive: true,
+              message: `Delete stage item ${stageItem.name || stageItem.type_name} with its matches and results?${consequence}`,
+            })
           ) {
             remove.mutate({ path });
           }
@@ -694,35 +814,64 @@ export function StagesSection({
     meta: { successMessage: 'Moved active stage backward.' },
   });
 
-  const activeStage = bundle.stages.find((stage) => stage.is_active);
+  // Stages come in the order they were added, which is the order they are played in.
+  const activeIndex = bundle.stages.findIndex((stage) => stage.is_active);
+  const activeStage = activeIndex >= 0 ? bundle.stages[activeIndex] : undefined;
+  // Before the first stage is activated, "next" starts it, and there is nothing to go back to.
+  const hasNextStage = activeIndex < bundle.stages.length - 1;
+  const hasPreviousStage = activeIndex > 0;
   const activeMatches = (activeStage?.stage_items ?? []).flatMap((stageItem) =>
     stageItem.rounds.flatMap((round) => round.matches),
   );
   const results = activeMatches.filter(isScored).length;
   const withoutResult = activeMatches.length - results;
+  // Places that only seeding decided, because the teams are level on every criterion.
+  const seedingDecides = Object.values(bundle.nextStageRankings)
+    .flat()
+    .flatMap((entry) => (entry.tied_team ? [{ team: entry.team, tiedTeam: entry.tied_team }] : []));
 
-  const goForward = () => {
-    // Teams move on by the standings as they are, which an unplayed match would still change.
+  const goForward = async () => {
+    const reasons = [
+      // Teams move on by the standings as they are, which an unplayed match would still change.
+      ...(activeStage != null && withoutResult > 0
+        ? [
+            `${withoutResult} ${withoutResult === 1 ? 'match' : 'matches'} of ${activeStage.name} ${withoutResult === 1 ? 'has' : 'have'} no result yet. Teams move on by the standings as they are now.`,
+          ]
+        : []),
+      ...seedingDecides.map(
+        ({ team, tiedTeam }) =>
+          `${team.name} and ${tiedTeam.name} are level on every criterion: only seeding puts ${team.name} ahead.`,
+      ),
+    ];
     if (
-      activeStage != null &&
-      withoutResult > 0 &&
-      !window.confirm(
-        `${withoutResult} ${withoutResult === 1 ? 'match' : 'matches'} of ${activeStage.name} ${withoutResult === 1 ? 'has' : 'have'} no result yet. Teams move on by the standings as they are now. Activate the next stage anyway?`,
-      )
+      reasons.length > 0 &&
+      !(await confirm({
+        confirmLabel: 'Activate next stage',
+        message: (
+          <>
+            {reasons.map((reason) => (
+              <p key={reason}>{reason}</p>
+            ))}
+            <p>Activate the next stage anyway?</p>
+          </>
+        ),
+      }))
     ) {
       return;
     }
     activateNext.mutate({ body: { direction: 'next', discard_results: false }, path });
   };
 
-  const goBack = () => {
+  const goBack = async () => {
     // Going back releases the teams that advanced, and their results in this stage with them.
     if (
       activeStage != null &&
       results > 0 &&
-      !window.confirm(
-        `Going back discards the ${results} ${results === 1 ? 'result' : 'results'} of ${activeStage.name}. This cannot be undone. Go back to the previous stage?`,
-      )
+      !(await confirm({
+        confirmLabel: 'Go back',
+        destructive: true,
+        message: `Going back discards the ${results} ${results === 1 ? 'result' : 'results'} of ${activeStage.name}. This cannot be undone. Go back to the previous stage?`,
+      }))
     ) {
       return;
     }
@@ -748,16 +897,16 @@ export function StagesSection({
               </button>
               <button
                 className="btn btn-soft btn-sm"
-                disabled={activateNext.isPending}
-                onClick={goForward}
+                disabled={!hasNextStage || activateNext.isPending}
+                onClick={() => void goForward()}
                 type="button"
               >
                 Activate next stage
               </button>
               <button
                 className="btn btn-ghost btn-sm"
-                disabled={activatePrevious.isPending}
-                onClick={goBack}
+                disabled={!hasPreviousStage || activatePrevious.isPending}
+                onClick={() => void goBack()}
                 type="button"
               >
                 Activate previous stage

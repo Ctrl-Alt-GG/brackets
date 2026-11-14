@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -28,6 +29,7 @@ function TimeSlots({
   /** Set for organizers, who enter the results on the matches. */
   tournamentId?: number;
 }) {
+  const { t } = useTranslation();
   const slots = groupBy(entries, (entry) => entry.match.start_time ?? '');
 
   return (
@@ -35,7 +37,7 @@ function TimeSlots({
       {[...slots.entries()].slice(0, maxSlots).map(([startTime, slotEntries]) => (
         <section className="space-y-3" key={startTime || 'unscheduled'}>
           <h3 className={cx('font-display font-semibold', size === 'lg' ? 'text-3xl' : 'text-xl')}>
-            {formatMatchTime(startTime || null)}
+            {formatMatchTime(startTime || null, t)}
           </h3>
           <div
             className={cx(
@@ -133,6 +135,7 @@ export function ScheduleSection({
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   tournamentId: number;
 }) {
+  const { t } = useTranslation();
   const recalculate = useMutation({
     ...scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation(),
     meta: { successMessage: 'Match times recalculated.' },
@@ -158,11 +161,11 @@ export function ScheduleSection({
               </button>
             ) : null}
             <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
-              Big screen
+              {t('common.bigScreen')}
             </Link>
           </div>
         }
-        title="Schedule"
+        title={t('tournament.schedule')}
       />
       {canManage ? (
         <>
@@ -176,9 +179,9 @@ export function ScheduleSection({
         </>
       ) : null}
       {matches.length === 0 ? (
-        <p className="text-sm text-base-content/70">No matches have been scheduled yet.</p>
+        <p className="text-sm text-base-content/70">{t('schedule.noneScheduled')}</p>
       ) : upcoming.length === 0 ? (
-        <p className="text-sm text-base-content/70">All matches are finished.</p>
+        <p className="text-sm text-base-content/70">{t('schedule.allFinished')}</p>
       ) : (
         <TimeSlots entries={upcoming} stageItemsById={stageItemsById} tournamentId={editable} />
       )}
@@ -188,7 +191,7 @@ export function ScheduleSection({
           open={upcoming.length === 0}
         >
           <summary className="collapse-title font-semibold">
-            Finished matches ({finished.length})
+            {t('schedule.finishedMatches', { count: finished.length })}
           </summary>
           <div className="collapse-content">
             <TimeSlots entries={finished} stageItemsById={stageItemsById} tournamentId={editable} />
@@ -207,13 +210,14 @@ export function BigScreenSchedule({
   matches: FlattenedMatch[];
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
 }) {
+  const { t } = useTranslation();
   const upcoming = matches.filter(({ match }) => matchStatus(match) !== 'finished');
 
   return (
     <Surface>
-      <SurfaceHeading title="Now and next" />
+      <SurfaceHeading title={t('tournament.nowAndNext')} />
       {upcoming.length === 0 ? (
-        <p className="text-lg text-base-content/80">All matches are finished.</p>
+        <p className="text-lg text-base-content/80">{t('schedule.allFinished')}</p>
       ) : (
         <TimeSlots entries={upcoming} maxSlots={2} size="lg" stageItemsById={stageItemsById} />
       )}

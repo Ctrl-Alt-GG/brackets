@@ -197,18 +197,36 @@ importers:
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
+      dequal:
+        specifier: ^2.0.3
+        version: 2.0.3
+      i18next:
+        specifier: ^27.1.1
+        version: 27.1.1(@typescript/typescript6@6.0.2)
+      i18next-browser-languagedetector:
+        specifier: ^8.3.0
+        version: 8.3.0
       match-sorter:
         specifier: ^8.3.1
         version: 8.3.1
+      qrcode.react:
+        specifier: ^4.2.0
+        version: 4.2.0(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
+      react-confirm:
+        specifier: ^0.5.0
+        version: 0.5.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
       react-hook-form:
         specifier: ^7.92.0
         version: 7.92.0(@types/react@19.3.0)(react@19.3.1)
+      react-i18next:
+        specifier: ^18.0.1
+        version: 18.0.1(@types/react@19.3.0)(@typescript/typescript6@6.0.2)(i18next@27.1.1(@typescript/typescript6@6.0.2))(react@19.3.1)
       react-router:
         specifier: 8.5.1
         version: 8.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1216,6 +1234,10 @@ packages:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
 
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
+
   destr@2.0.5:
     resolution: {integrity: sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA==}
 
@@ -1339,6 +1361,9 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
+  html-parse-stringify@4.0.1:
+    resolution: {integrity: sha512-0zHsZJrK7S3K2aucXWL6ycoYJ/iNtIcFHC/nYQgFklPtrv5LpJctIiSCroWZWeuoXvuyFdzp6KzjJQ+OT5MfFw==}
+
   https-proxy-agent@5.0.1:
     resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
     engines: {node: '>= 6'}
@@ -1346,8 +1371,20 @@ packages:
   i18next-browser-languagedetector@6.1.8:
     resolution: {integrity: sha512-Svm+MduCElO0Meqpj1kJAriTC6OhI41VhlT/A0UPjGoPZBhAHIaGE5EfsHlTpgdH09UVX7rcc72pSDDBeKSQQA==}
 
+  i18next-browser-languagedetector@8.3.0:
+    resolution: {integrity: sha512-t7FtF+VyQ+XSy+GI1O9TXWsMzP4U2u0m27yxJcCbG4LaAbTQa3CXFXgG3LvRivS+ZoYah8yPv5NhMl+Wg6I8Fg==}
+
   i18next@21.10.0:
     resolution: {integrity: sha512-YeuIBmFsGjUfO3qBmMOc0rQaun4mIpGKET5WDwvu8lU7gvwpcariZLNtL0Fzj+zazcHUrlXHiptcFhBMFaxzfg==}
+
+  i18next@27.1.1:
+    resolution: {integrity: sha512-Qq3aJizS3RXQ30crhx9BKQLrHoa6GKpgrOJjVZ9vgj3EBxAddrmVfDNUrAMxSUimw5Jc+ld4SSZUAzf1q4nGyQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
@@ -1599,8 +1636,19 @@ packages:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
     engines: {node: '>=10'}
 
+  qrcode.react@4.2.0:
+    resolution: {integrity: sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   rc9@3.0.1:
     resolution: {integrity: sha512-gMDyleLWVE+i6Sgtc0QbbY6pEKqYs97NGi6isHQPqYlLemPoO8dxQ3uGi0f4NiP98c+jMW6cG1Kx9dDwfvqARQ==}
+
+  react-confirm@0.5.0:
+    resolution: {integrity: sha512-pCGpMrgA1/ERlLnGeUiUnURk2hq4k1mep7QDOLibUNITTkJzcKj6tvGRZk3FnQ06GiGtUffMJmBioqewNVO2Ag==}
+    peerDependencies:
+      react: '>=18.x'
+      react-dom: '>=18.x'
 
   react-dom@19.3.1:
     resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
@@ -1615,6 +1663,20 @@ packages:
       react: ^16.8.0 || ^17 || ^18 || ^19
     peerDependenciesMeta:
       '@types/react':
+        optional: true
+
+  react-i18next@18.0.1:
+    resolution: {integrity: sha512-kPWXI0E/lrPj3+/umcKNzYZVnWmEedLiamMzDIHfbs+5ANf6yzvlZsjKou8f7kaGkfMMDLIZBejV+4aSN1CyBw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@types/react': '*'
+      i18next: '>= 27.0.1'
+      react: '>= 18.0.0'
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      typescript:
         optional: true
 
   react-router@8.5.1:
@@ -2479,6 +2541,8 @@ snapshots:
 
   delayed-stream@1.0.0: {}
 
+  dequal@2.0.3: {}
+
   destr@2.0.5: {}
 
   detect-libc@2.1.2: {}
@@ -2590,6 +2654,8 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  html-parse-stringify@4.0.1: {}
+
   https-proxy-agent@5.0.1:
     dependencies:
       agent-base: 6.0.2
@@ -2601,9 +2667,17 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.7
 
+  i18next-browser-languagedetector@8.3.0:
+    dependencies:
+      '@babel/runtime': 7.29.7
+
   i18next@21.10.0:
     dependencies:
       '@babel/runtime': 7.29.7
+
+  i18next@27.1.1(@typescript/typescript6@6.0.2):
+    optionalDependencies:
+      typescript: '@typescript/typescript6@6.0.2'
 
   inherits@2.0.4: {}
 
@@ -2822,10 +2896,19 @@ snapshots:
 
   proxy-from-env@2.1.0: {}
 
+  qrcode.react@4.2.0(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+
   rc9@3.0.1:
     dependencies:
       defu: 6.1.7
       destr: 2.0.5
+
+  react-confirm@0.5.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   react-dom@19.3.1(react@19.3.1):
     dependencies:
@@ -2837,6 +2920,15 @@ snapshots:
       react: 19.3.1
     optionalDependencies:
       '@types/react': 19.3.0
+
+  react-i18next@18.0.1(@types/react@19.3.0)(@typescript/typescript6@6.0.2)(i18next@27.1.1(@typescript/typescript6@6.0.2))(react@19.3.1):
+    dependencies:
+      html-parse-stringify: 4.0.1
+      i18next: 27.1.1(@typescript/typescript6@6.0.2)
+      react: 19.3.1
+    optionalDependencies:
+      '@types/react': 19.3.0
+      typescript: '@typescript/typescript6@6.0.2'
 
   react-router@8.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:

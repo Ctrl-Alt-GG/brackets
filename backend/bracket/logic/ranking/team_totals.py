@@ -2,41 +2,58 @@ import math
 from collections import defaultdict
 from decimal import Decimal
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
+from bracket import orm
 from bracket.logic.ranking.statistics import START_ELO, D, K, TeamTotals
 from bracket.utils.id_types import TeamId, TournamentId
 
 
 async def get_team_totals(
-    conn: AsyncConnection, tournament_id: TournamentId
+    conn: AsyncSession, tournament_id: TournamentId
 ) -> dict[TeamId, TeamTotals]:
     """Replay published results in schedule order, including corrections and deletions.
 
     Read the small match projection directly so team totals can also enrich embedded teams in
     stage responses without recursing through the full stage loader.
     """
+    input1, input2 = aliased(orm.StageItemInput), aliased(orm.StageItemInput)
     rows = await conn.execute(
-        text(
-            """
-            SELECT i1.team_id AS team1, i2.team_id AS team2,
-                   m.stage_item_input1_score AS score1, m.stage_item_input2_score AS score2
-            FROM matches m
-            JOIN rounds r ON r.id = m.round_id
-            JOIN stage_items si ON si.id = r.stage_item_id
-            JOIN stages s ON s.id = si.stage_id
-            JOIN stage_item_inputs i1 ON i1.id = m.stage_item_input1_id AND i1.stage_item_id = si.id
-            JOIN stage_item_inputs i2 ON i2.id = m.stage_item_input2_id AND i2.stage_item_id = si.id
-            WHERE s.tournament_id = :tournament_id AND r.is_draft IS FALSE
-              AND i1.team_id IS NOT NULL AND i2.team_id IS NOT NULL
-              AND i1.team_id <> i2.team_id
-              AND (m.stage_item_input1_score <> 0 OR m.stage_item_input2_score <> 0
-                   OR m.scoreless_result)
-            ORDER BY m.start_time NULLS LAST, r.id, m.id
-            """
-        ),
-        {"tournament_id": tournament_id},
+        select(
+            input1.team_id.label("team1"),
+            input2.team_id.label("team2"),
+            orm.Match.stage_item_input1_score.label("score1"),
+            orm.Match.stage_item_input2_score.label("score2"),
+        )
+        .select_from(orm.Match)
+        .join(orm.Round, orm.Round.id == orm.Match.round_id)
+        .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
+        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
+        .join(
+            input1,
+            (input1.id == orm.Match.stage_item_input1_id)
+            & (input1.stage_item_id == orm.StageItem.id),
+        )
+        .join(
+            input2,
+            (input2.id == orm.Match.stage_item_input2_id)
+            & (input2.stage_item_id == orm.StageItem.id),
+        )
+        .where(
+            orm.Stage.tournament_id == tournament_id,
+            orm.Round.is_draft.is_(False),
+            input1.team_id.is_not(None),
+            input2.team_id.is_not(None),
+            input1.team_id != input2.team_id,
+            or_(
+                orm.Match.stage_item_input1_score != 0,
+                orm.Match.stage_item_input2_score != 0,
+                orm.Match.scoreless_result,
+            ),
+        )
+        .order_by(orm.Match.start_time.asc().nulls_last(), orm.Round.id, orm.Match.id)
     )
     totals: defaultdict[TeamId, TeamTotals] = defaultdict(TeamTotals)
     ratings: defaultdict[TeamId, float] = defaultdict(lambda: float(START_ELO))

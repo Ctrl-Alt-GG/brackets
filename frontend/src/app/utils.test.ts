@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type * as OpenApi from '../openapi';
+import { serverNow, syncClock } from './clock';
 import type { FlattenedMatch } from './types';
 import {
   getErrorMessage,
   groupBy,
   isInProgress,
+  isStageHappeningNow,
   loginPath,
   matchStatus,
   matchWinner,
@@ -61,6 +63,7 @@ function tournament(overrides: Partial<OpenApi.Tournament> = {}) {
     logo_path: null,
     matches_played: 0,
     matches_total: 0,
+    more_rounds_possible: false,
     start_time: START,
     status: 'OPEN',
     ...overrides,
@@ -160,6 +163,61 @@ describe('tournamentPhase', () => {
 
   it('is finished once it is archived', () => {
     expect(tournamentPhase(tournament({ status: 'ARCHIVED' }), at(-HOUR))).toBe('finished');
+  });
+
+  it('stays running while a Swiss stage can still get rounds, also overnight', () => {
+    const betweenSwissRounds = tournament({
+      last_match_end: '2026-06-06T16:00:00Z',
+      matches_played: 6,
+      matches_total: 6,
+      more_rounds_possible: true,
+    });
+
+    expect(tournamentPhase(betweenSwissRounds, at(20 * HOUR))).toBe('running');
+  });
+});
+
+function swissStage(roundCreated: string, played: boolean) {
+  return {
+    is_active: true,
+    stage_items: [
+      {
+        rounds: [{ created: roundCreated, is_draft: false, matches: [{ played }] }],
+        type: 'SWISS',
+      },
+    ],
+  } as unknown as OpenApi.StageWithStageItems;
+}
+
+describe('isStageHappeningNow', () => {
+  it('is happening while matches are waiting for a result', () => {
+    expect(isStageHappeningNow(swissStage(START, false), tournament(), at(30 * HOUR))).toBe(true);
+  });
+
+  it('lasts a while after the latest Swiss round, which the next one follows', () => {
+    const done = swissStage(START, true);
+
+    expect(isStageHappeningNow(done, tournament(), at(HOUR))).toBe(true);
+    expect(isStageHappeningNow(done, tournament(), at(30 * HOUR))).toBe(false);
+  });
+});
+
+describe('serverNow', () => {
+  it("follows the server's clock rather than the device's", () => {
+    const deviceNow = Date.now();
+    // The server is ten minutes ahead. Its header has whole seconds.
+    syncClock(new Date(deviceNow + 10 * 60_000).toUTCString(), deviceNow);
+
+    expect(Math.abs(serverNow() - (Date.now() + 10 * 60_000))).toBeLessThan(1_500);
+
+    syncClock(new Date(deviceNow).toUTCString(), deviceNow);
+  });
+
+  it('keeps the last offset when an answer has no date', () => {
+    const before = serverNow();
+    syncClock(undefined);
+
+    expect(Math.abs(serverNow() - before)).toBeLessThan(1_500);
   });
 });
 

@@ -1,4 +1,6 @@
-import { useEffect, useEffectEvent, useId, useMemo, useRef } from 'react';
+import type { TFunction } from 'i18next';
+import { useEffect, useEffectEvent, useId, useMemo, useRef, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import 'brackets-viewer/dist/brackets-viewer.min.js';
 import 'brackets-viewer/dist/brackets-viewer.min.css';
@@ -7,6 +9,31 @@ import './bracket-viewer-canvas.css';
 import { roundLabel, type BracketViewerData } from '../bracket-adapter';
 
 const PARTICIPANT_SELECTOR = '.participant[data-participant-id]';
+
+/**
+ * The labels brackets-viewer writes itself: above every match, and for a slot of the first round
+ * that is still open. It translates them with an i18next of its own, which follows the browser's
+ * language rather than the page's, and falls back to its English. Its English, and its French,
+ * the only other language it has, get the page's labels, so they show whatever it detects.
+ */
+function viewerLabels(t: TFunction) {
+  // The viewer fills in its own placeholders, such as {{matchNumber}}.
+  const raw = { skipInterpolation: true } as const;
+  return {
+    abbreviations: {
+      forfeit: t('viewer.forfeit', raw),
+      loss: t('viewer.loss', raw),
+      win: t('viewer.win', raw),
+    },
+    common: { bye: t('viewer.bye', raw) },
+    'match-label': {
+      default: t('viewer.match', raw),
+      'standard-bracket-final': t('viewer.final', raw),
+      'standard-bracket-semi-final': t('viewer.semiFinal', raw),
+    },
+    'origin-hint': { seed: t('viewer.seed', raw) },
+  };
+}
 
 /**
  * `teamParticipants` maps the participants that are known teams to their team id. brackets-viewer
@@ -21,6 +48,7 @@ export function BracketViewerCanvas({
   onTeamClick?: (teamId: number) => void;
   teamParticipants?: ReadonlyMap<number, number>;
 }) {
+  const { t } = useTranslation();
   const containerId = `bracket-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -56,26 +84,34 @@ export function BracketViewerCanvas({
     const container = containerRef.current;
     if (!viewer || !container) return;
 
-    void viewer
-      .render(JSON.parse(serialized) as BracketViewerData, {
-        clear: true,
-        customRoundName: roundLabel,
-        // Only team names can be clicked, so nothing else reacts to the pointer.
-        highlightParticipantOnHover: false,
-        selector: `#${containerId}`,
-        // The library would rank by 3 points a win, but the Standings page has the real ranking,
-        // such as the rating in Swiss.
-        showRankingTable: false,
-      })
+    const labels = viewerLabels(t);
+    void Promise.all([viewer.addLocale('en', labels), viewer.addLocale('fr', labels)])
+      .then(() =>
+        viewer.render(JSON.parse(serialized) as BracketViewerData, {
+          clear: true,
+          customRoundName: (info) => roundLabel(info, t),
+          // Only team names can be clicked, so nothing else reacts to the pointer.
+          highlightParticipantOnHover: false,
+          selector: `#${containerId}`,
+          // The library would rank by 3 points a win, but the Standings page has the real
+          // ranking, such as the rating in Swiss.
+          showRankingTable: false,
+        }),
+      )
       .then(() => markTeams(container));
 
     return () => {
       container.innerHTML = '';
     };
-  }, [containerId, serialized]);
+    // `t` changes with the language, which the labels follow.
+  }, [containerId, serialized, t]);
 
   return (
-    <div className="cag-bracket overflow-x-auto pb-2">
+    <div
+      className="cag-bracket overflow-x-auto pb-2"
+      // A CSS string, for the label of an undecided slot.
+      style={{ '--undecided-label': JSON.stringify(t('common.undecided')) } as CSSProperties}
+    >
       {/* The library draws the bracket in here. The team names in it are the links; this only
           listens for them. */}
       <div

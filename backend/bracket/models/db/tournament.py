@@ -36,6 +36,14 @@ class Tournament(TournamentInsertable):
     matches_total: int = 0
     matches_played: int = 0
     last_match_end: datetime_utc | None = None
+    # A Swiss stage is active or still to come. Its rounds are drawn one at a time, so more
+    # matches can follow even when every published one has a result.
+    more_rounds_possible: bool = False
+
+
+class TournamentWithAccess(Tournament):
+    # Whether whoever asked can manage the tournament, or only follow it.
+    can_manage: bool
 
 
 class TournamentUpdateBody(BaseModelORM):

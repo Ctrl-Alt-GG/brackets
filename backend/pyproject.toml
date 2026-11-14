@@ -162,6 +162,14 @@ select = [
 ]
 ignore = ["FIX002", "TD002", "TD003", "TC001", "TC002", "TC003", "ISC001"]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlalchemy.text".msg = "Use the ORM (bracket.orm). Raw SQL belongs only in Alembic migrations."
+"sqlalchemy.sql.text".msg = "Use the ORM (bracket.orm). Raw SQL belongs only in Alembic migrations."
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/**" = ["TID251"]
+"tests/integration_tests/index_lookup_test.py" = ["TID251"]
+
 [tool.vulture]
 min_confidence = 0
 paths = ["."]

@@ -2,7 +2,7 @@ from typing import NamedTuple
 
 from fastapi import HTTPException
 from heliclockter import datetime_utc, timedelta
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.logic.planning.conflicts import handle_conflicts
@@ -75,15 +75,23 @@ def plan_match_timings(
     return timings
 
 
-async def schedule_all_matches(conn: AsyncConnection, tournament_id: TournamentId) -> None:
+async def schedule_all_matches(
+    conn: AsyncSession,
+    tournament_id: TournamentId,
+    *,
+    stages: list[StageWithStageItems] | None = None,
+    tournament: Tournament | None = None,
+) -> None:
     """
     Update the start time of every match whose planned time has changed.
 
     Call this whenever rounds or matches are added or removed, or when the tournament's start
     time or any match duration or margin changes.
     """
-    tournament = await sql_get_tournament(conn, tournament_id)
-    stages = await get_full_tournament_details(conn, tournament_id)
+    if tournament is None:
+        tournament = await sql_get_tournament(conn, tournament_id)
+    if stages is None:
+        stages = await get_full_tournament_details(conn, tournament_id)
     matches = {
         match.id: match
         for stage in stages
@@ -104,7 +112,11 @@ async def schedule_all_matches(conn: AsyncConnection, tournament_id: TournamentI
     ]
     if changed_timings:
         await sql_update_match_timings(conn, changed_timings)
-        stages = await get_full_tournament_details(conn, tournament_id)
+        for timing in changed_timings:
+            match = matches[timing.match_id]
+            match.start_time = timing.start_time
+            match.duration_minutes = timing.duration_minutes
+            match.margin_minutes = timing.margin_minutes
     # Adding/removing competitors can change conflicts even when every time stays the same.
     await handle_conflicts(conn, stages)
 
@@ -200,7 +212,7 @@ def plan_schedule_delay(stages: list[StageWithStageItems]) -> ScheduleDelay | No
 
 
 async def delay_upcoming_matches(
-    conn: AsyncConnection, tournament_id: TournamentId, minutes: int
+    conn: AsyncSession, tournament_id: TournamentId, minutes: int
 ) -> None:
     """Move the rounds that are still to be played, for an event that runs late (or early)."""
     tournament = await sql_get_tournament(conn, tournament_id)

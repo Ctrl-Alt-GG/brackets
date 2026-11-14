@@ -13,7 +13,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
 from bracket.database import engine
-from bracket.schema import metadata
+from bracket.orm import Base
 
 ALEMBIC_CONFIG = context.config
 logger = logging.getLogger("alembic")
@@ -21,14 +21,14 @@ logger = logging.getLogger("alembic")
 
 def run_migrations_offline() -> None:
     url = ALEMBIC_CONFIG.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=metadata, compare_type=True)
+    context.configure(url=url, target_metadata=Base.metadata, compare_type=True)
 
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=metadata, compare_type=True)
+    context.configure(connection=connection, target_metadata=Base.metadata, compare_type=True)
 
     with context.begin_transaction():
         context.run_migrations()

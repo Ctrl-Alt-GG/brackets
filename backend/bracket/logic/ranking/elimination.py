@@ -1,6 +1,6 @@
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.models.db.match import Match
+from bracket.models.db.match import Match, MatchWithDetails, MatchWithDetailsDefinitive
 from bracket.models.db.stage_item_inputs import StageItemInput
 from bracket.models.db.util import StageItemWithRounds
 from bracket.sql.matches import (
@@ -16,7 +16,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
     current_round_id: RoundId,
     stage_item: StageItemWithRounds,
     match_ids: set[MatchId] | None = None,
-) -> dict[MatchId, Match]:
+) -> dict[MatchId, MatchWithDetailsDefinitive | MatchWithDetails]:
     """
     Determine the updates of stage item input IDs in the elimination tree.
 
@@ -36,7 +36,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
         for match in current_round.matches
         if match_ids is None or match.id in match_ids
     }
-    updates: dict[MatchId, Match] = {}
+    updates: dict[MatchId, MatchWithDetailsDefinitive | MatchWithDetails] = {}
 
     for round_ in rounds:
         if round_.id <= current_round.id:
@@ -82,7 +82,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
 
 
 async def update_inputs_in_subsequent_elimination_rounds(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     current_round_id: RoundId,
     stage_item: StageItemWithRounds,
     match_ids: set[MatchId] | None = None,
@@ -98,10 +98,13 @@ async def update_inputs_in_subsequent_elimination_rounds(
             [match.stage_item_input1_id, match.stage_item_input2_id],
             reset_result=True,
         )
+    # Callers can continue using the same tree for rankings, scheduling and conflict checks.
+    for round_ in stage_item.rounds:
+        round_.matches = [updates.get(match.id, match) for match in round_.matches]
 
 
 async def update_inputs_in_complete_elimination_stage_item(
-    conn: AsyncConnection,
+    conn: AsyncSession,
     stage_item: StageItemWithRounds,
 ) -> None:
     """Work out every slot of the bracket again, starting from the results of the first round."""

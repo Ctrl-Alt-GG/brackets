@@ -10,7 +10,7 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputOptionTentative,
 )
 from bracket.models.db.team import FullTeamWithPlayers, Team
-from bracket.models.db.tournament import Tournament
+from bracket.models.db.tournament import Tournament, TournamentWithAccess
 from bracket.models.db.tournament_details import (
     StageItemInputStanding,
     TournamentAccess,
@@ -46,7 +46,7 @@ class TournamentResponse(DataResponse[Tournament]):
     pass
 
 
-class TournamentsResponse(DataResponse[list[Tournament]]):
+class TournamentsResponse(DataResponse[list[TournamentWithAccess]]):
     pass
 
 
@@ -102,7 +102,6 @@ class TokenResponse(DataResponse[Token]):
 
 class AuthFeatureFlags(BaseModel):
     user_registration_enabled: bool
-    password_reset_enabled: bool = False
 
 
 class AuthFeatureFlagsResponse(DataResponse[AuthFeatureFlags]):

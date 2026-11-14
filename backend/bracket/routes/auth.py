@@ -12,15 +12,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import APIKeyCookie, OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from heliclockter import datetime_utc, timedelta
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
+from bracket import orm
 from bracket.config import Environment, config, environment
-from bracket.database import DbConnection
-from bracket.models.db.tournament import Tournament, TournamentStatus
+from bracket.database import DbSession
+from bracket.models.db.tournament import TournamentStatus
 from bracket.models.db.user import UserInDB, UserPublic
-from bracket.schema import tournaments
-from bracket.sql.tournaments import sql_get_tournament_by_endpoint_name
 from bracket.sql.users import (
     get_user,
     get_user_access_to_club,
@@ -29,16 +29,16 @@ from bracket.sql.users import (
     revoke_session,
     update_user_password,
 )
-from bracket.utils.db import fetch_one_parsed
 from bracket.utils.id_types import ClubId, TournamentId, UserId
 from bracket.utils.rate_limit import (
     enforce_account_lockout,
+    enforce_visitor_read_limit,
     get_account_lockout_key,
     limiter,
     record_account_failure,
     reset_account_failures,
 )
-from bracket.utils.security import hash_password, normalize_email, verify_password
+from bracket.utils.security import hash_password, normalize_email, verify_password_in_thread
 from bracket.utils.types import assert_some
 
 router = APIRouter(prefix=config.api_prefix)
@@ -154,19 +154,17 @@ def get_auth_hash(password_hash: str) -> str:
     return hmac.new(config.jwt_secret.encode(), password_hash.encode(), hashlib.sha256).hexdigest()
 
 
-async def authenticate_user(conn: AsyncConnection, email: str, password: str) -> UserInDB | None:
+async def authenticate_user(conn: AsyncSession, email: str, password: str) -> UserInDB | None:
     try:
         normalized_email = normalize_email(email)
     except ValueError:
         return None
 
     user = await get_user(conn, normalized_email)
-    if user is None:
-        verify_password(password, DUMMY_PASSWORD_HASH)
-        return None
-
-    is_valid, updated_hash = verify_password(password, user.password_hash)
-    if not is_valid:
+    is_valid, updated_hash = await verify_password_in_thread(
+        password, user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    )
+    if user is None or not is_valid:
         return None
 
     if updated_hash is not None:
@@ -267,7 +265,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
 
 
 async def check_jwt_and_get_user(
-    conn: AsyncConnection, credentials: Credentials | None, response: Response | None = None
+    conn: AsyncSession, credentials: Credentials | None, response: Response | None = None
 ) -> UserPublic | None:
     """
     The user the credentials belong to, or `None` when they aren't valid (any more).
@@ -295,7 +293,7 @@ async def check_jwt_and_get_user(
 
 
 async def user_authenticated(
-    conn: DbConnection,
+    conn: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic:
@@ -308,7 +306,7 @@ async def user_authenticated(
 
 async def user_authenticated_for_tournament(
     tournament_id: TournamentId,
-    conn: DbConnection,
+    conn: DbSession,
     response: Response,
     request: Request,
     credentials: Credentials | None = Depends(get_credentials),
@@ -324,7 +322,7 @@ async def user_authenticated_for_tournament(
         # Competitor checks and score writes must share a lock: otherwise a score could be
         # recorded between checking that a slot is unused and assigning its replacement.
         locked = await conn.execute(
-            tournaments.select().where(tournaments.c.id == tournament_id).with_for_update()
+            select(orm.Tournament.id).where(orm.Tournament.id == tournament_id).with_for_update()
         )
         if locked.first() is None:
             raise forbidden("This tournament is no longer available")
@@ -334,7 +332,7 @@ async def user_authenticated_for_tournament(
 
 async def user_authenticated_for_club(
     club_id: ClubId,
-    conn: DbConnection,
+    conn: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic:
@@ -349,7 +347,7 @@ async def user_authenticated_for_club(
 
 async def user_authenticated_or_public_dashboard(
     tournament_id: TournamentId,
-    conn: DbConnection,
+    conn: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic | None:
@@ -360,9 +358,7 @@ async def user_authenticated_or_public_dashboard(
     if user is not None and await get_user_access_to_tournament(conn, tournament_id, user.id):
         return user
 
-    tournament = await fetch_one_parsed(
-        conn, Tournament, tournaments.select().where(tournaments.c.id == tournament_id)
-    )
+    tournament = await conn.get(orm.Tournament, tournament_id)
     if tournament is not None and (
         tournament.dashboard_public or tournament.status is TournamentStatus.OPEN
     ):
@@ -373,21 +369,33 @@ async def user_authenticated_or_public_dashboard(
     raise unauthorized("Could not validate credentials or page is not publicly available")
 
 
-async def user_authenticated_or_public_dashboard_by_endpoint_name(
-    conn: DbConnection,
+async def user_authenticated_or_rate_limited_visitor(
+    request: Request,
+    user: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+) -> UserPublic | None:
+    """
+    `user_authenticated_or_public_dashboard` for answers that take a lot of work, such as replaying
+    every match. The Details pages never ask for them, so a visitor who does is rate limited. The
+    tournament's organizers are not.
+    """
+    if user is None:
+        enforce_visitor_read_limit(request)
+    return user
+
+
+async def user_authenticated_or_visitor(
+    conn: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
-    endpoint_name: str | None = None,
 ) -> UserPublic | None:
-    if endpoint_name is not None:
-        if await sql_get_tournament_by_endpoint_name(conn, endpoint_name) is None:
-            raise unauthorized()
-        return None
+    """
+    The signed-in user, or `None` for a visitor.
 
-    if credentials is None:
-        return None
-
-    return await user_authenticated(conn, response, credentials)
+    Credentials that are no longer valid count as a visitor's. A browser keeps sending the cookie
+    of a session that ended elsewhere (a password change, for example) until it expires, and
+    pages that anyone may see must keep working for it meanwhile.
+    """
+    return await check_jwt_and_get_user(conn, credentials, response)
 
 
 @router.post("/token", response_model=Token, dependencies=[Depends(reject_cross_site_request)])
@@ -395,7 +403,7 @@ async def user_authenticated_or_public_dashboard_by_endpoint_name(
 async def login_for_access_token(
     request: Request,
     response: Response,
-    conn: DbConnection,
+    conn: DbSession,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
     try:
@@ -432,7 +440,7 @@ async def login_for_access_token(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     response: Response,
-    conn: DbConnection,
+    conn: DbSession,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> None:
     """

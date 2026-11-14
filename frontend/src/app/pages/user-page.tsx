@@ -1,7 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
+import { z } from 'zod';
 
 import * as OpenApi from '../../openapi';
 import {
@@ -13,6 +15,7 @@ import { zUserPasswordToUpdate, zUserToUpdate } from '../../openapi/zod.gen';
 import { useSession } from '../hooks';
 import { useSavedForm } from '../saved-form';
 import {
+  CheckboxField,
   EmptyState,
   ErrorState,
   Field,
@@ -81,41 +84,71 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
   );
 }
 
+// A typo in a new password would lock the organizer out, and the site sends no email to reset it,
+// so the new password is typed twice. The repetition is only checked here, never sent.
+const passwordSchema = zUserPasswordToUpdate
+  .extend({ repeated_password: z.string() })
+  .refine((values) => values.password === values.repeated_password, {
+    message: "The two new passwords aren't the same",
+    path: ['repeated_password'],
+  });
+
 function PasswordForm({ userId }: { userId: number }) {
+  const [showPasswords, setShowPasswords] = useState(false);
   const form = useForm({
-    defaultValues: { current_password: '', password: '' },
-    resolver: zodResolver(zUserPasswordToUpdate),
+    defaultValues: { current_password: '', password: '', repeated_password: '' },
+    resolver: zodResolver(passwordSchema),
   });
   const update = useMutation({
     ...putUserPasswordApiUsersUserIdPasswordPutMutation(),
     meta: { successMessage: 'Password updated.' },
   });
+  const { errors } = form.formState;
+  const type = showPasswords ? 'text' : 'password';
 
   return (
     <form
-      onSubmit={form.handleSubmit((body) =>
-        update.mutate({ body, path: { user_id: userId } }, { onSuccess: () => form.reset() }),
+      onSubmit={form.handleSubmit(({ current_password, password }) =>
+        update.mutate(
+          { body: { current_password, password }, path: { user_id: userId } },
+          { onSuccess: () => form.reset() },
+        ),
       )}
     >
-      <Field error={form.formState.errors.current_password?.message} label="Current password">
+      <Field error={errors.current_password?.message} label="Current password">
         <input
           autoComplete="current-password"
           className="input w-full"
           required
-          type="password"
+          type={type}
           {...form.register('current_password')}
         />
       </Field>
-      <Field error={form.formState.errors.password?.message} label="New password">
+      <Field error={errors.password?.message} label="New password">
         <input
           autoComplete="new-password"
           className="input w-full"
           placeholder="At least twelve characters"
           required
-          type="password"
+          type={type}
           {...form.register('password')}
         />
       </Field>
+      <Field error={errors.repeated_password?.message} label="Repeat the new password">
+        <input
+          autoComplete="new-password"
+          className="input w-full"
+          required
+          type={type}
+          {...form.register('repeated_password')}
+        />
+      </Field>
+      <CheckboxField
+        checked={showPasswords}
+        className="mt-3"
+        label="Show the passwords"
+        onChange={(event) => setShowPasswords(event.target.checked)}
+      />
       <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
         {update.isPending ? 'Updating…' : 'Update password'}
       </button>

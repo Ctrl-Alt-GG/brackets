@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.models.db.match import Match, MatchCreateBody
@@ -65,7 +65,7 @@ def determine_matches_subsequent_round(
 
 
 async def build_single_elimination_stage_item(
-    conn: AsyncConnection, tournament_id: TournamentId, stage_item: StageItemWithRounds
+    conn: AsyncSession, tournament_id: TournamentId, stage_item: StageItemWithRounds
 ) -> None:
     rounds = await get_rounds_for_stage_item(conn, tournament_id, stage_item.id)
     tournament = await sql_get_tournament(conn, tournament_id)

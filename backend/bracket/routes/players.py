@@ -2,16 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from bracket.config import config
-from bracket.database import DbConnection
-from bracket.logic.ranking.players import get_players_with_statistics
+from bracket.database import DbSession
+from bracket.logic.ranking.players import (
+    get_player_statistics,
+    get_players_with_statistics,
+    with_statistics,
+)
 from bracket.logic.ranking.statistics import PlayerStatistics
 from bracket.logic.subscriptions import check_requirement
-from bracket.models.db.player import Player, PlayerBody, PlayerMultiBody
+from bracket.models.db.player import PlayerBody, PlayerMultiBody
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
 from bracket.routes.auth import (
     user_authenticated_for_tournament,
-    user_authenticated_or_public_dashboard,
+    user_authenticated_or_rate_limited_visitor,
 )
 from bracket.routes.models import (
     PaginatedPlayers,
@@ -20,12 +24,12 @@ from bracket.routes.models import (
     SuccessResponse,
 )
 from bracket.routes.util import disallow_archived_tournament
-from bracket.schema import players
 from bracket.sql.players import (
     get_all_players_in_tournament,
     get_player_count,
     insert_player,
     sql_delete_player,
+    sql_update_player,
 )
 from bracket.utils.id_types import PlayerId, TournamentId
 from bracket.utils.pagination import PaginationPlayers
@@ -35,11 +39,11 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/players", response_model=PlayersResponse)
 async def get_players(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     not_in_team: bool = False,
     pagination: PaginationPlayers = Depends(),
-    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
+    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> PlayersResponse:
     if pagination.sort_by in PlayerStatistics.model_fields:
         # The statistics are worked out here, not stored, so sorting by them happens here too.
@@ -64,33 +68,27 @@ async def get_players(
 
 @router.put("/tournaments/{tournament_id}/players/{player_id}", response_model=SinglePlayerResponse)
 async def update_player_by_id(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     player_id: PlayerId,
     player_body: PlayerBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SinglePlayerResponse:
-    player = (
-        await conn.execute(
-            players.update()
-            .where((players.c.id == player_id) & (players.c.tournament_id == tournament_id))
-            .values(**player_body.model_dump())
-            .returning(players)
-        )
-    ).first()
+    player = await sql_update_player(conn, tournament_id, player_id, player_body)
     if player is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Could not find player with id {player_id}",
         )
 
-    return SinglePlayerResponse(data=Player.model_validate(player._mapping))
+    statistics = await get_player_statistics(conn, tournament_id)
+    return SinglePlayerResponse(data=with_statistics(player, statistics))
 
 
 @router.delete("/tournaments/{tournament_id}/players/{player_id}", response_model=SuccessResponse)
 async def delete_player(
-    conn: DbConnection,
+    conn: DbSession,
     tournament_id: TournamentId,
     player_id: PlayerId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -102,7 +100,7 @@ async def delete_player(
 
 @router.post("/tournaments/{tournament_id}/players", response_model=SuccessResponse)
 async def create_single_player(
-    conn: DbConnection,
+    conn: DbSession,
     player_body: PlayerBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
@@ -116,7 +114,7 @@ async def create_single_player(
 
 @router.post("/tournaments/{tournament_id}/players_multi", response_model=SuccessResponse)
 async def create_multiple_players(
-    conn: DbConnection,
+    conn: DbSession,
     player_body: PlayerMultiBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),

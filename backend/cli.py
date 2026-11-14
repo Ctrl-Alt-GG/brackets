@@ -11,13 +11,14 @@ from typing import Any
 
 import click
 from heliclockter import datetime_utc
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.app import app
 from bracket.config import config
 from bracket.database import engine
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import UserInsertable
+from bracket.sql.clubs import get_clubs_by_name_or_id, sql_make_club_owner
 from bracket.sql.users import (
     check_whether_email_is_in_use,
     create_user,
@@ -42,8 +43,12 @@ def run_async(f: Any) -> Any:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         async def inner() -> None:
             try:
-                async with engine.begin() as conn:
+                async with (
+                    engine.begin() as connection,
+                    AsyncSession(bind=connection, expire_on_commit=False) as conn,
+                ):
                     await f(conn, *args, **kwargs)
+                    await conn.flush()
             finally:
                 await engine.dispose()
 
@@ -110,7 +115,7 @@ def clear_user_lock(email: str, address: str) -> None:
 
 @cli.command()
 @run_async
-async def create_dev_db(conn: AsyncConnection) -> None:
+async def create_dev_db(conn: AsyncSession) -> None:
     await sql_create_dev_db(conn)
 
 
@@ -132,7 +137,7 @@ def checked_password(password: str, email: str, name: str) -> str:
 )
 @click.option("--name", prompt="Name", help="The name associated with the account.")
 @run_async
-async def register_user(conn: AsyncConnection, email: str, password: str, name: str) -> None:
+async def register_user(conn: AsyncSession, email: str, password: str, name: str) -> None:
     user = UserInsertable(
         email=email,
         password_hash=hash_password(checked_password(password, email, name)),
@@ -157,7 +162,7 @@ async def register_user(conn: AsyncConnection, email: str, password: str, name: 
     help="The new password. Leave it out to be asked for it.",
 )
 @run_async
-async def set_password(conn: AsyncConnection, email: str, password: str) -> None:
+async def set_password(conn: AsyncSession, email: str, password: str) -> None:
     """
     Give an account a new password, for an organizer who forgot theirs.
 
@@ -172,6 +177,33 @@ async def set_password(conn: AsyncConnection, email: str, password: str) -> None
         conn, user.id, hash_password(checked_password(password, user.email, user.name))
     )
     logger.info(f"Changed the password of {user.email}")
+
+
+@cli.command()
+@click.option("--event", prompt="Event (its name or id)", help="The event to hand over.")
+@click.option("--email", prompt="Email of the new owner", help="The account that will own it.")
+@run_async
+async def set_event_owner(conn: AsyncSession, event: str, email: str) -> None:
+    """
+    Make an account the owner of an event, for an event whose owner can't hand it over: their
+    account is gone, or they can't sign in any more. The previous owner stays on as an organizer.
+    """
+    user = await get_user(conn, email)
+    if user is None:
+        logger.error("No account has this email address")
+        raise SystemExit(1)
+
+    clubs = await get_clubs_by_name_or_id(conn, event)
+    if not clubs:
+        logger.error("No event has this name or id")
+        raise SystemExit(1)
+    if len(clubs) > 1:
+        ids = ", ".join(str(club.id) for club in clubs)
+        logger.error(f"Several events are called {event} (ids {ids}). Give the id instead.")
+        raise SystemExit(1)
+
+    await sql_make_club_owner(conn, clubs[0].id, user.id)
+    logger.info(f"{user.email} now owns {clubs[0].name} (id {clubs[0].id})")
 
 
 if __name__ == "__main__":

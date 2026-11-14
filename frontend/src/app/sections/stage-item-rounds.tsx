@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import {
@@ -11,6 +12,7 @@ import {
   updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation,
 } from '../../openapi/@tanstack/react-query.gen';
 import { ScoreForm } from '../components/score-form';
+import { confirm } from '../confirm';
 import {
   activeTeamInputs,
   formatDateTime,
@@ -153,13 +155,14 @@ function NextSwissRound({
       <button
         className="btn btn-primary"
         disabled={!canGenerate || generate.isPending}
-        onClick={() => {
+        onClick={async () => {
           if (
             previous &&
             unplayed > 0 &&
-            !window.confirm(
-              `${previous.name} isn't finished. Generate round ${roundNumber} anyway?`,
-            )
+            !(await confirm({
+              confirmLabel: `Generate round ${roundNumber}`,
+              message: `${previous.name} isn't finished. Generate round ${roundNumber} anyway?`,
+            }))
           )
             return;
           generate.mutate({
@@ -263,8 +266,13 @@ function DraftRound({
         <button
           className="btn btn-soft"
           disabled={busy}
-          onClick={() => {
-            if (window.confirm('Replace these pairings with newly generated ones?')) {
+          onClick={async () => {
+            if (
+              await confirm({
+                confirmLabel: 'Regenerate pairings',
+                message: 'Replace these pairings with newly generated ones?',
+              })
+            ) {
               regenerate.mutate({ path });
             }
           }}
@@ -275,8 +283,16 @@ function DraftRound({
         <button
           className="btn btn-ghost"
           disabled={busy}
-          onClick={() => {
-            if (window.confirm(`Discard the draft ${round.name}?`)) discard.mutate({ path });
+          onClick={async () => {
+            if (
+              await confirm({
+                confirmLabel: 'Discard draft',
+                destructive: true,
+                message: `Discard the draft ${round.name}?`,
+              })
+            ) {
+              discard.mutate({ path });
+            }
           }}
           type="button"
         >
@@ -294,11 +310,12 @@ function TeamWithRecord({
   context: RoundContext;
   input: StageItemInput | null;
 }) {
+  const { t } = useTranslation();
   const played = input ? input.wins + input.draws + input.losses : 0;
 
   return (
     <span>
-      {inputLabel(input, context.stageItemsById)}
+      {inputLabel(input, context.stageItemsById, t)}
       {input && played > 0 ? (
         <span className="ml-1 text-xs text-base-content/70">
           ({input.wins}W {input.draws}D {input.losses}L)
@@ -438,6 +455,7 @@ function PublishedRound({
   open: boolean;
   round: Round;
 }) {
+  const { t } = useTranslation();
   const played = playedCount(round);
   const startTime = round.matches.find((match) => match.start_time)?.start_time ?? null;
   const remove = useMutation({
@@ -455,7 +473,8 @@ function PublishedRound({
           ) : null}
         </span>
         <span className="block text-sm text-base-content/70">
-          {formatDateTime(startTime)} · {played} of {round.matches.length} matches played
+          {startTime ? formatDateTime(startTime) : 'Not scheduled yet'} · {played} of{' '}
+          {round.matches.length} matches played
         </span>
       </summary>
       <div className="collapse-content space-y-2">
@@ -463,8 +482,8 @@ function PublishedRound({
           <ScoreForm
             allowsDraw={allowsDraw}
             key={`${match.id}:${inputTeamId(match.stage_item_input1)}:${inputTeamId(match.stage_item_input2)}`}
-            label1={inputLabel(match.stage_item_input1, context.stageItemsById)}
-            label2={inputLabel(match.stage_item_input2, context.stageItemsById)}
+            label1={inputLabel(match.stage_item_input1, context.stageItemsById, t)}
+            label2={inputLabel(match.stage_item_input2, context.stageItemsById, t)}
             match={match}
             tournamentId={context.tournamentId}
           />
@@ -473,8 +492,14 @@ function PublishedRound({
           <button
             className="btn btn-ghost mt-2"
             disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Delete ${round.name} and its results?`)) {
+            onClick={async () => {
+              if (
+                await confirm({
+                  confirmLabel: `Delete ${round.name}`,
+                  destructive: true,
+                  message: `Delete ${round.name} and its results?`,
+                })
+              ) {
                 remove.mutate({
                   path: { round_id: round.id, tournament_id: context.tournamentId },
                 });

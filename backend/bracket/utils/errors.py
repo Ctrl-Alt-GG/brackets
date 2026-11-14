@@ -11,7 +11,7 @@ from bracket.utils.types import EnumAutoStr
 
 
 class UniqueIndex(EnumAutoStr):
-    ix_tournaments_dashboard_endpoint = auto()
+    ix_tournaments_dashboard_endpoint_lower = auto()
     ix_users_email = auto()
     ix_users_email_lower = auto()
     stage_item_inputs_stage_item_id_team_id_key = auto()
@@ -27,14 +27,16 @@ class ForeignKey(EnumAutoStr):
 
 
 unique_index_violation_error_lookup = {
-    UniqueIndex.ix_tournaments_dashboard_endpoint: "This Details link is already taken",
+    UniqueIndex.ix_tournaments_dashboard_endpoint_lower: "This Details link is already taken",
     UniqueIndex.ix_users_email: "This email is already taken",
     UniqueIndex.ix_users_email_lower: "This email is already taken",
+    # Both are unique per stage item: a team, or a place of an earlier stage item, takes one of
+    # its slots at most.
     UniqueIndex.stage_item_inputs_stage_item_id_team_id_key: (
-        "This team is already assigned to another stage item"
+        "This team already has another slot in this stage item"
     ),
     UniqueIndex.stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key: (
-        "This stage item winner is already assigned to another stage item"
+        "This place is already taken by another slot of this stage item"
     ),
     UniqueIndex.users_x_clubs_club_id_user_id_key: "This account already helps run this event",
 }

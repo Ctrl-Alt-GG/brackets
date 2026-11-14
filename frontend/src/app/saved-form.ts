@@ -1,3 +1,4 @@
+import { dequal as equal } from 'dequal';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   useForm,
@@ -8,27 +9,16 @@ import {
   type UseFormProps,
 } from 'react-hook-form';
 
-function equal(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (left == null || right == null || typeof left !== 'object' || typeof right !== 'object') {
-    return false;
-  }
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) =>
-        Object.hasOwn(right, key) &&
-        equal((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]),
-    )
-  );
-}
-
 /**
  * An editor follows the server except for genuine unsaved edits. A successful mutation makes
  * its submission the new baseline, retaining anything typed while that request was in flight.
  * Spread saveCallbacks into the editor's mutation; create forms do not need this lifecycle.
+ *
+ * React Hook Form's own `values` with `resetOptions: { keepDirtyValues: true }` follows the
+ * server too, but it can't replace this. It judges an edit against the values from before a save,
+ * so a field typed back to its old value while the save is in flight looks unedited, and the
+ * saved value would overwrite it. Its dirty state of a list also stays set once a single entry
+ * changed, so a list that was changed and changed back would no longer follow the server.
  */
 export function useSavedForm<TValues extends FieldValues, TContext = unknown, TOutput = TValues>({
   values,

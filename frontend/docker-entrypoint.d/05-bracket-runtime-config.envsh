@@ -3,9 +3,10 @@
 # exported here are available there.
 
 # The page reads the API's address from this file, so one image works with any backend. Quotes and
-# backslashes are escaped so that the value stays a string.
+# backslashes are escaped so that the value stays a string. The image's files are read-only, so
+# the file goes to /tmp, from where nginx serves it as /runtime-config.js.
 api_base_url_js=$(printf '%s' "${API_BASE_URL}" | sed 's/[\\"]/\\&/g')
-cat >/usr/share/nginx/html/runtime-config.js <<EOF
+cat >/tmp/runtime-config.js <<EOF
 window.__BRACKET_RUNTIME_CONFIG__ = {
   apiBaseUrl: "${api_base_url_js}"
 };

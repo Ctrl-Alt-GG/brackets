@@ -1,14 +1,14 @@
 from http import HTTPMethod
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.models.db.round import Round
 from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputInsertable
-from bracket.schema import rounds
 from bracket.sql.stage_items import get_stage_item
-from bracket.utils.db import fetch_one_parsed_certain
 from bracket.utils.dummy_records import (
     DUMMY_ROUND1,
     DUMMY_STAGE1,
@@ -30,7 +30,7 @@ from tests.integration_tests.sql import (
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_create_round(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
         inserted_team(
@@ -77,12 +77,14 @@ async def test_create_round(
             )
             == SUCCESS_RESPONSE
         )
-        stage_item = await get_stage_item(conn, auth_context.tournament.id, stage_item_inserted.id)
+        stage_item = await get_stage_item(
+            session, auth_context.tournament.id, stage_item_inserted.id
+        )
         [round_] = stage_item.rounds
         assert round_.is_draft
         assert len(round_.matches) == 1
 
-        await assert_row_count_and_clear(rounds, 1)
+        await assert_row_count_and_clear(orm.Round, 1)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -113,7 +115,7 @@ async def test_delete_round(
             )
             == SUCCESS_RESPONSE
         )
-        await assert_row_count_and_clear(rounds, 0)
+        await assert_row_count_and_clear(orm.Round, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -148,8 +150,9 @@ async def test_delete_round_of_fixed_format(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_update_round(
-    conn: AsyncConnection, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+    session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
+    """A Swiss round can be renamed and withdrawn into a draft."""
     body = {"name": "Some new name", "is_draft": True}
     async with (
         inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
@@ -158,7 +161,11 @@ async def test_update_round(
         ) as stage_inserted,
         inserted_stage_item(
             DUMMY_STAGE_ITEM1.model_copy(
-                update={"stage_id": stage_inserted.id, "ranking_id": auth_context.ranking.id}
+                update={
+                    "stage_id": stage_inserted.id,
+                    "ranking_id": auth_context.ranking.id,
+                    "type": StageType.SWISS,
+                }
             )
         ) as stage_item_inserted,
         inserted_round(
@@ -171,10 +178,14 @@ async def test_update_round(
             )
             == SUCCESS_RESPONSE
         )
-        updated_round = await fetch_one_parsed_certain(
-            conn, Round, query=rounds.select().where(rounds.c.id == round_inserted.id)
+        updated_round = Round.model_validate(
+            await session.scalar(
+                (select(orm.Round).where(orm.Round.id == round_inserted.id)).execution_options(
+                    populate_existing=True
+                )
+            )
         )
         assert updated_round.name == body["name"]
         assert updated_round.is_draft == body["is_draft"]
 
-        await assert_row_count_and_clear(rounds, 1)
+        await assert_row_count_and_clear(orm.Round, 1)
