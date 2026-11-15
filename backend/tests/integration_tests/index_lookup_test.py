@@ -1,7 +1,8 @@
 import pytest
-from sqlalchemy import text
+from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket import orm
 from bracket.utils.errors import (
     foreign_key_violation_error_lookup,
     unique_index_violation_error_lookup,
@@ -27,7 +28,20 @@ async def test_all_unique_indices_in_lookup(session: AsyncSession) -> None:
     indices = {ix.index_name for ix in result}
 
     expected_indices = {ix.name for ix in unique_index_violation_error_lookup.keys()}
-    assert indices == expected_indices
+    # Supporting composite foreign keys need unique parent keys as well as public uniqueness rules.
+    metadata_indices = {
+        index.name
+        for table in orm.Base.metadata.tables.values()
+        for index in table.indexes
+        if index.unique
+    } | {
+        constraint.name
+        for table in orm.Base.metadata.tables.values()
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert indices == metadata_indices
+    assert expected_indices <= indices
 
 
 @pytest.mark.asyncio(loop_scope="session")

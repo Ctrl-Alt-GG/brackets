@@ -1,171 +1,146 @@
-from collections.abc import Awaitable, Callable
-from typing import Any, NoReturn, get_args
+from typing import NoReturn
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
 
-from bracket.models.db.util import StageWithStageItems
-from bracket.sql.players import get_all_players_in_tournament, get_player_by_id
-from bracket.sql.rankings import get_all_rankings_in_tournament
-from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.teams import get_team_by_id
-from bracket.utils.id_types import (
-    MatchId,
-    PlayerId,
-    RankingId,
-    RoundId,
-    StageId,
-    StageItemId,
-    StageItemInputId,
-    TeamId,
-    TournamentId,
+from bracket import orm
+from bracket.models.db.match import MatchCreateBodyFrontend
+from bracket.models.db.round import Round, RoundCreateBody
+from bracket.models.db.stage_item import StageItem, StageItemCreateBody, StageType
+from bracket.models.db.stage_item_inputs import (
+    StageItemInput,
+    StageItemInputUpdateBody,
+    StageItemInputUpdateBodyFinal,
+    StageItemInputUpdateBodyTentative,
 )
-
-CheckCallableT = Callable[
-    [AsyncSession, Any, list[StageWithStageItems], TournamentId], Awaitable[bool]
-]
+from bracket.utils.id_types import PlayerId, TournamentId
 
 
-async def check_stage_belongs_to_tournament(
-    conn: AsyncSession, stage_id: StageId, stages: list[StageWithStageItems], _: TournamentId
-) -> bool:
-    return any(stage.id == stage_id for stage in stages)
+def _missing_reference(kind: str, value: object) -> NoReturn:
+    raise HTTPException(400, f"Could not find {kind}(s) with ID {value}")
 
 
-async def check_team_belongs_to_tournament(
-    conn: AsyncSession,
-    team_id: TeamId,
-    _: list[StageWithStageItems],
-    tournament_id: TournamentId,
-) -> bool:
-    return await get_team_by_id(conn, team_id, tournament_id) is not None
-
-
-async def check_stage_item_belongs_to_tournament(
-    conn: AsyncSession,
-    stage_item_id: StageItemId,
-    stages: list[StageWithStageItems],
-    _: TournamentId,
-) -> bool:
-    return any(
-        stage_item.id == stage_item_id for stage in stages for stage_item in stage.stage_items
-    )
-
-
-async def check_stage_item_input_belongs_to_tournament(
-    conn: AsyncSession,
-    stage_item_input_id: StageItemInputId,
-    stages: list[StageWithStageItems],
-    _: TournamentId,
-) -> bool:
-    return any(
-        stage_item_input.id == stage_item_input_id
-        for stage in stages
-        for stage_item in stage.stage_items
-        for stage_item_input in stage_item.inputs
-    )
-
-
-async def check_round_belongs_to_tournament(
-    conn: AsyncSession, round_id: RoundId, stages: list[StageWithStageItems], _: TournamentId
-) -> bool:
-    return any(
-        round_.id == round_id
-        for stage in stages
-        for stage_item in stage.stage_items
-        for round_ in stage_item.rounds
-    )
-
-
-async def check_match_belongs_to_tournament(
-    conn: AsyncSession, match_id: MatchId, stages: list[StageWithStageItems], _: TournamentId
-) -> bool:
-    return any(
-        match.id == match_id
-        for stage in stages
-        for stage_item in stage.stage_items
-        for round_ in stage_item.rounds
-        for match in round_.matches
-    )
-
-
-async def check_player_belongs_to_tournament(
-    conn: AsyncSession,
-    player_id: PlayerId,
-    _: list[StageWithStageItems],
-    tournament_id: TournamentId,
-) -> bool:
-    return await get_player_by_id(conn, player_id, tournament_id) is not None
-
-
-async def check_ranking_belongs_to_tournament(
-    conn: AsyncSession,
-    ranking_id: RankingId,
-    _: list[StageWithStageItems],
-    tournament_id: TournamentId,
-) -> bool:
-    return any(
-        ranking.id == ranking_id
-        for ranking in await get_all_rankings_in_tournament(conn, tournament_id)
-    )
-
-
-async def check_players_belong_to_tournament(
-    conn: AsyncSession, player_ids: set[PlayerId], tournament_id: TournamentId
-) -> bool:
-    return player_ids.issubset(
-        player.id for player in await get_all_players_in_tournament(conn, tournament_id)
-    )
-
-
-def raise_exception(field_type: Any, field_value: Any) -> NoReturn:
-    field_name = field_type.__name__ if field_type is not None else "Unknown type"
-    msg = f"Could not find {field_name.replace('Id', '')}(s) with ID {field_value}"
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
-
-
-async def check_foreign_keys_belong_to_tournament(
-    conn: AsyncSession, some_body: BaseModel, tournament_id: TournamentId
+async def validate_player_ids(
+    session: AsyncSession, tournament_id: TournamentId, player_ids: set[PlayerId]
 ) -> None:
-    """
-    Inspects the types of BaseModel attributes, and based on that checks whether that attribute
-    is indeed part of the tournament. This prohibits e.g. adding players from another tournament to
-    a certain team.
-    """
-    stages = await get_full_tournament_details(conn, tournament_id)
+    if not player_ids:
+        return
+    found = set(
+        await session.scalars(
+            select(orm.Player.id).where(
+                orm.Player.tournament_id == tournament_id, orm.Player.id.in_(player_ids)
+            )
+        )
+    )
+    if found != player_ids:
+        _missing_reference("Player", player_ids)
 
-    check_lookup: dict[type[Any], CheckCallableT] = {  # pyrefly: ignore [bad-assignment]
-        StageId: check_stage_belongs_to_tournament,
-        TeamId: check_team_belongs_to_tournament,
-        StageItemId: check_stage_item_belongs_to_tournament,
-        StageItemInputId: check_stage_item_input_belongs_to_tournament,
-        RoundId: check_round_belongs_to_tournament,
-        PlayerId: check_player_belongs_to_tournament,
-        MatchId: check_match_belongs_to_tournament,
-        RankingId: check_ranking_belongs_to_tournament,
-    }
 
-    for field_key, field_info in type(some_body).model_fields.items():
-        field_value = getattr(some_body, field_key)
-        if field_value is None:
-            continue
+async def validate_stage_item_create(
+    session: AsyncSession, tournament_id: TournamentId, body: StageItemCreateBody
+) -> None:
+    stage_id = await session.scalar(
+        select(orm.Stage.id).where(
+            orm.Stage.id == body.stage_id, orm.Stage.tournament_id == tournament_id
+        )
+    )
+    if stage_id is None:
+        _missing_reference("Stage", body.stage_id)
+    if body.ranking_id is not None:
+        ranking_id = await session.scalar(
+            select(orm.Ranking.id).where(
+                orm.Ranking.id == body.ranking_id, orm.Ranking.tournament_id == tournament_id
+            )
+        )
+        if ranking_id is None:
+            _missing_reference("Ranking", body.ranking_id)
 
-        if isinstance(field_value, BaseModel):
-            await check_foreign_keys_belong_to_tournament(conn, field_value, tournament_id)
-        elif isinstance(field_value, set):
-            if field_info.annotation == set[PlayerId]:
-                if not await check_players_belong_to_tournament(conn, field_value, tournament_id):
-                    raise_exception(PlayerId, field_value)
-            else:
-                raise Exception(f"Unknown set type: {field_info.annotation}")
-        else:
-            possible_types = [field_info.annotation, *get_args(field_info.annotation)]
-            for possible_type in possible_types:
-                if possible_type is not None:
-                    check_callable = check_lookup.get(possible_type)
-                    if check_callable is not None and not await check_callable(
-                        conn, field_value, stages, tournament_id
-                    ):
-                        raise_exception(possible_type, field_value)
+
+async def validate_round_create(
+    session: AsyncSession, tournament_id: TournamentId, body: RoundCreateBody
+) -> None:
+    item_id = await session.scalar(
+        select(orm.StageItem.id).where(
+            orm.StageItem.id == body.stage_item_id, orm.StageItem.tournament_id == tournament_id
+        )
+    )
+    if item_id is None:
+        _missing_reference("StageItem", body.stage_item_id)
+
+
+async def validate_match_create(
+    session: AsyncSession, tournament_id: TournamentId, body: MatchCreateBodyFrontend
+) -> Round:
+    round_ = await session.scalar(
+        select(orm.Round)
+        .where(orm.Round.id == body.round_id, orm.Round.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
+    )
+    if round_ is None:
+        _missing_reference("Round", body.round_id)
+    input_ids = [body.stage_item_input1_id, body.stage_item_input2_id]
+    requested_inputs = {id_ for id_ in input_ids if id_ is not None}
+    if requested_inputs:
+        found_inputs = set(
+            await session.scalars(
+                select(orm.StageItemInput.id).where(
+                    orm.StageItemInput.tournament_id == tournament_id,
+                    orm.StageItemInput.id.in_(requested_inputs),
+                )
+            )
+        )
+        for input_id in input_ids:
+            if input_id is not None and input_id not in found_inputs:
+                _missing_reference("StageItemInput", input_id)
+    winner_ids = [
+        body.stage_item_input1_winner_from_match_id,
+        body.stage_item_input2_winner_from_match_id,
+    ]
+    requested_winners = {id_ for id_ in winner_ids if id_ is not None}
+    if requested_winners:
+        found_winners = set(
+            await session.scalars(
+                select(orm.Match.id).where(
+                    orm.Match.tournament_id == tournament_id, orm.Match.id.in_(requested_winners)
+                )
+            )
+        )
+        for match_id in winner_ids:
+            if match_id is not None and match_id not in found_winners:
+                _missing_reference("Match", match_id)
+    return Round.model_validate(round_)
+
+
+async def validate_stage_item_input_update(
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    current: StageItemInput | None,
+    body: StageItemInputUpdateBody,
+    target: StageItem,
+) -> None:
+    if current is None or current.stage_item_id != target.id:
+        raise HTTPException(404, "Could not find the stage item input")
+    if isinstance(body, StageItemInputUpdateBodyTentative):
+        source = await session.scalar(
+            select(orm.StageItem).where(
+                orm.StageItem.id == body.winner_from_stage_item_id,
+                orm.StageItem.tournament_id == tournament_id,
+            )
+        )
+        if source is None:
+            raise HTTPException(
+                404, f"Could not find stage item with id {body.winner_from_stage_item_id}"
+            )
+        if source.stage_id >= target.stage_id or source.type is StageType.SINGLE_ELIMINATION:
+            raise HTTPException(400, "Choose a group or Swiss stage item from an earlier stage")
+        if body.winner_position > source.team_count:
+            raise HTTPException(400, "The source stage item doesn't have that many team slots")
+    elif isinstance(body, StageItemInputUpdateBodyFinal):
+        team_id = await session.scalar(
+            select(orm.Team.id).where(
+                orm.Team.id == body.team_id, orm.Team.tournament_id == tournament_id
+            )
+        )
+        if team_id is None:
+            raise HTTPException(404, f"Could not find team with id {body.team_id}")

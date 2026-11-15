@@ -658,3 +658,35 @@ async def test_visitors_who_keep_asking_for_replayed_matches_are_limited(
     assert visitor[3] == {"detail": "Too many requests. Try again in a minute."}
     assert all("data" in response for response in organizer)
     assert "data" in details
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_delaying_remaining_rounds_respects_the_maximum_break(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
+) -> None:
+    async with api_tournament(auth_context) as flow:
+        teams = await flow.add_teams("A", "B", "C")
+        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 3, "Group")
+        await flow.fill(group, *teams.values())
+        await flow.score((await flow.matches(group))[0][0], 2, 0)
+        before = await flow.matches(group)
+        refused = await flow.call(HTTPMethod.POST, "delay_schedule", {"minutes": 1440})
+        assert await flow.matches(group) == before
+        accepted = await flow.call(HTTPMethod.POST, "delay_schedule", {"minutes": 1435})
+        after = await flow.matches(group)
+        repeated = await flow.call(HTTPMethod.POST, "delay_schedule", {"minutes": 1})
+        assert await flow.matches(group) == after
+    assert refused == {
+        "detail": (
+            "The remaining rounds can move later by at most 1435 minutes without exceeding "
+            "the maximum break of 1440 minutes."
+        )
+    }
+    assert accepted == SUCCESS_RESPONSE
+    assert after[0][0]["custom_margin_minutes"] == 1440
+    assert repeated == {
+        "detail": (
+            "The remaining rounds can move later by at most 0 minutes without exceeding "
+            "the maximum break of 1440 minutes."
+        )
+    }

@@ -118,9 +118,15 @@ async def leaf_data() -> AsyncIterator[LeafData]:
         await session.flush()
         session.add_all(
             [
-                orm.PlayerXTeam(team_id=teams[0].id, player_id=players[0].id),
-                orm.PlayerXTeam(team_id=teams[0].id, player_id=players[1].id),
-                orm.PlayerXTeam(team_id=teams[2].id, player_id=players[2].id),
+                orm.PlayerXTeam(
+                    tournament_id=tournament_id, team_id=teams[0].id, player_id=players[0].id
+                ),
+                orm.PlayerXTeam(
+                    tournament_id=tournament_id, team_id=teams[0].id, player_id=players[1].id
+                ),
+                orm.PlayerXTeam(
+                    tournament_id=tournament_id, team_id=teams[2].id, player_id=players[2].id
+                ),
                 orm.Player(
                     tournament_id=tournaments["foreign"].id,
                     name="Foreign",
@@ -134,6 +140,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
             ]
         )
         item = orm.StageItem(
+            tournament_id=tournament_id,
             stage_id=stage.id,
             ranking_id=ranking.id,
             name="Swiss",
@@ -146,15 +153,20 @@ async def leaf_data() -> AsyncIterator[LeafData]:
             orm.StageItemInput(
                 stage_item_id=item.id, tournament_id=tournament_id, team_id=team.id, slot=index
             )
-            for index, team in enumerate(teams)
+            for index, team in enumerate(teams, start=1)
         ]
-        published = orm.Round(stage_item_id=item.id, name="Published", is_draft=False)
-        draft = orm.Round(stage_item_id=item.id, name="Draft", is_draft=True)
+        published = orm.Round(
+            tournament_id=tournament_id, stage_item_id=item.id, name="Published", is_draft=False
+        )
+        draft = orm.Round(
+            tournament_id=tournament_id, stage_item_id=item.id, name="Draft", is_draft=True
+        )
         session.add_all([*inputs, published, draft])
         await session.flush()
         session.add_all(
             [
                 orm.Match(
+                    tournament_id=tournament_id,
                     round_id=published.id,
                     stage_item_input1_id=inputs[0].id,
                     stage_item_input2_id=inputs[2].id,
@@ -167,6 +179,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     margin_minutes=10,
                 ),
                 orm.Match(
+                    tournament_id=tournament_id,
                     round_id=published.id,
                     stage_item_input1_id=inputs[2].id,
                     stage_item_input2_id=inputs[1].id,
@@ -178,6 +191,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     start_time=DAY + timedelta(hours=1),
                 ),
                 orm.Match(
+                    tournament_id=tournament_id,
                     round_id=published.id,
                     stage_item_input1_score=0,
                     stage_item_input2_score=0,
@@ -185,6 +199,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     stage_item_input2_conflict=False,
                 ),
                 orm.Match(
+                    tournament_id=tournament_id,
                     round_id=draft.id,
                     stage_item_input1_id=inputs[1].id,
                     stage_item_input2_id=inputs[0].id,
@@ -312,6 +327,7 @@ async def test_team_members_filters_and_refresh(leaf_data: LeafData) -> None:
     alpha_id = TeamId(leaf_data.teams[0].id)
     await sql_set_team_members(
         leaf_data.session,
+        leaf_data.tournament_id,
         alpha_id,
         {PlayerId(leaf_data.players[3].id)},
         {PlayerId(leaf_data.players[0].id), PlayerId(leaf_data.players[1].id)},

@@ -67,7 +67,7 @@ async def test_update_stage_item_input(
         ) as stage_item_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=None,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -99,7 +99,7 @@ async def test_update_stage_item_input_invalid_team(
         ) as stage_item_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=None,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -148,7 +148,7 @@ async def test_update_stage_item_input_from_other_tournament(
         ) as stage_item_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=None,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,

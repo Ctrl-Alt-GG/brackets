@@ -1,4 +1,5 @@
 from contextlib import AsyncExitStack
+from decimal import Decimal
 from http import HTTPMethod
 
 import pytest
@@ -11,8 +12,11 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputFinal,
 )
-from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
-from bracket.sql.stage_items import get_stage_item, sql_create_stage_item_with_inputs
+from bracket.sql.stage_items import (
+    get_stage_item,
+    sql_create_stage_item_with_inputs,
+    sql_delete_stage_item,
+)
 from bracket.utils.dummy_records import DUMMY_PLAYER1, DUMMY_STAGE1, DUMMY_TEAM1
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
@@ -68,7 +72,7 @@ async def test_standings_and_player_statistics(
                 ],
             ),
         )
-        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, session, stage_item.id)
+        stack.push_async_callback(sql_delete_stage_item, session, stage_item.id)
         await build_matches_for_stage_item(session, stage_item, tournament_id)
 
         # Team 1 beats team 2 2-1, team 2 beats team 3 3-0, and team 1 vs team 3 isn't played.
@@ -109,13 +113,15 @@ async def test_standings_and_player_statistics(
 
     # Teams 1 and 2 both have a point. Team 2 has the better score difference, but team 1 beat
     # team 2, which decides first. The unplayed match doesn't count as a draw.
-    assert standings["data"][str(stage_item.id)] == [
+    rows = standings["data"][str(stage_item.id)]
+    assert all(isinstance(row["points"], str) for row in rows)
+    assert [row | {"points": Decimal(row["points"])} for row in rows] == [
         {
             "stage_item_input_id": input_ids[teams[0].id],
             "wins": 1,
             "draws": 0,
             "losses": 0,
-            "points": "1.00",
+            "points": Decimal("1.00"),
             "score_for": 2,
             "score_against": 1,
         },
@@ -124,7 +130,7 @@ async def test_standings_and_player_statistics(
             "wins": 1,
             "draws": 0,
             "losses": 1,
-            "points": "1.00",
+            "points": Decimal("1.00"),
             "score_for": 4,
             "score_against": 2,
         },
@@ -133,7 +139,7 @@ async def test_standings_and_player_statistics(
             "wins": 0,
             "draws": 0,
             "losses": 1,
-            "points": "0.00",
+            "points": Decimal("0.00"),
             "score_for": 0,
             "score_against": 3,
         },

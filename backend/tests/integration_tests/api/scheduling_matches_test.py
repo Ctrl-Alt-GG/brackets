@@ -10,8 +10,7 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputCreateBodyTentative,
 )
-from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
-from bracket.sql.stage_items import sql_create_stage_item_with_inputs
+from bracket.sql.stage_items import sql_create_stage_item_with_inputs, sql_delete_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament
 from bracket.utils.dummy_records import (
@@ -114,8 +113,8 @@ async def test_schedule_all_matches(
         stages = await get_full_tournament_details(session, tournament_id)
         tournament = await sql_get_tournament(session, tournament_id)
 
-        await sql_delete_stage_item_with_foreign_keys(session, stage_item_2.id)
-        await sql_delete_stage_item_with_foreign_keys(session, stage_item_1.id)
+        await sql_delete_stage_item(session, stage_item_2.id)
+        await sql_delete_stage_item(session, stage_item_1.id)
 
     assert response == SUCCESS_RESPONSE
 
@@ -168,7 +167,7 @@ async def test_schedule_matches_with_custom_stage_duration(
         tournament = await sql_get_tournament(session, tournament_id)
 
         [stage_item] = updated_stage.stage_items
-        await sql_delete_stage_item_with_foreign_keys(session, stage_item.id)
+        await sql_delete_stage_item(session, stage_item.id)
 
     assert create_response == SUCCESS_RESPONSE
     assert update_response == SUCCESS_RESPONSE

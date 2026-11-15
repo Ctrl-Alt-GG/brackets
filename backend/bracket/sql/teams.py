@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from heliclockter import datetime_utc
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,13 +8,14 @@ from sqlalchemy.orm import selectinload
 from bracket import orm
 from bracket.logic.ranking.statistics import START_ELO, TeamStatistics, TeamTotals
 from bracket.logic.ranking.team_totals import get_team_totals
+from bracket.models.db.player import Player
 from bracket.models.db.team import FullTeamWithPlayers, Team, TeamBody
 from bracket.utils.id_types import PlayerId, StageItemInputId, TeamId, TournamentId
 from bracket.utils.pagination import PaginationTeams
 
 
 async def get_teams_by_id(
-    conn: AsyncSession,
+    session: AsyncSession,
     team_ids: set[TeamId],
     tournament_id: TournamentId,
     *,
@@ -24,7 +27,7 @@ async def get_teams_by_id(
     """
     if not team_ids:
         return []
-    entities = await conn.scalars(
+    entities = await session.scalars(
         select(orm.Team)
         .where(orm.Team.id.in_(team_ids), orm.Team.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
@@ -32,30 +35,31 @@ async def get_teams_by_id(
     teams = [Team.model_validate(entity) for entity in entities]
     if not teams or not with_totals:
         return teams
-    totals = await get_team_totals(conn, tournament_id)
+    totals = await get_team_totals(session, tournament_id)
     return [
         team.model_copy(update=totals.get(team.id, TeamTotals()).model_dump()) for team in teams
     ]
 
 
 async def get_team_by_id(
-    conn: AsyncSession,
+    session: AsyncSession,
     team_id: TeamId,
     tournament_id: TournamentId,
     *,
     with_totals: bool = False,
 ) -> Team | None:
-    result = await get_teams_by_id(conn, {team_id}, tournament_id, with_totals=with_totals)
+    result = await get_teams_by_id(session, {team_id}, tournament_id, with_totals=with_totals)
     return result[0] if result else None
 
 
 async def get_teams_with_members(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     only_active_teams: bool = False,
     team_id: TeamId | None = None,
     pagination: PaginationTeams | None = None,
+    totals: Mapping[TeamId, TeamTotals] | None = None,
 ) -> list[FullTeamWithPlayers]:
     totals_sort = pagination is None or pagination.sort_by in TeamTotals.model_fields
     query = (
@@ -85,10 +89,11 @@ async def get_teams_with_members(
         )
     else:
         query = query.order_by(orm.Team.name, orm.Team.id)
-    entities = (await conn.scalars(query)).all()
+    entities = (await session.scalars(query)).all()
     if not entities:
         return []
-    totals = await get_team_totals(conn, tournament_id)
+    if totals is None:
+        totals = await get_team_totals(session, tournament_id)
     teams = [
         FullTeamWithPlayers.model_validate(entity).model_copy(
             update=totals.get(TeamId(entity.id), TeamTotals()).model_dump()
@@ -107,7 +112,7 @@ async def get_teams_with_members(
 
 
 async def get_team_count(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     only_active_teams: bool = False,
@@ -117,18 +122,18 @@ async def get_team_count(
     )
     if only_active_teams:
         query = query.where(orm.Team.active.is_(True))
-    return int(await conn.scalar(query) or 0)
+    return int(await session.scalar(query) or 0)
 
 
 async def update_stage_item_input_statistics(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     statistics: dict[StageItemInputId, TeamStatistics],
 ) -> None:
     """Store the results of these slots, in one round trip to the database."""
     if not statistics:
         return
-    await conn.execute(
+    await session.execute(
         update(orm.StageItemInput)
         .where(orm.StageItemInput.tournament_id == tournament_id)
         .execution_options(synchronize_session=False),
@@ -138,7 +143,7 @@ async def update_stage_item_input_statistics(
                 "wins": input_statistics.wins,
                 "draws": input_statistics.draws,
                 "losses": input_statistics.losses,
-                "points": float(input_statistics.points),
+                "points": input_statistics.points,
             }
             for stage_item_input_id, input_statistics in statistics.items()
         ],
@@ -146,7 +151,7 @@ async def update_stage_item_input_statistics(
 
 
 async def sql_create_team(
-    conn: AsyncSession, tournament_id: TournamentId, name: str, active: bool
+    session: AsyncSession, tournament_id: TournamentId, name: str, active: bool
 ) -> TeamId:
     entity = orm.Team(
         name=name,
@@ -159,55 +164,110 @@ async def sql_create_team(
         draws=0,
         losses=0,
     )
-    conn.add(entity)
-    await conn.flush()
+    session.add(entity)
+    await session.flush()
     return TeamId(entity.id)
 
 
 async def sql_update_team(
-    conn: AsyncSession, tournament_id: TournamentId, team_id: TeamId, body: TeamBody
+    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId, body: TeamBody
 ) -> None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Team).where(orm.Team.id == team_id, orm.Team.tournament_id == tournament_id)
     )
     if entity is not None:
         entity.name = body.name
         entity.active = body.active
-        await conn.flush()
+        await session.flush()
 
 
-async def sql_update_team_logo(conn: AsyncSession, team_id: TeamId, logo_path: str | None) -> None:
-    entity = await conn.get(orm.Team, team_id)
+async def sql_update_team_logo(
+    session: AsyncSession, team_id: TeamId, logo_path: str | None
+) -> None:
+    entity = await session.get(orm.Team, team_id)
     if entity is not None:
         entity.logo_path = logo_path
-        await conn.flush()
+        await session.flush()
 
 
-async def sql_add_team_player(conn: AsyncSession, team_id: TeamId, player_id: PlayerId) -> None:
-    conn.add(orm.PlayerXTeam(team_id=team_id, player_id=player_id))
-    await conn.flush()
+async def sql_add_team_player(
+    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId, player_id: PlayerId
+) -> None:
+    session.add(orm.PlayerXTeam(tournament_id=tournament_id, team_id=team_id, player_id=player_id))
+    await session.flush()
 
 
 async def sql_set_team_members(
-    conn: AsyncSession, team_id: TeamId, player_ids: set[PlayerId], previous_ids: set[PlayerId]
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    team_id: TeamId,
+    player_ids: set[PlayerId],
+    previous_ids: set[PlayerId],
 ) -> None:
-    conn.add_all(
-        orm.PlayerXTeam(team_id=team_id, player_id=player_id)
+    session.add_all(
+        orm.PlayerXTeam(tournament_id=tournament_id, team_id=team_id, player_id=player_id)
         for player_id in player_ids - previous_ids
     )
-    await conn.flush()
-    await conn.execute(
+    await session.flush()
+    await session.execute(
         delete(orm.PlayerXTeam).where(
             orm.PlayerXTeam.player_id.not_in(player_ids), orm.PlayerXTeam.team_id == team_id
         )
     )
 
 
-async def sql_delete_team(conn: AsyncSession, tournament_id: TournamentId, team_id: TeamId) -> None:
-    await conn.execute(
+async def sql_delete_team(
+    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId
+) -> None:
+    await session.execute(
         delete(orm.Team).where(orm.Team.id == team_id, orm.Team.tournament_id == tournament_id)
     )
 
 
-async def sql_delete_teams_of_tournament(conn: AsyncSession, tournament_id: TournamentId) -> None:
-    await conn.execute(delete(orm.Team).where(orm.Team.tournament_id == tournament_id))
+async def get_team_player_ids(
+    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId
+) -> set[PlayerId]:
+    return {
+        PlayerId(id_)
+        for id_ in await session.scalars(
+            select(orm.PlayerXTeam.player_id).where(
+                orm.PlayerXTeam.tournament_id == tournament_id,
+                orm.PlayerXTeam.team_id == team_id,
+            )
+        )
+    }
+
+
+async def find_player_in_other_team(
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    team_id: TeamId,
+    player_ids: set[PlayerId],
+) -> tuple[Player, str] | None:
+    if not player_ids:
+        return None
+    result = await session.execute(
+        select(orm.Player, orm.Team.name)
+        .join(orm.PlayerXTeam, orm.PlayerXTeam.player_id == orm.Player.id)
+        .join(orm.Team, orm.Team.id == orm.PlayerXTeam.team_id)
+        .where(
+            orm.Player.tournament_id == tournament_id,
+            orm.PlayerXTeam.tournament_id == tournament_id,
+            orm.PlayerXTeam.team_id != team_id,
+            orm.Player.id.in_(player_ids),
+        )
+        .order_by(orm.Player.name, orm.Player.id)
+        .limit(1)
+    )
+    row = result.first()
+    return (Player.model_validate(row[0]), row[1]) if row is not None else None
+
+
+async def get_team_logo_paths(
+    session: AsyncSession, tournament_id: TournamentId
+) -> list[str | None]:
+    return list(
+        await session.scalars(
+            select(orm.Team.logo_path).where(orm.Team.tournament_id == tournament_id)
+        )
+    )

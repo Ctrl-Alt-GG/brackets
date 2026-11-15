@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.app import app
 from bracket.config import config
-from bracket.database import engine
+from bracket.database import engine, session_scope
 from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import UserInsertable
 from bracket.sql.clubs import get_clubs_by_name_or_id, sql_make_club_owner
@@ -43,12 +43,8 @@ def run_async(f: Any) -> Any:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         async def inner() -> None:
             try:
-                async with (
-                    engine.begin() as connection,
-                    AsyncSession(bind=connection, expire_on_commit=False) as conn,
-                ):
-                    await f(conn, *args, **kwargs)
-                    await conn.flush()
+                async with session_scope() as session:
+                    await f(session, *args, **kwargs)
             finally:
                 await engine.dispose()
 
@@ -115,8 +111,8 @@ def clear_user_lock(email: str, address: str) -> None:
 
 @cli.command()
 @run_async
-async def create_dev_db(conn: AsyncSession) -> None:
-    await sql_create_dev_db(conn)
+async def create_dev_db(session: AsyncSession) -> None:
+    await sql_create_dev_db(session)
 
 
 def checked_password(password: str, email: str, name: str) -> str:
@@ -137,7 +133,7 @@ def checked_password(password: str, email: str, name: str) -> str:
 )
 @click.option("--name", prompt="Name", help="The name associated with the account.")
 @run_async
-async def register_user(conn: AsyncSession, email: str, password: str, name: str) -> None:
+async def register_user(session: AsyncSession, email: str, password: str, name: str) -> None:
     user = UserInsertable(
         email=email,
         password_hash=hash_password(checked_password(password, email, name)),
@@ -145,10 +141,10 @@ async def register_user(conn: AsyncSession, email: str, password: str, name: str
         created=datetime_utc.now(),
         account_type=UserAccountType.REGULAR,
     )
-    if await check_whether_email_is_in_use(conn, email):
+    if await check_whether_email_is_in_use(session, email):
         logger.error("Email address already in use")
         raise SystemExit(1)
-    user_created = await create_user(conn, user)
+    user_created = await create_user(session, user)
     logger.info(f"Created user with id: {user_created.id}")
 
 
@@ -162,19 +158,19 @@ async def register_user(conn: AsyncSession, email: str, password: str, name: str
     help="The new password. Leave it out to be asked for it.",
 )
 @run_async
-async def set_password(conn: AsyncSession, email: str, password: str) -> None:
+async def set_password(session: AsyncSession, email: str, password: str) -> None:
     """
     Give an account a new password, for an organizer who forgot theirs.
 
     There is no reset by email: the site sends none. Every session of the account ends.
     """
-    user = await get_user(conn, email)
+    user = await get_user(session, email)
     if user is None:
         logger.error("No account has this email address")
         raise SystemExit(1)
 
     await update_user_password(
-        conn, user.id, hash_password(checked_password(password, user.email, user.name))
+        session, user.id, hash_password(checked_password(password, user.email, user.name))
     )
     logger.info(f"Changed the password of {user.email}")
 
@@ -183,17 +179,17 @@ async def set_password(conn: AsyncSession, email: str, password: str) -> None:
 @click.option("--event", prompt="Event (its name or id)", help="The event to hand over.")
 @click.option("--email", prompt="Email of the new owner", help="The account that will own it.")
 @run_async
-async def set_event_owner(conn: AsyncSession, event: str, email: str) -> None:
+async def set_event_owner(session: AsyncSession, event: str, email: str) -> None:
     """
     Make an account the owner of an event, for an event whose owner can't hand it over: their
     account is gone, or they can't sign in any more. The previous owner stays on as an organizer.
     """
-    user = await get_user(conn, email)
+    user = await get_user(session, email)
     if user is None:
         logger.error("No account has this email address")
         raise SystemExit(1)
 
-    clubs = await get_clubs_by_name_or_id(conn, event)
+    clubs = await get_clubs_by_name_or_id(session, event)
     if not clubs:
         logger.error("No event has this name or id")
         raise SystemExit(1)
@@ -202,7 +198,7 @@ async def set_event_owner(conn: AsyncSession, event: str, email: str) -> None:
         logger.error(f"Several events are called {event} (ids {ids}). Give the id instead.")
         raise SystemExit(1)
 
-    await sql_make_club_owner(conn, clubs[0].id, user.id)
+    await sql_make_club_owner(session, clubs[0].id, user.id)
     logger.info(f"{user.email} now owns {clubs[0].name} (id {clubs[0].id})")
 
 

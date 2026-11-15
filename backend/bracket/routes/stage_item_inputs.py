@@ -1,17 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
 
 from bracket.config import config
 from bracket.database import DbSession
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.models.db.match import is_played
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
-    StageItemInput,
     StageItemInputUpdateBody,
-    StageItemInputUpdateBodyFinal,
     StageItemInputUpdateBodyTentative,
 )
 from bracket.models.db.tournament import Tournament
@@ -25,7 +20,7 @@ from bracket.routes.util import disallow_archived_tournament, stage_item_depende
 from bracket.sql.stage_item_inputs import get_stage_item_input_by_id, sql_update_stage_item_input
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.teams import get_team_by_id
+from bracket.sql.validation import validate_stage_item_input_update
 from bracket.utils.errors import (
     ForeignKey,
     UniqueIndex,
@@ -37,52 +32,12 @@ from bracket.utils.id_types import StageItemId, StageItemInputId, TournamentId
 router = APIRouter(prefix=config.api_prefix)
 
 
-async def validate_stage_item_update(
-    conn: AsyncSession,
-    stage_item_input_db: StageItemInput | None,
-    stage_item_input_body: StageItemInputUpdateBody,
-    tournament_id: TournamentId,
-    stage_item: StageItemWithRounds,
-) -> None:
-    if stage_item_input_db is None or stage_item_input_db.stage_item_id != stage_item.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Could not find the stage item input",
-        )
-
-    if isinstance(stage_item_input_body, StageItemInputUpdateBodyTentative):
-        input_id = stage_item_input_body.winner_from_stage_item_id
-        # Empty unless the stage item is part of this tournament.
-        source_stages = await get_full_tournament_details(
-            conn, tournament_id, stage_item_ids={input_id}
-        )
-        if not source_stages or not source_stages[0].stage_items:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Could not find stage item with id {input_id}",
-            )
-        source = source_stages[0].stage_items[0]
-        if source.stage_id >= stage_item.stage_id or source.type is StageType.SINGLE_ELIMINATION:
-            raise HTTPException(400, "Choose a group or Swiss stage item from an earlier stage")
-        if stage_item_input_body.winner_position > source.team_count:
-            raise HTTPException(400, "The source stage item doesn't have that many team slots")
-
-    if (
-        isinstance(stage_item_input_body, StageItemInputUpdateBodyFinal)
-        and await get_team_by_id(conn, stage_item_input_body.team_id, tournament_id) is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not find team with id {stage_item_input_body.team_id}",
-        )
-
-
 @router.put(
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}/inputs/{stage_item_input_id}",
     response_model=SuccessResponse,
 )
 async def update_stage_item_input(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_input_id: StageItemInputId,
@@ -91,9 +46,9 @@ async def update_stage_item_input(
     stage_item: StageItemWithRounds = Depends(stage_item_dependency),
     ___: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    stage_item_input = await get_stage_item_input_by_id(conn, tournament_id, stage_item_input_id)
-    await validate_stage_item_update(
-        conn, stage_item_input, stage_item_body, tournament_id, stage_item
+    stage_item_input = await get_stage_item_input_by_id(session, tournament_id, stage_item_input_id)
+    await validate_stage_item_input_update(
+        session, tournament_id, stage_item_input, stage_item_body, stage_item
     )
     assert stage_item_input is not None
     if isinstance(stage_item_body, StageItemInputUpdateBodyTentative):
@@ -130,10 +85,10 @@ async def update_stage_item_input(
         check_foreign_key_violation({ForeignKey.stage_item_inputs_team_id_fkey}),
     ):
         await sql_update_stage_item_input(
-            conn, tournament_id, stage_item_id, stage_item_input_id, stage_item_body
+            session, tournament_id, stage_item_id, stage_item_input_id, stage_item_body
         )
     await recalculate_ranking_for_stage_item(
-        conn, tournament_id, await get_stage_item(conn, tournament_id, stage_item_id)
+        session, tournament_id, await get_stage_item(session, tournament_id, stage_item_id)
     )
-    await handle_conflicts(conn, await get_full_tournament_details(conn, tournament_id))
+    await handle_conflicts(session, await get_full_tournament_details(session, tournament_id))
     return SuccessResponse()

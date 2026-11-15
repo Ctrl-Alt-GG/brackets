@@ -28,9 +28,9 @@ from bracket.utils.id_types import (
 
 
 async def round_dependency(
-    tournament_id: TournamentId, round_id: RoundId, conn: DbSession
+    tournament_id: TournamentId, round_id: RoundId, session: DbSession
 ) -> Round:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Round)
         .join(orm.StageItem)
         .join(orm.Stage)
@@ -49,16 +49,16 @@ async def round_dependency(
 
 
 async def round_with_matches_dependency(
-    tournament_id: TournamentId, round_id: RoundId, conn: DbSession
+    tournament_id: TournamentId, round_id: RoundId, session: DbSession
 ) -> RoundWithMatches:
-    return await get_round_by_id(conn, tournament_id, round_id)
+    return await get_round_by_id(session, tournament_id, round_id)
 
 
 async def stage_dependency(
-    tournament_id: TournamentId, stage_id: StageId, conn: DbSession
+    tournament_id: TournamentId, stage_id: StageId, session: DbSession
 ) -> StageWithStageItems:
     stages_result = await get_full_tournament_details(
-        conn, tournament_id, no_draft_rounds=False, stage_id=stage_id
+        session, tournament_id, no_draft_rounds=False, stage_id=stage_id
     )
 
     if len(stages_result) < 1:
@@ -71,15 +71,15 @@ async def stage_dependency(
 
 
 async def stage_item_dependency(
-    tournament_id: TournamentId, stage_item_id: StageItemId, conn: DbSession
+    tournament_id: TournamentId, stage_item_id: StageItemId, session: DbSession
 ) -> StageItemWithRounds:
-    return await get_stage_item(conn, tournament_id, stage_item_id=stage_item_id)
+    return await get_stage_item(session, tournament_id, stage_item_id=stage_item_id)
 
 
 async def match_dependency(
-    tournament_id: TournamentId, match_id: MatchId, conn: DbSession
+    tournament_id: TournamentId, match_id: MatchId, session: DbSession
 ) -> Match:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Match)
         .join(orm.Round)
         .join(orm.StageItem)
@@ -102,8 +102,8 @@ async def match_dependency(
     return match
 
 
-async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: DbSession) -> Team:
-    entity = await conn.scalar(
+async def team_dependency(tournament_id: TournamentId, team_id: TeamId, session: DbSession) -> Team:
+    entity = await session.scalar(
         select(orm.Team)
         .where(orm.Team.id == team_id, orm.Team.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
@@ -120,9 +120,9 @@ async def team_dependency(tournament_id: TournamentId, team_id: TeamId, conn: Db
 
 
 async def team_with_players_dependency(
-    tournament_id: TournamentId, team_id: TeamId, conn: DbSession
+    tournament_id: TournamentId, team_id: TeamId, session: DbSession
 ) -> FullTeamWithPlayers:
-    teams_with_members = await get_teams_with_members(conn, tournament_id, team_id=team_id)
+    teams_with_members = await get_teams_with_members(session, tournament_id, team_id=team_id)
 
     if len(teams_with_members) < 1:
         raise HTTPException(
@@ -134,9 +134,9 @@ async def team_with_players_dependency(
 
 
 async def ranking_dependency(
-    tournament_id: TournamentId, ranking_id: RankingId, conn: DbSession
+    tournament_id: TournamentId, ranking_id: RankingId, session: DbSession
 ) -> Ranking:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Ranking)
         .where(orm.Ranking.id == ranking_id, orm.Ranking.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
@@ -152,8 +152,10 @@ async def ranking_dependency(
     return ranking
 
 
-async def disallow_archived_tournament(tournament_id: TournamentId, conn: DbSession) -> Tournament:
-    tournament = await sql_get_tournament(conn, tournament_id)
+async def disallow_archived_tournament(
+    tournament_id: TournamentId, session: DbSession
+) -> Tournament:
+    tournament = await sql_get_tournament(session, tournament_id)
     if tournament.status is TournamentStatus.ARCHIVED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

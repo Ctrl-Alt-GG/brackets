@@ -4,7 +4,6 @@ import json
 import random
 from collections.abc import Iterator
 from contextlib import contextmanager
-from decimal import Decimal
 from functools import partial
 from http import HTTPMethod
 from itertools import product
@@ -25,25 +24,9 @@ from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
 from tests.integration_tests.api.flows import api_tournament
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_auth_request
 from tests.integration_tests.models import AuthContext
+from tests.integration_tests.snapshots import canonical_tournament
 
 GOLDEN = Path(__file__).parents[1] / "assets" / "golden" / "tournament.json"
-
-
-def canonical(value: Any, key: str = "") -> Any:
-    if key in {"points", "elo_score", "swiss_score", "win_points", "draw_points", "loss_points"}:
-        return format(Decimal(str(value)).normalize(), "f")
-    if key == "created":
-        return "<created>"
-    if key == "id" or key.endswith("_id"):
-        return "<id>" if value is not None else None
-    if isinstance(value, list):
-        return [canonical(item) for item in value]
-    if isinstance(value, dict):
-        return {
-            str(index) if name.lstrip("-").isdigit() else name: canonical(item, name)
-            for index, (name, item) in enumerate(value.items())
-        }
-    return value
 
 
 @contextmanager
@@ -114,7 +97,7 @@ async def test_tournament_contract(
             request.node.user_properties.append((name, json.dumps(result)))
             # A fixed fixture catches repeated graph loads and queries added per stage item.
             assert result["queries"] <= {"activation": 20, "score": 14, "details": 15}[name]
-        actual = canonical(actual)
+        actual = canonical_tournament(actual, club_id=auth_context.club.id)
         assert actual == json.loads(GOLDEN.read_text())
         await assert_stage_filters(TournamentId(flow.id))
 
@@ -182,6 +165,7 @@ async def assert_stage_filters(tournament_id: TournamentId) -> None:
         assert len(entities) == len(complete)
         # A stored round and stage item can exist without their child collections.
         empty_item = orm.StageItem(
+            tournament_id=tournament_id,
             stage_id=complete[-1].id,
             name="No inputs",
             team_count=2,
@@ -190,7 +174,14 @@ async def assert_stage_filters(tournament_id: TournamentId) -> None:
         )
         session.add(empty_item)
         await session.flush()
-        session.add(orm.Round(stage_item_id=empty_item.id, name="Round 09", is_draft=False))
+        session.add(
+            orm.Round(
+                tournament_id=tournament_id,
+                stage_item_id=empty_item.id,
+                name="Round 09",
+                is_draft=False,
+            )
+        )
         await session.flush()
         stages = await get_full_tournament_details(
             session, tournament_id, stage_item_ids={StageItemId(empty_item.id)}

@@ -59,9 +59,10 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     if environment is Environment.PRODUCTION and not config.is_cors_enabled():
         logger.warning("It's advised to set the `CORS_ORIGINS` environment variable in production")
 
-    yield
-
-    await engine.dispose()
+    try:
+        yield
+    finally:
+        await engine.dispose()
 
 
 routers = {

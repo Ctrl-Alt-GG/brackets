@@ -48,6 +48,11 @@ On startup the backend connects to the database, runs Alembic migrations
 Health check: `GET /api/ping`. Uploaded logos are kept in the `bracket_uploads`
 volume.
 
+Upgrades validate existing tournament relationships and point values before changing
+the schema. If an upgrade reports incompatible rows, correct the listed records in
+the previous application version or database, then retry. Keep the reported migration
+pending until those corrections are complete.
+
 Logo uploads are limited to 4 megapixels and 4096 pixels per side before decoding,
 then reduced to 512 pixels and stripped of image metadata.
 
@@ -141,19 +146,40 @@ docs (`/docs`, `/redoc`) are only served in development.
 
 Database entities live in `backend/bracket/orm/`. Repository functions in `bracket/sql/`
 use an `AsyncSession` and return the Pydantic models in `bracket/models/db/` that define
-the API contract. Each request shares one session and transaction, committed before the
-response is sent. Relationships require explicit eager loading. After changing an entity,
-run `alembic check` against the current database and add a migration for intended schema
-changes.
+the API contract. GET, HEAD and OPTIONS requests use read-only `REPEATABLE READ`
+transactions, so loaded graphs, standings and totals share a database snapshot. Commands
+use `READ COMMITTED` and commit before the response is sent. Tournament edits lock the
+tournament before changing results or competitors; membership edits lock the event before
+checking access. Relationships require explicit eager loading.
 
-Tests need a PostgreSQL database; stamp it first so that the app doesn't replay
-the migrations on top of the tables the tests create:
+The cached Details loader owns its snapshot transaction. Its authorization check releases
+its connection before waiting for that loader, so requests waiting on the cache do not
+hold another database connection.
+
+Ranking rules and stage-slot points use PostgreSQL `NUMERIC` and Python `Decimal`, with
+six decimal places. Rule values range from -1000 to 1000; requests with greater decimal
+precision are rejected.
+
+Tests need a disposable PostgreSQL database. Migration tests also need a database role
+with permission to create databases. They restore the frozen `b2e5c8d1f4a7` schema in
+`backend/tests/migration_tests/assets/`, upgrade populated data to head, exercise downgrade
+and re-upgrade, and compare the resulting schema with ORM metadata, including defaults.
+They test empty-database bootstrap separately. CI runs these checks before the unit and
+integration suite, whose fixtures create tables from metadata.
 
 ```bash
 cd backend
+ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run pytest tests/migration_tests
 ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run alembic stamp head
-ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run pytest
+ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run pytest tests/unit_tests tests/integration_tests
 ```
+
+Stamping the integration-test database keeps startup from replaying migrations over
+fixture-created tables. Existing installations at `b2e5c8d1f4a7` upgrade through Alembic
+normally. An empty installation uses startup bootstrap because the oldest historical
+migrations assume application tables already exist. After changing entities, add the
+corresponding migration and run the migration suite; `alembic check` against a migrated
+database checks for remaining schema differences.
 
 Frontend:
 
@@ -225,8 +251,8 @@ decides who moves on, before the next stage is activated.
 
 `GET /api/tournaments/{id}/details` returns everything the Details pages show in
 one response, which the backend keeps for a few seconds. A venue full of phones
-that refresh every half minute costs one database read per tournament, not one
-per visitor.
+that refresh every half minute shares one Details load per tournament every few
+seconds. Each load uses several database queries.
 
 The other public reads of a tournament (stages, players, teams, rankings and
 standings) are worked out on every request. A client that can't manage the

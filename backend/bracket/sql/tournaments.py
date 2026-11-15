@@ -89,9 +89,9 @@ def with_progress(stmt: Select[orm.Tournament]) -> Select[orm.Tournament]:
     )
 
 
-async def sql_get_tournament(conn: AsyncSession, tournament_id: TournamentId) -> Tournament:
+async def sql_get_tournament(session: AsyncSession, tournament_id: TournamentId) -> Tournament:
     entity = (
-        await conn.scalars(
+        await session.scalars(
             with_progress(select(orm.Tournament).where(orm.Tournament.id == tournament_id))
         )
     ).one()
@@ -99,9 +99,9 @@ async def sql_get_tournament(conn: AsyncSession, tournament_id: TournamentId) ->
 
 
 async def sql_get_tournament_by_endpoint_name(
-    conn: AsyncSession, endpoint_name: str
+    session: AsyncSession, endpoint_name: str
 ) -> Tournament | None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         with_progress(
             select(orm.Tournament).where(
                 func.lower(orm.Tournament.dashboard_endpoint) == endpoint_name.lower(),
@@ -113,7 +113,7 @@ async def sql_get_tournament_by_endpoint_name(
 
 
 async def _get_tournaments_where(
-    conn: AsyncSession, condition: ColumnElement[bool], filter_: TournamentFilter
+    session: AsyncSession, condition: ColumnElement[bool], filter_: TournamentFilter
 ) -> list[Tournament]:
     stmt = select(orm.Tournament).where(condition)
     if filter_ != "ALL":
@@ -123,20 +123,20 @@ async def _get_tournaments_where(
         orm.Tournament.start_time.desc(),
         orm.Tournament.id,
     )
-    return [Tournament.model_validate(entity) for entity in await conn.scalars(stmt)]
+    return [Tournament.model_validate(entity) for entity in await session.scalars(stmt)]
 
 
 async def sql_get_tournaments(
-    conn: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "ALL"
+    session: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "ALL"
 ) -> list[Tournament]:
-    return await _get_tournaments_where(conn, orm.Tournament.club_id.in_(club_ids), filter_)
+    return await _get_tournaments_where(session, orm.Tournament.club_id.in_(club_ids), filter_)
 
 
 async def sql_get_visible_tournaments(
-    conn: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "OPEN"
+    session: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "OPEN"
 ) -> list[Tournament]:
     return await _get_tournaments_where(
-        conn,
+        session,
         or_(
             orm.Tournament.status == TournamentStatus.OPEN,
             orm.Tournament.dashboard_public.is_(True),
@@ -146,33 +146,42 @@ async def sql_get_visible_tournaments(
     )
 
 
-async def sql_delete_tournament(conn: AsyncSession, tournament_id: TournamentId) -> None:
-    await conn.execute(delete(orm.Tournament).where(orm.Tournament.id == tournament_id))
+async def sql_delete_tournament(session: AsyncSession, tournament_id: TournamentId) -> None:
+    # Match-to-slot and slot-to-team foreign keys deliberately refuse destructive deletions.
+    # Remove matches before stages, then let the database cascade the remaining descendants.
+    await session.execute(delete(orm.Match).where(orm.Match.tournament_id == tournament_id))
+    await session.execute(delete(orm.Stage).where(orm.Stage.tournament_id == tournament_id))
+    await session.execute(delete(orm.Tournament).where(orm.Tournament.id == tournament_id))
 
 
 async def sql_update_tournament(
-    conn: AsyncSession, tournament_id: TournamentId, tournament: TournamentUpdateBody
+    session: AsyncSession, tournament_id: TournamentId, tournament: TournamentUpdateBody
 ) -> None:
-    entity = await conn.get(orm.Tournament, tournament_id)
+    entity = await session.get(orm.Tournament, tournament_id)
     if entity is not None:
-        for name, value in tournament.model_dump().items():
-            setattr(entity, name, value)
-        await conn.flush()
+        entity.name = tournament.name
+        entity.start_time = tournament.start_time
+        entity.dashboard_public = tournament.dashboard_public
+        entity.dashboard_endpoint = tournament.dashboard_endpoint
+        entity.players_can_be_in_multiple_teams = tournament.players_can_be_in_multiple_teams
+        entity.duration_minutes = tournament.duration_minutes
+        entity.margin_minutes = tournament.margin_minutes
+        await session.flush()
 
 
 async def sql_update_tournament_logo(
-    conn: AsyncSession, tournament_id: TournamentId, logo_path: str | None
+    session: AsyncSession, tournament_id: TournamentId, logo_path: str | None
 ) -> None:
-    entity = await conn.get(orm.Tournament, tournament_id)
+    entity = await session.get(orm.Tournament, tournament_id)
     if entity is not None:
         entity.logo_path = logo_path
-        await conn.flush()
+        await session.flush()
 
 
 async def sql_move_tournament_start(
-    conn: AsyncSession, tournament_id: TournamentId, minutes: int
+    session: AsyncSession, tournament_id: TournamentId, minutes: int
 ) -> None:
-    await conn.execute(
+    await session.execute(
         update(orm.Tournament)
         .where(orm.Tournament.id == tournament_id)
         .values(start_time=orm.Tournament.start_time + func.make_interval(0, 0, 0, 0, 0, minutes))
@@ -181,16 +190,16 @@ async def sql_move_tournament_start(
 
 
 async def sql_update_tournament_status(
-    conn: AsyncSession, tournament_id: TournamentId, body: TournamentChangeStatusBody
+    session: AsyncSession, tournament_id: TournamentId, body: TournamentChangeStatusBody
 ) -> None:
-    entity = await conn.get(orm.Tournament, tournament_id)
+    entity = await session.get(orm.Tournament, tournament_id)
     if entity is not None:
         entity.status = body.status
-        await conn.flush()
+        await session.flush()
 
 
-async def sql_create_tournament(conn: AsyncSession, tournament: TournamentBody) -> TournamentId:
+async def sql_create_tournament(session: AsyncSession, tournament: TournamentBody) -> TournamentId:
     entity = orm.Tournament(**tournament.model_dump())
-    conn.add(entity)
-    await conn.flush()
+    session.add(entity)
+    await session.flush()
     return TournamentId(entity.id)

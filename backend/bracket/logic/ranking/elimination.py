@@ -1,3 +1,4 @@
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.match import Match, MatchWithDetails, MatchWithDetailsDefinitive
@@ -10,6 +11,8 @@ from bracket.utils.id_types import (
     MatchId,
     RoundId,
 )
+
+_match_details = TypeAdapter(MatchWithDetailsDefinitive | MatchWithDetails)
 
 
 def get_inputs_to_update_in_subsequent_elimination_rounds(
@@ -62,8 +65,10 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
 
             if original_inputs != updated_inputs:
                 input_ids = [input_.id if input_ else None for input_ in updated_inputs]
-                updated_match = subsequent_match.model_copy(
-                    update={
+                # Filling or clearing a slot can change which match variant validates.
+                updated_match = _match_details.validate_python(
+                    subsequent_match.model_dump()
+                    | {
                         "stage_item_input1_id": input_ids[0],
                         "stage_item_input2_id": input_ids[1],
                         "stage_item_input1": updated_inputs[0],
@@ -82,7 +87,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
 
 
 async def update_inputs_in_subsequent_elimination_rounds(
-    conn: AsyncSession,
+    session: AsyncSession,
     current_round_id: RoundId,
     stage_item: StageItemWithRounds,
     match_ids: set[MatchId] | None = None,
@@ -92,7 +97,7 @@ async def update_inputs_in_subsequent_elimination_rounds(
     )
     for match in updates.values():
         await sql_set_input_ids_for_match(
-            conn,
+            session,
             match.round_id,
             match.id,
             [match.stage_item_input1_id, match.stage_item_input2_id],
@@ -104,7 +109,7 @@ async def update_inputs_in_subsequent_elimination_rounds(
 
 
 async def update_inputs_in_complete_elimination_stage_item(
-    conn: AsyncSession,
+    session: AsyncSession,
     stage_item: StageItemWithRounds,
 ) -> None:
     """Work out every slot of the bracket again, starting from the results of the first round."""
@@ -112,4 +117,4 @@ async def update_inputs_in_complete_elimination_stage_item(
         return
 
     first_round = min(stage_item.rounds, key=lambda round_: round_.id)
-    await update_inputs_in_subsequent_elimination_rounds(conn, first_round.id, stage_item)
+    await update_inputs_in_subsequent_elimination_rounds(session, first_round.id, stage_item)

@@ -67,7 +67,7 @@ def source_name(
 
 
 async def get_updates_to_inputs_in_activated_stage(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stages: list[StageWithStageItems],
     stage_id: StageId,
@@ -82,7 +82,7 @@ async def get_updates_to_inputs_in_activated_stage(
     still open the tournament and fix it. With `strict`, as when the stage is activated, it is an
     error instead.
     """
-    team_rankings = await get_team_rankings_lookup_for_tournament(conn, tournament_id, stages)
+    team_rankings = await get_team_rankings_lookup_for_tournament(session, tournament_id, stages)
     activated_stage = next(stage for stage in stages if stage.id == stage_id)
     teams_by_input: dict[StageItemInputId, Team] = {
         input_.id: input_.team
@@ -186,7 +186,7 @@ def check_teams_take_one_slot_each(
 
 
 async def update_matches_in_activated_stage(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stages: list[StageWithStageItems],
     stage_id: StageId,
@@ -195,7 +195,7 @@ async def update_matches_in_activated_stage(
     Puts the teams that move on into the slots of the newly activated stage.
     """
     updates_per_stage_item = await get_updates_to_inputs_in_activated_stage(
-        conn, tournament_id, stages, stage_id, strict=True
+        session, tournament_id, stages, stage_id, strict=True
     )
     activated_stage = next(stage for stage in stages if stage.id == stage_id)
     for stage_item in activated_stage.stage_items:
@@ -209,7 +209,7 @@ async def update_matches_in_activated_stage(
         for stage_item_updates in updates_per_stage_item.values():
             for update in stage_item_updates:
                 await sql_set_team_id_for_stage_item_input(
-                    conn, tournament_id, update.stage_item_input.id, update.team.id
+                    session, tournament_id, update.stage_item_input.id, update.team.id
                 )
 
     resolved_inputs = {
@@ -245,7 +245,7 @@ def count_results_in_stage(stage: StageWithStageItems) -> int:
 
 
 async def update_matches_in_deactivated_stage(
-    conn: AsyncSession, tournament_id: TournamentId, deactivated_stage: StageWithStageItems
+    session: AsyncSession, tournament_id: TournamentId, deactivated_stage: StageWithStageItems
 ) -> None:
     """
     Releases the teams that advanced into the deactivated stage, and discards its results.
@@ -254,20 +254,20 @@ async def update_matches_in_deactivated_stage(
     those slots, so the results can't be kept.
     """
     for stage_item in deactivated_stage.stage_items:
-        await clear_results_for_matches_in_stage_item(conn, tournament_id, stage_item.id)
+        await clear_results_for_matches_in_stage_item(session, tournament_id, stage_item.id)
 
         for stage_item_input in stage_item.inputs:
             if stage_item_input.winner_from_stage_item_id is not None:
                 await sql_set_team_id_for_stage_item_input(
-                    conn, tournament_id, stage_item_input.id, None
+                    session, tournament_id, stage_item_input.id, None
                 )
 
         # Without results there are no winners, so the later rounds of a bracket empty out, and
         # the statistics kept with every slot start over.
-        cleared_stage_item = await get_stage_item(conn, tournament_id, stage_item.id)
+        cleared_stage_item = await get_stage_item(session, tournament_id, stage_item.id)
         if cleared_stage_item.type is StageType.SINGLE_ELIMINATION:
-            await update_inputs_in_complete_elimination_stage_item(conn, cleared_stage_item)
+            await update_inputs_in_complete_elimination_stage_item(session, cleared_stage_item)
 
         await recalculate_ranking_for_stage_item(
-            conn, tournament_id, await get_stage_item(conn, tournament_id, stage_item.id)
+            session, tournament_id, await get_stage_item(session, tournament_id, stage_item.id)
         )

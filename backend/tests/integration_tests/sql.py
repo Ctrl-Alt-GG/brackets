@@ -35,7 +35,7 @@ async def assert_row_count_and_clear(entity_type: type[orm.Base], expected_rows:
     async with AsyncSession(engine) as session, session.begin():
         row_count = await session.scalar(select(func.count()).select_from(entity_type))
         await session.execute(delete(entity_type))
-    assert row_count == expected_rows
+    assert row_count == expected_rows, (row_count, expected_rows)
 
 
 @asynccontextmanager
@@ -96,7 +96,9 @@ async def inserted_player_in_team(
     player: PlayerInsertable, team_id: TeamId
 ) -> AsyncIterator[Player]:
     async with inserted_player(player) as model:
-        async with inserted_entity(orm.PlayerXTeam(player_id=model.id, team_id=team_id)):
+        async with inserted_entity(
+            orm.PlayerXTeam(tournament_id=model.tournament_id, player_id=model.id, team_id=team_id)
+        ):
             yield model
 
 
@@ -108,7 +110,15 @@ async def inserted_stage(stage: StageInsertable) -> AsyncIterator[Stage]:
 
 @asynccontextmanager
 async def inserted_stage_item(stage_item: StageItemInsertable) -> AsyncIterator[StageItem]:
-    async with inserted_entity(orm.StageItem(**stage_item.model_dump())) as entity:
+    async with AsyncSession(engine) as session:
+        tournament_id = (
+            await session.scalars(
+                select(orm.Stage.tournament_id).where(orm.Stage.id == stage_item.stage_id)
+            )
+        ).one()
+    async with inserted_entity(
+        orm.StageItem(tournament_id=tournament_id, **stage_item.model_dump())
+    ) as entity:
         yield StageItem.model_validate(entity)
 
 
@@ -127,14 +137,28 @@ async def inserted_stage_item_input(
 
 @asynccontextmanager
 async def inserted_round(round_: RoundInsertable) -> AsyncIterator[Round]:
-    async with inserted_entity(orm.Round(**round_.model_dump())) as entity:
+    async with AsyncSession(engine) as session:
+        tournament_id = (
+            await session.scalars(
+                select(orm.StageItem.tournament_id).where(orm.StageItem.id == round_.stage_item_id)
+            )
+        ).one()
+    async with inserted_entity(
+        orm.Round(tournament_id=tournament_id, **round_.model_dump())
+    ) as entity:
         yield Round.model_validate(entity)
 
 
 @asynccontextmanager
 async def inserted_match(match: MatchInsertable) -> AsyncIterator[Match]:
+    async with AsyncSession(engine) as session:
+        tournament_id = (
+            await session.scalars(
+                select(orm.Round.tournament_id).where(orm.Round.id == match.round_id)
+            )
+        ).one()
     async with inserted_entity(
-        orm.Match(**match.model_dump(exclude_computed_fields=True))
+        orm.Match(tournament_id=tournament_id, **match.model_dump(exclude_computed_fields=True))
     ) as entity:
         yield match_without_details(entity)
 

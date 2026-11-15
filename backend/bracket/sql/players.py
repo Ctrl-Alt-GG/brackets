@@ -10,7 +10,7 @@ from bracket.utils.pagination import PaginationPlayers
 
 
 async def get_all_players_in_tournament(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -33,18 +33,19 @@ async def get_all_players_in_tournament(
     query = query.order_by(
         sort_column.desc()
         if pagination is not None and pagination.sort_direction == "desc"
-        else sort_column.asc()
+        else sort_column.asc(),
+        orm.Player.id,
     )
     if pagination is not None:
         query = query.limit(pagination.limit).offset(pagination.offset)
-    entities = await conn.scalars(query.execution_options(populate_existing=True))
+    entities = await session.scalars(query.execution_options(populate_existing=True))
     return [Player.model_validate(entity) for entity in entities]
 
 
 async def get_player_by_id(
-    conn: AsyncSession, player_id: PlayerId, tournament_id: TournamentId
+    session: AsyncSession, player_id: PlayerId, tournament_id: TournamentId
 ) -> Player | None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Player)
         .where(orm.Player.id == player_id, orm.Player.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
@@ -53,7 +54,7 @@ async def get_player_by_id(
 
 
 async def get_player_count(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -65,13 +66,13 @@ async def get_player_count(
     )
     if not_in_team:
         query = query.where(~exists().where(orm.PlayerXTeam.player_id == orm.Player.id))
-    return int(await conn.scalar(query) or 0)
+    return int(await session.scalar(query) or 0)
 
 
 async def sql_update_player(
-    conn: AsyncSession, tournament_id: TournamentId, player_id: PlayerId, body: PlayerBody
+    session: AsyncSession, tournament_id: TournamentId, player_id: PlayerId, body: PlayerBody
 ) -> Player | None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Player).where(
             orm.Player.id == player_id, orm.Player.tournament_id == tournament_id
         )
@@ -80,26 +81,22 @@ async def sql_update_player(
         return None
     entity.name = body.name
     entity.active = body.active
-    await conn.flush()
+    await session.flush()
     return Player.model_validate(entity)
 
 
 async def sql_delete_player(
-    conn: AsyncSession, tournament_id: TournamentId, player_id: PlayerId
+    session: AsyncSession, tournament_id: TournamentId, player_id: PlayerId
 ) -> None:
-    await conn.execute(
+    await session.execute(
         delete(orm.Player).where(
             orm.Player.id == player_id, orm.Player.tournament_id == tournament_id
         )
     )
 
 
-async def sql_delete_players_of_tournament(conn: AsyncSession, tournament_id: TournamentId) -> None:
-    await conn.execute(delete(orm.Player).where(orm.Player.tournament_id == tournament_id))
-
-
 async def insert_player(
-    conn: AsyncSession, player_body: PlayerBody, tournament_id: TournamentId
+    session: AsyncSession, player_body: PlayerBody, tournament_id: TournamentId
 ) -> PlayerId:
     entity = orm.Player(
         name=player_body.name,
@@ -112,6 +109,6 @@ async def insert_player(
         draws=0,
         losses=0,
     )
-    conn.add(entity)
-    await conn.flush()
+    session.add(entity)
+    await session.flush()
     return PlayerId(entity.id)

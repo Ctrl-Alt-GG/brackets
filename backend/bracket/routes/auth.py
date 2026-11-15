@@ -2,7 +2,6 @@ import hashlib
 import hmac
 import re
 from dataclasses import dataclass
-from http import HTTPMethod
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -18,9 +17,10 @@ from starlette.requests import Request
 
 from bracket import orm
 from bracket.config import Environment, config, environment
-from bracket.database import DbSession
+from bracket.database import READ_METHODS, DbSession, session_scope
 from bracket.models.db.tournament import TournamentStatus
 from bracket.models.db.user import UserInDB, UserPublic
+from bracket.sql.clubs import lock_club
 from bracket.sql.users import (
     get_user,
     get_user_access_to_club,
@@ -53,7 +53,6 @@ SESSION_COOKIE = "__Host-bracket_session" if SECURE_SESSION_COOKIE else "bracket
 # The header that state-changing requests signed in with the session cookie have to send.
 CSRF_HEADER = "X-Requested-With"
 CSRF_HEADER_VALUE = "XMLHttpRequest"
-SAFE_METHODS = frozenset({HTTPMethod.GET, HTTPMethod.HEAD, HTTPMethod.OPTIONS})
 
 # API clients send the token as a bearer token instead.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{config.api_prefix}/token", auto_error=False)
@@ -102,7 +101,7 @@ async def protect_session_from_csrf(request: Request) -> None:
     cookie has to send one. This is OWASP's custom request header defense against CSRF.
     """
     if (
-        request.method not in SAFE_METHODS
+        request.method not in READ_METHODS
         and SESSION_COOKIE in request.cookies
         # A request with its own credentials doesn't use the ambient cookie.
         and "Authorization" not in request.headers
@@ -154,13 +153,13 @@ def get_auth_hash(password_hash: str) -> str:
     return hmac.new(config.jwt_secret.encode(), password_hash.encode(), hashlib.sha256).hexdigest()
 
 
-async def authenticate_user(conn: AsyncSession, email: str, password: str) -> UserInDB | None:
+async def authenticate_user(session: AsyncSession, email: str, password: str) -> UserInDB | None:
     try:
         normalized_email = normalize_email(email)
     except ValueError:
         return None
 
-    user = await get_user(conn, normalized_email)
+    user = await get_user(session, normalized_email)
     is_valid, updated_hash = await verify_password_in_thread(
         password, user.password_hash if user is not None else DUMMY_PASSWORD_HASH
     )
@@ -168,7 +167,7 @@ async def authenticate_user(conn: AsyncSession, email: str, password: str) -> Us
         return None
 
     if updated_hash is not None:
-        await update_user_password(conn, user.id, updated_hash)
+        await update_user_password(session, user.id, updated_hash)
         return user.model_copy(update={"password_hash": updated_hash})
 
     return user
@@ -265,7 +264,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
 
 
 async def check_jwt_and_get_user(
-    conn: AsyncSession, credentials: Credentials | None, response: Response | None = None
+    session: AsyncSession, credentials: Credentials | None, response: Response | None = None
 ) -> UserPublic | None:
     """
     The user the credentials belong to, or `None` when they aren't valid (any more).
@@ -278,7 +277,7 @@ async def check_jwt_and_get_user(
         return None
 
     session_id = str(payload["sid"])
-    user = await get_user_in_db_with_session(conn, UserId(int(payload["sub"])), session_id)
+    user = await get_user_in_db_with_session(session, UserId(int(payload["sub"])), session_id)
     if user is None or not hmac.compare_digest(
         str(payload["auth_hash"]), get_auth_hash(user.password_hash)
     ):
@@ -293,11 +292,11 @@ async def check_jwt_and_get_user(
 
 
 async def user_authenticated(
-    conn: DbSession,
+    session: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic:
-    user = await check_jwt_and_get_user(conn, credentials, response)
+    user = await check_jwt_and_get_user(session, credentials, response)
     if user is None:
         raise unauthorized()
 
@@ -306,22 +305,22 @@ async def user_authenticated(
 
 async def user_authenticated_for_tournament(
     tournament_id: TournamentId,
-    conn: DbSession,
+    session: DbSession,
     response: Response,
     request: Request,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic:
-    user = await check_jwt_and_get_user(conn, credentials, response)
+    user = await check_jwt_and_get_user(session, credentials, response)
     if user is None:
         raise unauthorized()
     # Also for a tournament that doesn't exist, so that the answer doesn't tell which ids do.
-    if not await get_user_access_to_tournament(conn, tournament_id, user.id):
+    if not await get_user_access_to_tournament(session, tournament_id, user.id):
         raise forbidden("You don't have access to this tournament")
 
-    if request.method not in SAFE_METHODS:
+    if request.method not in READ_METHODS:
         # Competitor checks and score writes must share a lock: otherwise a score could be
         # recorded between checking that a slot is unused and assigning its replacement.
-        locked = await conn.execute(
+        locked = await session.execute(
             select(orm.Tournament.id).where(orm.Tournament.id == tournament_id).with_for_update()
         )
         if locked.first() is None:
@@ -332,33 +331,36 @@ async def user_authenticated_for_tournament(
 
 async def user_authenticated_for_club(
     club_id: ClubId,
-    conn: DbSession,
+    session: DbSession,
     response: Response,
+    request: Request,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic:
-    user = await check_jwt_and_get_user(conn, credentials, response)
+    user = await check_jwt_and_get_user(session, credentials, response)
     if user is None:
         raise unauthorized()
-    if not await get_user_access_to_club(conn, club_id, user.id):
+    if request.method not in READ_METHODS and not await lock_club(session, club_id):
+        raise forbidden("You don't have access to this event")
+    if not await get_user_access_to_club(session, club_id, user.id):
         raise forbidden("You don't have access to this event")
 
     return user
 
 
-async def user_authenticated_or_public_dashboard(
+async def authenticate_tournament_or_public(
+    session: AsyncSession,
     tournament_id: TournamentId,
-    conn: DbSession,
     response: Response,
-    credentials: Credentials | None = Depends(get_credentials),
+    credentials: Credentials | None,
 ) -> UserPublic | None:
     """
     The organizer of the tournament, or `None` for anyone else while the tournament is public.
     """
-    user = await check_jwt_and_get_user(conn, credentials, response)
-    if user is not None and await get_user_access_to_tournament(conn, tournament_id, user.id):
+    user = await check_jwt_and_get_user(session, credentials, response)
+    if user is not None and await get_user_access_to_tournament(session, tournament_id, user.id):
         return user
 
-    tournament = await conn.get(orm.Tournament, tournament_id)
+    tournament = await session.get(orm.Tournament, tournament_id)
     if tournament is not None and (
         tournament.dashboard_public or tournament.status is TournamentStatus.OPEN
     ):
@@ -367,6 +369,28 @@ async def user_authenticated_or_public_dashboard(
     if user is not None:
         raise forbidden("You don't have access to this tournament")
     raise unauthorized("Could not validate credentials or page is not publicly available")
+
+
+async def user_authenticated_or_public_dashboard(
+    tournament_id: TournamentId,
+    session: DbSession,
+    response: Response,
+    credentials: Credentials | None = Depends(get_credentials),
+) -> UserPublic | None:
+    return await authenticate_tournament_or_public(session, tournament_id, response, credentials)
+
+
+async def user_authenticated_for_cached_dashboard(
+    tournament_id: TournamentId,
+    response: Response,
+    credentials: Credentials | None = Depends(get_credentials),
+) -> UserPublic | None:
+    # Cached loads own their session and may outlive the initiating request. Release the
+    # authorization connection first so waiting visitors cannot exhaust the shared pool.
+    async with session_scope(read_only=True) as session:
+        return await authenticate_tournament_or_public(
+            session, tournament_id, response, credentials
+        )
 
 
 async def user_authenticated_or_rate_limited_visitor(
@@ -384,7 +408,7 @@ async def user_authenticated_or_rate_limited_visitor(
 
 
 async def user_authenticated_or_visitor(
-    conn: DbSession,
+    session: DbSession,
     response: Response,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> UserPublic | None:
@@ -395,7 +419,7 @@ async def user_authenticated_or_visitor(
     of a session that ended elsewhere (a password change, for example) until it expires, and
     pages that anyone may see must keep working for it meanwhile.
     """
-    return await check_jwt_and_get_user(conn, credentials, response)
+    return await check_jwt_and_get_user(session, credentials, response)
 
 
 @router.post("/token", response_model=Token, dependencies=[Depends(reject_cross_site_request)])
@@ -403,7 +427,7 @@ async def user_authenticated_or_visitor(
 async def login_for_access_token(
     request: Request,
     response: Response,
-    conn: DbSession,
+    session: DbSession,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
     try:
@@ -416,7 +440,7 @@ async def login_for_access_token(
     lockout_key = get_account_lockout_key(normalized_email, request)
     enforce_account_lockout(lockout_key)
 
-    user = await authenticate_user(conn, form_data.username, form_data.password)
+    user = await authenticate_user(session, form_data.username, form_data.password)
     if not user:
         retry_after = record_account_failure(lockout_key)
         if retry_after is not None:
@@ -440,7 +464,7 @@ async def login_for_access_token(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     response: Response,
-    conn: DbSession,
+    session: DbSession,
     credentials: Credentials | None = Depends(get_credentials),
 ) -> None:
     """
@@ -452,7 +476,7 @@ async def logout(
         # A session's cookie is renewed while it is used, so a copy of it can hold a token that
         # lasts longer than the one presented here. No token issued until now outlives this.
         last_expiry = datetime_utc.now() + timedelta(minutes=config.access_token_expire_minutes)
-        await revoke_session(conn, str(payload["sid"]), last_expiry)
+        await revoke_session(session, str(payload["sid"]), last_expiry)
 
     response.delete_cookie(
         SESSION_COOKIE, secure=SECURE_SESSION_COOKIE, httponly=True, samesite="strict"

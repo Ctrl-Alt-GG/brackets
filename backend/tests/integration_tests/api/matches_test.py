@@ -12,6 +12,7 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.sql.matches import match_without_details
 from bracket.utils.dummy_records import (
     DUMMY_MATCH1,
+    DUMMY_RANKING1,
     DUMMY_ROUND1,
     DUMMY_STAGE1,
     DUMMY_STAGE_ITEM1,
@@ -26,6 +27,7 @@ from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (
     assert_row_count_and_clear,
     inserted_match,
+    inserted_ranking,
     inserted_round,
     inserted_stage,
     inserted_stage_item,
@@ -130,7 +132,7 @@ async def test_delete_match(
         ) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=team1_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -138,7 +140,7 @@ async def test_delete_match(
         ) as stage_item_input1_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=1,
+                slot=2,
                 team_id=team2_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -187,7 +189,7 @@ async def test_update_match(
         ) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=team1_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -195,7 +197,7 @@ async def test_update_match(
         ) as stage_item_input1_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=1,
+                slot=2,
                 team_id=team2_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -265,7 +267,7 @@ async def test_update_endpoint_custom_duration_margin(
         ) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=0,
+                slot=1,
                 team_id=team1_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -273,7 +275,7 @@ async def test_update_endpoint_custom_duration_margin(
         ) as stage_item_input1_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
-                slot=1,
+                slot=2,
                 team_id=team2_inserted.id,
                 tournament_id=auth_context.tournament.id,
                 stage_item_id=stage_item_inserted.id,
@@ -393,12 +395,15 @@ async def test_update_match_of_other_tournament(
                 update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
             )
         ) as other_tournament,
+        inserted_ranking(
+            DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})
+        ) as other_ranking,
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": other_tournament.id})
         ) as stage,
         inserted_stage_item(
             DUMMY_STAGE_ITEM1.model_copy(
-                update={"stage_id": stage.id, "ranking_id": auth_context.ranking.id}
+                update={"stage_id": stage.id, "ranking_id": other_ranking.id}
             )
         ) as stage_item,
         inserted_round(DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item.id})) as round_,

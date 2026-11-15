@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Sized
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -47,7 +48,7 @@ limit_labels = {
 }
 
 
-def check_requirement(array: list[Any], user: UserBase, attribute: str, additions: int = 1) -> None:
+def check_requirement(array: Sized, user: UserBase, attribute: str, additions: int = 1) -> None:
     subscription = subscription_lookup[user.account_type.value]
     constraint: int = getattr(subscription, attribute)
     if len(array) + additions > constraint:

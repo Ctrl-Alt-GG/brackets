@@ -25,15 +25,20 @@ async def test_rankings_endpoint(
     async with inserted_team(
         DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
     ):
-        assert await send_tournament_request(HTTPMethod.GET, "rankings", auth_context, {}) == {
+        response = await send_tournament_request(HTTPMethod.GET, "rankings", auth_context, {})
+        for ranking in response["data"]:
+            for field in ("win_points", "draw_points", "loss_points"):
+                assert isinstance(ranking[field], str)
+                ranking[field] = Decimal(ranking[field])
+        assert response == {
             "data": [
                 {
                     "created": ANY,
                     "id": auth_context.ranking.id,
                     "position": 0,
-                    "win_points": "1.0",
-                    "draw_points": "0.5",
-                    "loss_points": "0.0",
+                    "win_points": Decimal("1.0"),
+                    "draw_points": Decimal("0.5"),
+                    "loss_points": Decimal("0.0"),
                     "add_score_points": False,
                     "tournament_id": auth_context.tournament.id,
                 }

@@ -88,8 +88,11 @@ def test_stage_item_tree_from_orm_attributes(stage_type: StageType) -> None:
 
 def test_relationships_reject_implicit_loading() -> None:
     engine = create_engine("sqlite://")
-    orm.Base.metadata.create_all(engine)
     try:
+        # Only this relationship's parent table is needed to prove that access cannot issue SQL.
+        orm.Base.metadata.create_all(
+            engine, tables=[orm.Base.metadata.tables[orm.Stage.__tablename__]]
+        )
         with Session(engine) as session:
             session.add(
                 orm.Stage(

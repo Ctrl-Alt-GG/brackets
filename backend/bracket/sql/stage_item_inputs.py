@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from pydantic import TypeAdapter
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +20,9 @@ from bracket.utils.id_types import RankingId, StageItemId, StageItemInputId, Tea
 
 
 async def get_stage_item_input_by_id(
-    conn: AsyncSession, tournament_id: TournamentId, stage_item_input_id: StageItemInputId
+    session: AsyncSession, tournament_id: TournamentId, stage_item_input_id: StageItemInputId
 ) -> StageItemInput | None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.StageItemInput)
         .where(
             orm.StageItemInput.id == stage_item_input_id,
@@ -35,9 +37,9 @@ async def get_stage_item_input_by_id(
 
 
 async def get_stage_item_ids_by_ranking_id(
-    conn: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
+    session: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
 ) -> list[StageItemId]:
-    ids = await conn.scalars(
+    ids = await session.scalars(
         select(orm.StageItem.id)
         .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
         .where(orm.StageItem.ranking_id == ranking_id, orm.Stage.tournament_id == tournament_id)
@@ -46,12 +48,12 @@ async def get_stage_item_ids_by_ranking_id(
 
 
 async def sql_set_team_id_for_stage_item_input(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stage_item_input_id: StageItemInputId,
     team_id: TeamId | None,
 ) -> None:
-    await conn.execute(
+    await session.execute(
         update(orm.StageItemInput)
         .where(
             orm.StageItemInput.tournament_id == tournament_id,
@@ -61,51 +63,56 @@ async def sql_set_team_id_for_stage_item_input(
     )
 
 
-async def sql_delete_stage_item_inputs(conn: AsyncSession, stage_item_id: StageItemId) -> None:
+async def sql_delete_stage_item_inputs(session: AsyncSession, stage_item_id: StageItemId) -> None:
     """Delete these slots, emptying the downstream slots that took their winners."""
-    await conn.execute(
+    await session.execute(
         update(orm.StageItemInput)
         .where(orm.StageItemInput.winner_from_stage_item_id == stage_item_id)
         .values(team_id=None, winner_from_stage_item_id=None, winner_position=None)
     )
-    await conn.execute(
+    await session.execute(
         delete(orm.StageItemInput).where(orm.StageItemInput.stage_item_id == stage_item_id)
     )
 
 
-async def sql_create_stage_item_input(
-    conn: AsyncSession,
+async def sql_create_stage_item_inputs(
+    session: AsyncSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
-    stage_item_input: StageItemInputCreateBody,
-) -> StageItemInputBase:
-    entity = orm.StageItemInput(
-        slot=stage_item_input.slot,
-        tournament_id=tournament_id,
-        stage_item_id=stage_item_id,
-        team_id=stage_item_input.team_id
-        if isinstance(stage_item_input, StageItemInputCreateBodyFinal)
-        else None,
-        winner_from_stage_item_id=stage_item_input.winner_from_stage_item_id
-        if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
-        else None,
-        winner_position=stage_item_input.winner_position
-        if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
-        else None,
-    )
-    conn.add(entity)
-    await conn.flush()
-    return StageItemInputBase.model_validate(entity)
+    inputs: Sequence[StageItemInputCreateBody],
+) -> list[StageItemInputBase]:
+    entities = [
+        orm.StageItemInput(
+            slot=stage_item_input.slot,
+            tournament_id=tournament_id,
+            stage_item_id=stage_item_id,
+            team_id=stage_item_input.team_id
+            if isinstance(stage_item_input, StageItemInputCreateBodyFinal)
+            else None,
+            winner_from_stage_item_id=stage_item_input.winner_from_stage_item_id
+            if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
+            else None,
+            winner_position=stage_item_input.winner_position
+            if isinstance(stage_item_input, StageItemInputCreateBodyTentative)
+            else None,
+        )
+        for stage_item_input in inputs
+    ]
+    if not entities:
+        return []
+    session.add_all(entities)
+    await session.flush()
+    return [StageItemInputBase.model_validate(entity) for entity in entities]
 
 
 async def sql_update_stage_item_input(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_input_id: StageItemInputId,
     body: StageItemInputUpdateBody,
 ) -> None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.StageItemInput)
         .where(
             orm.StageItemInput.id == stage_item_input_id,
@@ -124,4 +131,4 @@ async def sql_update_stage_item_input(
         entity.winner_position = (
             body.winner_position if isinstance(body, StageItemInputUpdateBodyTentative) else None
         )
-        await conn.flush()
+        await session.flush()

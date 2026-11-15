@@ -40,28 +40,28 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/rankings")
 async def get_rankings(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> RankingsResponse:
-    return RankingsResponse(data=await get_all_rankings_in_tournament(conn, tournament_id))
+    return RankingsResponse(data=await get_all_rankings_in_tournament(session, tournament_id))
 
 
 @router.get("/tournaments/{tournament_id}/standings")
 async def get_standings(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> StandingsResponse:
     """
     Get the teams of every stage item, best first. Teams advance to the next stage in this order.
     """
-    return StandingsResponse(data=await get_tournament_standings(conn, tournament_id))
+    return StandingsResponse(data=await get_tournament_standings(session, tournament_id))
 
 
 @router.put("/tournaments/{tournament_id}/rankings/{ranking_id}")
 async def update_ranking_by_id(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
     ranking_body: RankingBody,
@@ -70,31 +70,31 @@ async def update_ranking_by_id(
     ___: Ranking = Depends(ranking_dependency),
 ) -> SuccessResponse:
     await sql_update_ranking(
-        conn,
+        session,
         tournament_id=tournament_id,
         ranking_id=ranking_id,
         ranking_body=ranking_body,
     )
-    stage_item_ids = await get_stage_item_ids_by_ranking_id(conn, tournament_id, ranking_id)
+    stage_item_ids = await get_stage_item_ids_by_ranking_id(session, tournament_id, ranking_id)
     for stage_item_id in stage_item_ids:
-        stage_item = await get_stage_item(conn, tournament_id, stage_item_id)
-        await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
+        stage_item = await get_stage_item(session, tournament_id, stage_item_id)
+        await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
 
         if stage_item.type == StageType.SINGLE_ELIMINATION:
-            await update_inputs_in_complete_elimination_stage_item(conn, stage_item)
+            await update_inputs_in_complete_elimination_stage_item(session, stage_item)
     return SuccessResponse()
 
 
 @router.delete("/tournaments/{tournament_id}/rankings/{ranking_id}")
 async def delete_ranking(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     ___: Ranking = Depends(ranking_dependency),
 ) -> SuccessResponse:
-    stage_item_ids = await get_stage_item_ids_by_ranking_id(conn, tournament_id, ranking_id)
+    stage_item_ids = await get_stage_item_ids_by_ranking_id(session, tournament_id, ranking_id)
     if stage_item_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -104,29 +104,29 @@ async def delete_ranking(
         )
 
     # New stage items take the first ranking unless they name one.
-    if len(await get_all_rankings_in_tournament(conn, tournament_id)) <= 1:
+    if len(await get_all_rankings_in_tournament(session, tournament_id)) <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A tournament needs at least one ranking",
         )
 
-    await sql_delete_ranking(conn, tournament_id, ranking_id)
+    await sql_delete_ranking(session, tournament_id, ranking_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/rankings")
 async def create_ranking(
-    conn: DbSession,
+    session: DbSession,
     ranking_body: RankingCreateBody,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    existing_rankings = await get_all_rankings_in_tournament(conn, tournament_id)
+    existing_rankings = await get_all_rankings_in_tournament(session, tournament_id)
     check_requirement(existing_rankings, user, "max_rankings")
 
     highest_position = (
         max(x.position for x in existing_rankings) if len(existing_rankings) > 0 else -1
     )
-    await sql_create_ranking(conn, tournament_id, ranking_body, highest_position + 1)
+    await sql_create_ranking(session, tournament_id, ranking_body, highest_position + 1)
     return SuccessResponse()

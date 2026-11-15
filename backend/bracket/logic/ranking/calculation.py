@@ -214,13 +214,14 @@ def determine_team_ranking_for_stage_item(
 
 
 async def get_team_rankings_lookup_for_tournament(
-    conn: AsyncSession, tournament_id: TournamentId, stages: list[StageWithStageItems]
+    session: AsyncSession, tournament_id: TournamentId, stages: list[StageWithStageItems]
 ) -> StageItemXTeamRanking:
     stage_items = {
         stage_item.id: stage_item for stage in stages for stage_item in stage.stage_items
     }
     rankings = {
-        ranking.id: ranking for ranking in await get_all_rankings_in_tournament(conn, tournament_id)
+        ranking.id: ranking
+        for ranking in await get_all_rankings_in_tournament(session, tournament_id)
     }
     return {
         stage_item_id: determine_team_ranking_for_stage_item(
@@ -231,11 +232,11 @@ async def get_team_rankings_lookup_for_tournament(
 
 
 async def recalculate_ranking_for_stage_item(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stage_item: StageItemWithRounds,
 ) -> None:
-    ranking = await get_ranking_for_stage_item(conn, tournament_id, stage_item.id)
+    ranking = await get_ranking_for_stage_item(session, tournament_id, stage_item.id)
     assert stage_item, "Stage item not found"
     assert ranking, "Ranking not found"
 
@@ -245,7 +246,7 @@ async def recalculate_ranking_for_stage_item(
     # teams before recalculating; skipping their slots would retain the old teams' ratings
     # when another team advances into them later.
     await update_stage_item_input_statistics(
-        conn,
+        session,
         tournament_id,
         {
             stage_item_input.id: elo_per_input[stage_item_input.id]

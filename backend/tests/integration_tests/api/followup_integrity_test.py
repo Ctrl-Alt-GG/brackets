@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from bracket.routes import rounds as round_routes
-from bracket.sql.matches import sql_create_match
+from bracket.sql.matches import sql_create_matches
 from tests.integration_tests.api.flows import api_tournament, names, result
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE
 from tests.integration_tests.models import AuthContext
@@ -166,10 +166,10 @@ async def test_regeneration_keeps_the_draft_when_pairing_or_inserting_fails(
         )
 
         async def fail_after_insert(*args, **kwargs):  # type: ignore[no-untyped-def]
-            await sql_create_match(*args, **kwargs)
+            await sql_create_matches(*args, **kwargs)
             raise RuntimeError("Injected replacement failure")
 
-        with patch.object(round_routes, "sql_create_match", side_effect=fail_after_insert):
+        with patch.object(round_routes, "sql_create_matches", side_effect=fail_after_insert):
             failed = await flow.call(HTTPMethod.POST, endpoint)
         assert (await flow.stage_item(item))["rounds"][0] == before
         accepted = await flow.call(HTTPMethod.POST, endpoint)

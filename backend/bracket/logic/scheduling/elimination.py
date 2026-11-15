@@ -6,8 +6,7 @@ from bracket.models.db.match import Match, MatchCreateBody
 from bracket.models.db.stage_item import SINGLE_ELIMINATION_TEAM_COUNTS
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.util import RoundWithMatches, StageItemWithRounds
-from bracket.sql.matches import sql_create_match
-from bracket.sql.rounds import get_rounds_for_stage_item
+from bracket.sql.matches import sql_create_matches
 from bracket.sql.tournaments import sql_get_tournament
 from bracket.utils.id_types import TournamentId
 
@@ -65,24 +64,24 @@ def determine_matches_subsequent_round(
 
 
 async def build_single_elimination_stage_item(
-    conn: AsyncSession, tournament_id: TournamentId, stage_item: StageItemWithRounds
+    session: AsyncSession, tournament_id: TournamentId, stage_item: StageItemWithRounds
 ) -> None:
-    rounds = await get_rounds_for_stage_item(conn, tournament_id, stage_item.id)
-    tournament = await sql_get_tournament(conn, tournament_id)
+    rounds = stage_item.rounds
+    tournament = await sql_get_tournament(session, tournament_id)
 
     assert len(rounds) > 0
     first_round = rounds[0]
 
-    prev_matches = [
-        await sql_create_match(conn, match)
-        for match in determine_matches_first_round(first_round, stage_item, tournament)
-    ]
+    prev_matches = await sql_create_matches(
+        session, tournament_id, determine_matches_first_round(first_round, stage_item, tournament)
+    )
 
     for round_ in rounds[1:]:
-        prev_matches = [
-            await sql_create_match(conn, match)
-            for match in determine_matches_subsequent_round(prev_matches, round_, tournament)
-        ]
+        prev_matches = await sql_create_matches(
+            session,
+            tournament_id,
+            determine_matches_subsequent_round(prev_matches, round_, tournament),
+        )
 
 
 def get_number_of_rounds_to_create_single_elimination(team_count: int) -> int:

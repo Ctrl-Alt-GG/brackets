@@ -149,4 +149,5 @@ async def api_tournament(
     try:
         yield flow
     finally:
-        await send_auth_request(HTTPMethod.DELETE, f"tournaments/{flow.id}", auth_context)
+        deleted = await send_auth_request(HTTPMethod.DELETE, f"tournaments/{flow.id}", auth_context)
+        assert deleted == {"success": True}, deleted

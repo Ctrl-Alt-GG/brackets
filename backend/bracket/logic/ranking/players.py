@@ -96,7 +96,7 @@ def determine_player_statistics(
 
 
 async def get_player_statistics(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     stages: list[StageWithStageItems] | None = None,
@@ -104,9 +104,9 @@ async def get_player_statistics(
 ) -> dict[PlayerId, PlayerStatistics]:
     """`stages` (without draft rounds) and `teams` can be passed by a caller that has them."""
     if stages is None:
-        stages = await get_full_tournament_details(conn, tournament_id, no_draft_rounds=True)
+        stages = await get_full_tournament_details(session, tournament_id, no_draft_rounds=True)
     if teams is None:
-        teams = await get_teams_with_members(conn, tournament_id)
+        teams = await get_teams_with_members(session, tournament_id)
     # Replaying every match is the longest step of a tournament's pages. In a worker thread, other
     # requests are still answered while it runs.
     return await run_in_threadpool(determine_player_statistics, stages, teams)
@@ -121,7 +121,7 @@ def with_statistics(player: Player, statistics: dict[PlayerId, PlayerStatistics]
 
 
 async def get_players_with_statistics(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
@@ -133,8 +133,8 @@ async def get_players_with_statistics(
     The players with their results. Those follow from the match results, so they are worked out
     on every request instead of being read from the players table.
     """
-    statistics = await get_player_statistics(conn, tournament_id, stages=stages, teams=teams)
+    statistics = await get_player_statistics(session, tournament_id, stages=stages, teams=teams)
     players = await get_all_players_in_tournament(
-        conn, tournament_id, not_in_team=not_in_team, pagination=pagination
+        session, tournament_id, not_in_team=not_in_team, pagination=pagination
     )
     return [with_statistics(player, statistics) for player in players]

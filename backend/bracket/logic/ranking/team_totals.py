@@ -12,7 +12,7 @@ from bracket.utils.id_types import TeamId, TournamentId
 
 
 async def get_team_totals(
-    conn: AsyncSession, tournament_id: TournamentId
+    session: AsyncSession, tournament_id: TournamentId
 ) -> dict[TeamId, TeamTotals]:
     """Replay published results in schedule order, including corrections and deletions.
 
@@ -20,7 +20,7 @@ async def get_team_totals(
     stage responses without recursing through the full stage loader.
     """
     input1, input2 = aliased(orm.StageItemInput), aliased(orm.StageItemInput)
-    rows = await conn.execute(
+    rows = await session.execute(
         select(
             input1.team_id.label("team1"),
             input2.team_id.label("team2"),

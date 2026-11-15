@@ -44,7 +44,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.get("/tournaments/{tournament_id}/stages", response_model=StagesWithStageItemsResponse)
 async def get_stages(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     user: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
     no_draft_rounds: bool = False,
@@ -56,14 +56,14 @@ async def get_stages(
         )
 
     stages_ = await get_full_tournament_details(
-        conn, tournament_id, no_draft_rounds=no_draft_rounds, with_team_totals=True
+        session, tournament_id, no_draft_rounds=no_draft_rounds, with_team_totals=True
     )
     return StagesWithStageItemsResponse(data=stages_)
 
 
 @router.delete("/tournaments/{tournament_id}/stages/{stage_id}", response_model=SuccessResponse)
 async def delete_stage(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_id: StageId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -76,28 +76,28 @@ async def delete_stage(
             detail="Stage contains stage items, please delete those first",
         )
 
-    await sql_delete_stage(conn, tournament_id, stage_id)
+    await sql_delete_stage(session, tournament_id, stage_id)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stages", response_model=SuccessResponse)
 async def create_stage(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    existing_stages = await get_full_tournament_details(conn, tournament_id)
+    existing_stages = await get_full_tournament_details(session, tournament_id)
     check_requirement(existing_stages, user, "max_stages")
 
-    await sql_create_stage(conn, tournament_id)
+    await sql_create_stage(session, tournament_id)
     return SuccessResponse()
 
 
 @router.put("/tournaments/{tournament_id}/stages/{stage_id}", response_model=SuccessResponse)
 async def update_stage(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_id: StageId,
     stage_body: StageUpdateBody,
@@ -105,23 +105,23 @@ async def update_stage(
     __: Tournament = Depends(disallow_archived_tournament),
     stage: Stage = Depends(stage_dependency),  # pylint: disable=redefined-builtin
 ) -> SuccessResponse:
-    await sql_update_stage(conn, tournament_id, stage_id, stage_body)
+    await sql_update_stage(session, tournament_id, stage_id, stage_body)
 
     if stage_body.custom_duration_minutes != stage.custom_duration_minutes:
-        await schedule_all_matches(conn, tournament_id)
+        await schedule_all_matches(session, tournament_id)
 
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stages/activate", response_model=SuccessResponse)
 async def activate_next_stage(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_body: StageActivateBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    stages = await get_full_tournament_details(conn, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
     active_stage = next((stage for stage in stages if stage.is_active), None)
     if stage_body.direction == "previous" and active_stage is None:
         raise HTTPException(
@@ -137,7 +137,7 @@ async def activate_next_stage(
         )
 
     if stage_body.direction == "next":
-        await update_matches_in_activated_stage(conn, tournament_id, stages, new_active_stage.id)
+        await update_matches_in_activated_stage(session, tournament_id, stages, new_active_stage.id)
     elif active_stage is not None:
         results = count_results_in_stage(active_stage)
         if results > 0 and not stage_body.discard_results:
@@ -149,12 +149,12 @@ async def activate_next_stage(
                     "Confirm that they can be discarded."
                 ),
             )
-        await update_matches_in_deactivated_stage(conn, tournament_id, active_stage)
+        await update_matches_in_deactivated_stage(session, tournament_id, active_stage)
 
-    await sql_activate_next_stage(conn, new_active_stage.id, tournament_id)
+    await sql_activate_next_stage(session, new_active_stage.id, tournament_id)
     if stage_body.direction == "previous":
-        stages = await get_full_tournament_details(conn, tournament_id)
-    await handle_conflicts(conn, stages)
+        stages = await get_full_tournament_details(session, tournament_id)
+    await handle_conflicts(session, stages)
     return SuccessResponse()
 
 
@@ -163,18 +163,18 @@ async def activate_next_stage(
     response_model=StageItemInputOptionsResponse,
 )
 async def get_available_inputs(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> StageItemInputOptionsResponse:
-    stages = await get_full_tournament_details(conn, tournament_id)
-    teams = await get_teams_with_members(conn, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
+    teams = await get_teams_with_members(session, tournament_id)
     return StageItemInputOptionsResponse(data=determine_available_inputs(teams, stages))
 
 
 @router.get("/tournaments/{tournament_id}/next_stage_rankings")
 async def get_next_stage_rankings(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
 ) -> StageRankingResponse:
@@ -185,7 +185,7 @@ async def get_next_stage_rankings(
     the slot takes. `tied_team` names a team that is level on every criterion with the one that
     gets the slot, which only seeding put behind it.
     """
-    stages = await get_full_tournament_details(conn, tournament_id, with_team_totals=True)
+    stages = await get_full_tournament_details(session, tournament_id, with_team_totals=True)
     next_stage = get_adjacent_stage(stages, "next")
 
     if next_stage is None:
@@ -193,6 +193,6 @@ async def get_next_stage_rankings(
 
     return StageRankingResponse(
         data=await get_updates_to_inputs_in_activated_stage(
-            conn, tournament_id, stages, next_stage.id
+            session, tournament_id, stages, next_stage.id
         )
     )

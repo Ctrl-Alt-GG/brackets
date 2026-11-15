@@ -1,4 +1,5 @@
 from bracket.logic.ranking.elimination import get_inputs_to_update_in_subsequent_elimination_rounds
+from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.utils.id_types import (
     RoundId,
     TournamentId,
@@ -35,8 +36,9 @@ def test_elimination_input_updates() -> None:
     )
 
     assert updates == {
-        matches[2].id: matches[2].model_copy(
-            update={
+        matches[2].id: MatchWithDetailsDefinitive.model_validate(
+            matches[2].model_dump()
+            | {
                 "stage_item_input1_id": stage_item_inputs[0].id,
                 "stage_item_input2_id": stage_item_inputs[3].id,
                 "stage_item_input1": stage_item_inputs[0],

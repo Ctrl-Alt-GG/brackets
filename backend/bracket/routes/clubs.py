@@ -43,7 +43,7 @@ router = APIRouter(prefix=config.api_prefix)
 
 
 async def name_is_taken(
-    conn: DbSession, user_id: UserId, name: str, club_id: ClubId | None = None
+    session: DbSession, user_id: UserId, name: str, club_id: ClubId | None = None
 ) -> bool:
     """
     The events an organizer owns have different names. Others may use the same ones, also the
@@ -51,14 +51,14 @@ async def name_is_taken(
     """
     return any(
         club.name.casefold() == name.casefold() and club.id != club_id
-        for club in await get_clubs_for_user_id(conn, user_id, UserXClubRelation.OWNER)
+        for club in await get_clubs_for_user_id(session, user_id, UserXClubRelation.OWNER)
     )
 
 
 async def check_name_is_free(
-    conn: DbSession, user: UserPublic, name: str, club_id: ClubId | None = None
+    session: DbSession, user: UserPublic, name: str, club_id: ClubId | None = None
 ) -> None:
-    if await name_is_taken(conn, user.id, name, club_id):
+    if await name_is_taken(session, user.id, name, club_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You already have an event with this name",
@@ -66,10 +66,10 @@ async def check_name_is_free(
 
 
 async def user_owns_club(
-    club_id: ClubId, conn: DbSession, user: UserPublic = Depends(user_authenticated_for_club)
+    club_id: ClubId, session: DbSession, user: UserPublic = Depends(user_authenticated_for_club)
 ) -> UserPublic:
     """The event's owner. Organizers who were added to help can't rename it or manage who helps."""
-    members = await get_club_members(conn, club_id)
+    members = await get_club_members(session, club_id)
     if not any(
         member.user_id == user.id and member.relation is UserXClubRelation.OWNER
         for member in members
@@ -81,46 +81,46 @@ async def user_owns_club(
 
 @router.get("/clubs", response_model=ClubsResponse)
 async def get_clubs(
-    conn: DbSession, user: UserPublic = Depends(user_authenticated)
+    session: DbSession, user: UserPublic = Depends(user_authenticated)
 ) -> ClubsResponse:
-    return ClubsResponse(data=await get_clubs_for_user_id(conn, user.id))
+    return ClubsResponse(data=await get_clubs_for_user_id(session, user.id))
 
 
 @router.post("/clubs", response_model=ClubResponse)
 async def create_new_club(
-    conn: DbSession, club: ClubCreateBody, user: UserPublic = Depends(user_authenticated)
+    session: DbSession, club: ClubCreateBody, user: UserPublic = Depends(user_authenticated)
 ) -> ClubResponse:
-    existing_clubs = await get_clubs_for_user_id(conn, user.id)
+    existing_clubs = await get_clubs_for_user_id(session, user.id)
     check_requirement(existing_clubs, user, "max_clubs")
-    await check_name_is_free(conn, user, club.name)
+    await check_name_is_free(session, user, club.name)
 
-    return ClubResponse(data=await create_club(conn, club, user.id))
+    return ClubResponse(data=await create_club(session, club, user.id))
 
 
 @router.delete("/clubs/{club_id}", response_model=SuccessResponse)
 async def delete_club(
-    conn: DbSession, club_id: ClubId, _: UserPublic = Depends(user_owns_club)
+    session: DbSession, club_id: ClubId, _: UserPublic = Depends(user_owns_club)
 ) -> SuccessResponse:
     with check_foreign_key_violation({ForeignKey.tournaments_club_id_fkey}):
-        await sql_delete_club(conn, club_id)
+        await sql_delete_club(session, club_id)
 
     return SuccessResponse()
 
 
 @router.put("/clubs/{club_id}", response_model=ClubResponse)
 async def update_club(
-    conn: DbSession,
+    session: DbSession,
     club_id: ClubId,
     club: ClubUpdateBody,
     user: UserPublic = Depends(user_owns_club),
 ) -> ClubResponse:
-    await check_name_is_free(conn, user, club.name, club_id)
-    return ClubResponse(data=await sql_update_club(conn, club_id, club))
+    await check_name_is_free(session, user, club.name, club_id)
+    return ClubResponse(data=await sql_update_club(session, club_id, club))
 
 
 @router.put("/clubs/{club_id}/owner", response_model=ClubMembersResponse)
 async def transfer_ownership(
-    conn: DbSession,
+    session: DbSession,
     club_id: ClubId,
     body: ClubOwnerUpdateBody,
     _: UserPublic = Depends(user_owns_club),
@@ -129,7 +129,7 @@ async def transfer_ownership(
     Hand the event over to another of its organizers, for an owner who leaves the organizing
     team. The previous owner stays on as an organizer.
     """
-    members = await get_club_members(conn, club_id)
+    members = await get_club_members(session, club_id)
     new_owner = next((member for member in members if member.user_id == body.user_id), None)
     if new_owner is None:
         raise HTTPException(
@@ -141,8 +141,8 @@ async def transfer_ownership(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"{new_owner.name} owns it already"
         )
 
-    club = await get_club_by_id(conn, club_id)
-    if await name_is_taken(conn, new_owner.user_id, club.name, club_id):
+    club = await get_club_by_id(session, club_id)
+    if await name_is_taken(session, new_owner.user_id, club.name, club_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -151,16 +151,16 @@ async def transfer_ownership(
             ),
         )
 
-    await sql_make_club_owner(conn, club_id, new_owner.user_id)
-    return ClubMembersResponse(data=await get_club_members(conn, club_id))
+    await sql_make_club_owner(session, club_id, new_owner.user_id)
+    return ClubMembersResponse(data=await get_club_members(session, club_id))
 
 
 @router.get("/clubs/{club_id}/members", response_model=ClubMembersResponse)
 async def get_members(
-    conn: DbSession, club_id: ClubId, _: UserPublic = Depends(user_authenticated_for_club)
+    session: DbSession, club_id: ClubId, _: UserPublic = Depends(user_authenticated_for_club)
 ) -> ClubMembersResponse:
     """The organizers of an event: its owner and the people the owner added."""
-    return ClubMembersResponse(data=await get_club_members(conn, club_id))
+    return ClubMembersResponse(data=await get_club_members(session, club_id))
 
 
 @router.post("/clubs/{club_id}/members", response_model=ClubMembersResponse)
@@ -169,7 +169,7 @@ async def add_member(
     request: Request,
     # The rate limiter writes its headers to this.
     response: Response,
-    conn: DbSession,
+    session: DbSession,
     club_id: ClubId,
     body: ClubMemberCreateBody,
     _: UserPublic = Depends(user_owns_club),
@@ -180,33 +180,33 @@ async def add_member(
     """
     del request, response
 
-    user = await get_user(conn, body.email)
+    user = await get_user(session, body.email)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No account has this email address. They need an account first.",
         )
 
-    members = await get_club_members(conn, club_id)
+    members = await get_club_members(session, club_id)
     if any(member.user_id == user.id for member in members):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"{user.name} already helps run this event",
         )
 
-    await sql_give_user_access_to_club(conn, user.id, club_id, UserXClubRelation.COLLABORATOR)
-    return ClubMembersResponse(data=await get_club_members(conn, club_id))
+    await sql_give_user_access_to_club(session, user.id, club_id, UserXClubRelation.COLLABORATOR)
+    return ClubMembersResponse(data=await get_club_members(session, club_id))
 
 
 @router.delete("/clubs/{club_id}/members/{user_id}", response_model=ClubMembersResponse)
 async def remove_member(
-    conn: DbSession,
+    session: DbSession,
     club_id: ClubId,
     user_id: UserId,
     user: UserPublic = Depends(user_authenticated_for_club),
 ) -> ClubMembersResponse:
     """Remove an organizer from the event. The owner removes others; anyone can leave."""
-    members = await get_club_members(conn, club_id)
+    members = await get_club_members(session, club_id)
     member = next((member for member in members if member.user_id == user_id), None)
     if member is None:
         raise HTTPException(
@@ -226,5 +226,5 @@ async def remove_member(
     if not is_owner and user.id != user_id:
         raise forbidden("Only the owner of this event can remove someone else")
 
-    await sql_remove_user_from_club(conn, user_id, club_id)
-    return ClubMembersResponse(data=await get_club_members(conn, club_id))
+    await sql_remove_user_from_club(session, user_id, club_id)
+    return ClubMembersResponse(data=await get_club_members(session, club_id))

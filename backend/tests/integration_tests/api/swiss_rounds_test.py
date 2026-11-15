@@ -10,8 +10,11 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
 )
 from bracket.models.db.util import RoundWithMatches
-from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
-from bracket.sql.stage_items import get_stage_item, sql_create_stage_item_with_inputs
+from bracket.sql.stage_items import (
+    get_stage_item,
+    sql_create_stage_item_with_inputs,
+    sql_delete_stage_item,
+)
 from bracket.utils.dummy_records import DUMMY_STAGE1, DUMMY_TEAM1
 from bracket.utils.id_types import StageItemInputId
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
@@ -59,7 +62,7 @@ async def test_generate_and_publish_swiss_rounds(
                 ],
             ),
         )
-        stack.push_async_callback(sql_delete_stage_item_with_foreign_keys, session, stage_item.id)
+        stack.push_async_callback(sql_delete_stage_item, session, stage_item.id)
         round_body = {"stage_item_id": stage_item.id}
 
         response = await send_tournament_request(
@@ -155,5 +158,5 @@ async def test_generate_round_needs_swiss_stage_item_with_teams(
                 HTTPMethod.POST, "rounds", auth_context, json={"stage_item_id": swiss.id}
             ) == {"detail": "Assign at least two active teams to this stage item first"}
         finally:
-            await sql_delete_stage_item_with_foreign_keys(session, swiss.id)
-            await sql_delete_stage_item_with_foreign_keys(session, round_robin.id)
+            await sql_delete_stage_item(session, swiss.id)
+            await sql_delete_stage_item(session, round_robin.id)

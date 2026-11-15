@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from heliclockter import datetime_utc, timedelta
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInput
@@ -107,6 +109,12 @@ class MatchBody(BaseModelORM):
     scoreless_result: bool = False
     custom_duration_minutes: int | None = Field(None, ge=1, le=MAX_MINUTES)
     custom_margin_minutes: int | None = Field(None, ge=0, le=MAX_MINUTES)
+
+    @model_validator(mode="after")
+    def normalize_scoreless_result(self) -> MatchBody:
+        if self.stage_item_input1_score or self.stage_item_input2_score:
+            self.scoreless_result = False
+        return self
 
 
 class ScheduleDelayBody(BaseModelORM):

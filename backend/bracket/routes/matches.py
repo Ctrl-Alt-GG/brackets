@@ -24,7 +24,7 @@ from bracket.routes.auth import user_authenticated_for_tournament
 from bracket.routes.models import SingleMatchResponse, SuccessResponse
 from bracket.routes.util import disallow_archived_tournament, match_dependency
 from bracket.sql.matches import (
-    sql_create_match,
+    sql_create_matches,
     sql_delete_match,
     sql_get_match,
     sql_update_match,
@@ -33,7 +33,7 @@ from bracket.sql.rounds import get_round_by_id
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament
-from bracket.sql.validation import check_foreign_keys_belong_to_tournament
+from bracket.sql.validation import validate_match_create
 from bracket.utils.id_types import MatchId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -41,14 +41,14 @@ router = APIRouter(prefix=config.api_prefix)
 
 @router.delete("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def delete_match(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
     match: Match = Depends(match_dependency),
 ) -> SuccessResponse:
-    round_ = await get_round_by_id(conn, tournament_id, match.round_id)
-    stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
+    round_ = await get_round_by_id(session, tournament_id, match.round_id)
+    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
 
     if not round_.is_draft or stage_item.type != StageType.SWISS:
         raise HTTPException(
@@ -56,27 +56,26 @@ async def delete_match(
             detail="Can only delete matches from draft rounds in Swiss stage items",
         )
 
-    await sql_delete_match(conn, match.id)
+    await sql_delete_match(session, match.id)
 
-    stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
+    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
 
-    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
-    await schedule_all_matches(conn, tournament_id)
+    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
+    await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/matches", response_model=SingleMatchResponse)
 async def create_match(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     match_body: MatchCreateBodyFrontend,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SingleMatchResponse:
-    await check_foreign_keys_belong_to_tournament(conn, match_body, tournament_id)
-
-    round_ = await get_round_by_id(conn, tournament_id, match_body.round_id)
-    stage_item = await get_stage_item(conn, tournament_id, round_.stage_item_id)
+    round_metadata = await validate_match_create(session, tournament_id, match_body)
+    stage_item = await get_stage_item(session, tournament_id, round_metadata.stage_item_id)
+    round_ = next(round_ for round_ in stage_item.rounds if round_.id == round_metadata.id)
 
     if not round_.is_draft or stage_item.type != StageType.SWISS:
         raise HTTPException(
@@ -113,32 +112,32 @@ async def create_match(
             detail="One of these teams already has a match in this round",
         )
 
-    tournament = await sql_get_tournament(conn, tournament_id)
+    tournament = await sql_get_tournament(session, tournament_id)
     body_with_durations = MatchCreateBody(
         **match_body.model_dump(),
         duration_minutes=tournament.duration_minutes,
         margin_minutes=tournament.margin_minutes,
     )
 
-    match = await sql_create_match(conn, body_with_durations)
-    await schedule_all_matches(conn, tournament_id)
-    return SingleMatchResponse(data=await sql_get_match(conn, match.id))
+    [match] = await sql_create_matches(session, tournament_id, [body_with_durations])
+    await schedule_all_matches(session, tournament_id)
+    return SingleMatchResponse(data=await sql_get_match(session, match.id))
 
 
 @router.post("/tournaments/{tournament_id}/schedule_matches", response_model=SuccessResponse)
 async def schedule_matches(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
     __: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    await schedule_all_matches(conn, tournament_id)
+    await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/delay_schedule", response_model=SuccessResponse)
 async def delay_schedule(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     body: ScheduleDelayBody,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -148,13 +147,13 @@ async def delay_schedule(
     Move every round that hasn't been played yet, and everything after it, for an event that
     runs late. A negative number of minutes moves them earlier.
     """
-    await delay_upcoming_matches(conn, tournament_id, body.minutes)
+    await delay_upcoming_matches(session, tournament_id, body.minutes)
     return SuccessResponse()
 
 
 @router.put("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def update_match_by_id(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     match_id: MatchId,
     match_body: MatchBody,
@@ -162,7 +161,7 @@ async def update_match_by_id(
     tournament: Tournament = Depends(disallow_archived_tournament),
     match: Match = Depends(match_dependency),
 ) -> SuccessResponse:
-    stages = await get_full_tournament_details(conn, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
     stage_item, round_ = next(
         (stage_item, round_)
         for stage in stages
@@ -195,12 +194,10 @@ async def update_match_by_id(
             ),
         )
 
-    await sql_update_match(conn, match_id, match_body)
+    await sql_update_match(session, match_id, match_body)
     current_match.stage_item_input1_score = match_body.stage_item_input1_score
     current_match.stage_item_input2_score = match_body.stage_item_input2_score
-    current_match.scoreless_result = match_body.scoreless_result and not (
-        match_body.stage_item_input1_score or match_body.stage_item_input2_score
-    )
+    current_match.scoreless_result = match_body.scoreless_result
     current_match.custom_duration_minutes = match_body.custom_duration_minutes
     current_match.custom_margin_minutes = match_body.custom_margin_minutes
 
@@ -208,16 +205,16 @@ async def update_match_by_id(
         # Propagation updates both the stored competitors and this loaded tree, so conflict and
         # ranking calculations see cleared downstream results without fetching the tree again.
         await update_inputs_in_subsequent_elimination_rounds(
-            conn, round_.id, stage_item, {match_id}
+            session, round_.id, stage_item, {match_id}
         )
 
     if (
         match_body.custom_duration_minutes != match.custom_duration_minutes
         or match_body.custom_margin_minutes != match.custom_margin_minutes
     ):
-        await schedule_all_matches(conn, tournament_id, stages=stages, tournament=tournament)
+        await schedule_all_matches(session, tournament_id, stages=stages, tournament=tournament)
     elif is_knockout:
-        await handle_conflicts(conn, stages)
+        await handle_conflicts(session, stages)
 
-    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
+    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
     return SuccessResponse()

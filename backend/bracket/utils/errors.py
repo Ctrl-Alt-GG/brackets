@@ -17,6 +17,9 @@ class UniqueIndex(EnumAutoStr):
     stage_item_inputs_stage_item_id_team_id_key = auto()
     stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key = auto()
     users_x_clubs_club_id_user_id_key = auto()
+    uq_users_x_clubs_owner = auto()
+    uq_players_x_teams_membership = auto()
+    uq_stage_item_inputs_slot = auto()
 
 
 class ForeignKey(EnumAutoStr):
@@ -39,6 +42,9 @@ unique_index_violation_error_lookup = {
         "This place is already taken by another slot of this stage item"
     ),
     UniqueIndex.users_x_clubs_club_id_user_id_key: "This account already helps run this event",
+    UniqueIndex.uq_users_x_clubs_owner: "This event already has an owner",
+    UniqueIndex.uq_players_x_teams_membership: "This player is already in this team",
+    UniqueIndex.uq_stage_item_inputs_slot: "This slot is already part of this stage item",
 }
 
 
@@ -67,8 +73,8 @@ def check_unique_constraint_violation(expected_violations: set[UniqueIndex]) -> 
             raise
 
         constraint_name = error.as_dict()["constraint_name"]
-        assert constraint_name, "UniqueViolationError occurred but no constraint_name defined"
-        assert constraint_name in UniqueIndex.values(), "Unknown UniqueViolationError occurred"
+        if constraint_name not in UniqueIndex.values():
+            raise
         constraint = UniqueIndex(constraint_name)
 
         if (
@@ -93,10 +99,8 @@ def check_foreign_key_violation(expected_violations: set[ForeignKey]) -> Iterato
             raise
 
         constraint_name = error.as_dict()["constraint_name"]
-        assert constraint_name, "ForeignKeyViolationError occurred but no constraint_name defined"
-        assert constraint_name in ForeignKey.values(), (
-            f"Unknown ForeignKeyViolationError occurred: {constraint_name}"
-        )
+        if constraint_name not in ForeignKey.values():
+            raise
         constraint = ForeignKey(constraint_name)
 
         if (

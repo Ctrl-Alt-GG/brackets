@@ -7,10 +7,11 @@ from pydantic import BaseModel, Field
 from bracket.models.db.shared import BaseModelORM
 from bracket.utils.id_types import RankingId, TournamentId
 
-# Far beyond any real points rule. The points are stored as floating point numbers, which hold
-# values of this size with more decimals than anyone enters.
+# Points rules have at most six decimal places and are stored exactly in PostgreSQL NUMERIC.
 MAX_RANKING_POINTS = 1000
-RankingPoints = Annotated[Decimal, Field(ge=-MAX_RANKING_POINTS, le=MAX_RANKING_POINTS)]
+RankingPoints = Annotated[
+    Decimal, Field(ge=-MAX_RANKING_POINTS, le=MAX_RANKING_POINTS, decimal_places=6)
+]
 
 
 class RankingInsertable(BaseModel):

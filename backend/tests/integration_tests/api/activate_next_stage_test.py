@@ -12,8 +12,7 @@ from bracket.models.db.stage_item_inputs import (
 )
 from bracket.models.db.util import StageWithStageItems
 from bracket.sql.matches import sql_update_match
-from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
-from bracket.sql.stage_items import sql_create_stage_item_with_inputs
+from bracket.sql.stage_items import sql_create_stage_item_with_inputs, sql_delete_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.dummy_records import (
     DUMMY_STAGE1,
@@ -125,8 +124,8 @@ async def test_activate_next_stage(
         )
         [_, next_stage] = await get_full_tournament_details(session, auth_context.tournament.id)
 
-        await sql_delete_stage_item_with_foreign_keys(session, stage_item_2.id)
-        await sql_delete_stage_item_with_foreign_keys(session, stage_item_1.id)
+        await sql_delete_stage_item(session, stage_item_2.id)
+        await sql_delete_stage_item(session, stage_item_1.id)
 
     assert response == SUCCESS_RESPONSE
 

@@ -26,13 +26,13 @@ from bracket.routes.auth import (
 )
 from bracket.routes.models import SuccessResponse
 from bracket.routes.util import disallow_archived_tournament, stage_item_dependency
-from bracket.sql.shared import sql_delete_stage_item_with_foreign_keys
 from bracket.sql.stage_items import (
     sql_create_stage_item_with_empty_inputs,
+    sql_delete_stage_item,
     sql_update_stage_item_name,
 )
 from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.validation import check_foreign_keys_belong_to_tournament
+from bracket.sql.validation import validate_stage_item_create
 from bracket.utils.id_types import StageItemId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -42,7 +42,7 @@ router = APIRouter(prefix=config.api_prefix)
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def delete_stage_item(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     _: UserPublic = Depends(user_authenticated_for_tournament),
@@ -55,7 +55,7 @@ async def delete_stage_item(
     Slots of later stage items that take a team from it become open again. That is refused
     once such a stage item has results, which belong to the teams that advanced.
     """
-    stages = await get_full_tournament_details(conn, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
     fed_with_results = sorted(
         {
             stage_item.name
@@ -76,28 +76,28 @@ async def delete_stage_item(
             ),
         )
 
-    await sql_delete_stage_item_with_foreign_keys(conn, stage_item_id)
-    await schedule_all_matches(conn, tournament_id)
+    await sql_delete_stage_item(session, stage_item_id)
+    await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/stage_items", response_model=SuccessResponse)
 async def create_stage_item(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_body: StageItemCreateBody,
     user: UserPublic = Depends(user_authenticated_for_tournament),
     _: Tournament = Depends(disallow_archived_tournament),
 ) -> SuccessResponse:
-    await check_foreign_keys_belong_to_tournament(conn, stage_body, tournament_id)
+    await validate_stage_item_create(session, tournament_id, stage_body)
 
-    stages = await get_full_tournament_details(conn, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
     existing_stage_items = [stage_item for stage in stages for stage_item in stage.stage_items]
     check_requirement(existing_stage_items, user, "max_stage_items")
 
-    stage_item = await sql_create_stage_item_with_empty_inputs(conn, tournament_id, stage_body)
-    await build_matches_for_stage_item(conn, stage_item, tournament_id)
-    await schedule_all_matches(conn, tournament_id)
+    stage_item = await sql_create_stage_item_with_empty_inputs(session, tournament_id, stage_body)
+    await build_matches_for_stage_item(session, stage_item, tournament_id)
+    await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
 
 
@@ -105,7 +105,7 @@ async def create_stage_item(
     "/tournaments/{tournament_id}/stage_items/{stage_item_id}", response_model=SuccessResponse
 )
 async def update_stage_item(
-    conn: DbSession,
+    session: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
     stage_item_body: StageItemUpdateBody,
@@ -113,8 +113,8 @@ async def update_stage_item(
     __: Tournament = Depends(disallow_archived_tournament),
     stage_item: StageItemWithRounds = Depends(stage_item_dependency),
 ) -> SuccessResponse:
-    await sql_update_stage_item_name(conn, stage_item.id, stage_item_body.name)
-    await recalculate_ranking_for_stage_item(conn, tournament_id, stage_item)
+    await sql_update_stage_item_name(session, stage_item.id, stage_item_body.name)
+    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
     if stage_item.type == StageType.SINGLE_ELIMINATION:
-        await update_inputs_in_complete_elimination_stage_item(conn, stage_item)
+        await update_inputs_in_complete_elimination_stage_item(session, stage_item)
     return SuccessResponse()

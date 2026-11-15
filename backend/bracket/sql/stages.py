@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -9,11 +11,11 @@ from bracket.logic.ranking.team_totals import get_team_totals
 from bracket.models.db.stage import Stage, StageUpdateBody
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.util import StageWithStageItems
-from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
+from bracket.utils.id_types import RoundId, StageId, StageItemId, TeamId, TournamentId
 
 
 async def get_full_tournament_details(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     round_id: RoundId | None = None,
     stage_id: StageId | None = None,
@@ -56,14 +58,18 @@ async def get_full_tournament_details(
     if stage_item_ids is not None:
         stmt = stmt.where(orm.Stage.stage_items.any(orm.StageItem.id.in_(stage_item_ids)))
 
-    stages = [StageWithStageItems.model_validate(stage) for stage in await conn.scalars(stmt)]
+    stages = [StageWithStageItems.model_validate(stage) for stage in await session.scalars(stmt)]
     if with_team_totals:
-        await add_team_totals(conn, tournament_id, stages)
+        await add_team_totals(session, tournament_id, stages)
     return stages
 
 
 async def add_team_totals(
-    conn: AsyncSession, tournament_id: TournamentId, stages: list[StageWithStageItems]
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    stages: list[StageWithStageItems],
+    *,
+    totals: Mapping[TeamId, TeamTotals] | None = None,
 ) -> None:
     # The slots of a stage item and those in its matches are separate copies.
     inputs = [
@@ -84,7 +90,8 @@ async def add_team_totals(
     if not inputs:
         return
 
-    totals = await get_team_totals(conn, tournament_id)
+    if totals is None:
+        totals = await get_team_totals(session, tournament_id)
     for input_ in inputs:
         input_.team = input_.team.model_copy(
             update=totals.get(input_.team_id, TeamTotals()).model_dump()
@@ -92,39 +99,39 @@ async def add_team_totals(
 
 
 async def sql_delete_stage(
-    conn: AsyncSession, tournament_id: TournamentId, stage_id: StageId
+    session: AsyncSession, tournament_id: TournamentId, stage_id: StageId
 ) -> None:
-    await conn.execute(
+    await session.execute(
         delete(orm.Stage).where(orm.Stage.id == stage_id, orm.Stage.tournament_id == tournament_id)
     )
 
 
-async def sql_create_stage(conn: AsyncSession, tournament_id: TournamentId) -> Stage:
+async def sql_create_stage(session: AsyncSession, tournament_id: TournamentId) -> Stage:
     stage = orm.Stage(name="Stage", tournament_id=tournament_id, is_active=False)
-    conn.add(stage)
-    await conn.flush()
+    session.add(stage)
+    await session.flush()
     return Stage.model_validate(stage)
 
 
 async def sql_update_stage(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     stage_id: StageId,
     body: StageUpdateBody,
 ) -> None:
-    stage = await conn.scalar(
+    stage = await session.scalar(
         select(orm.Stage).where(orm.Stage.id == stage_id, orm.Stage.tournament_id == tournament_id)
     )
     if stage is not None:
         stage.name = body.name
         stage.custom_duration_minutes = body.custom_duration_minutes
-        await conn.flush()
+        await session.flush()
 
 
 async def sql_activate_next_stage(
-    conn: AsyncSession, new_active_stage_id: StageId, tournament_id: TournamentId
+    session: AsyncSession, new_active_stage_id: StageId, tournament_id: TournamentId
 ) -> None:
-    await conn.execute(
+    await session.execute(
         update(orm.Stage)
         .where(orm.Stage.tournament_id == tournament_id)
         .values(is_active=orm.Stage.id == new_active_stage_id)

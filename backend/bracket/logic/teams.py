@@ -6,9 +6,9 @@ from bracket.utils.uploads import get_existing_upload_path
 
 
 async def get_team_logo_path(
-    conn: AsyncSession, tournament_id: TournamentId, team_id: TeamId
+    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId
 ) -> str | None:
-    team = await get_team_by_id(conn, team_id, tournament_id)
+    team = await get_team_by_id(session, team_id, tournament_id)
     logo_path = await get_existing_upload_path(
         "team-logos", team.logo_path if team is not None else None
     )

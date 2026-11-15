@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.logic.planning.conflicts import handle_conflicts
-from bracket.models.db.match import MatchTiming, is_played
+from bracket.models.db.match import MAX_MINUTES, MatchTiming, is_played
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.util import RoundWithMatches, StageWithStageItems
 from bracket.sql.matches import sql_add_margin_to_matches, sql_update_match_timings
@@ -76,7 +76,7 @@ def plan_match_timings(
 
 
 async def schedule_all_matches(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     *,
     stages: list[StageWithStageItems] | None = None,
@@ -89,9 +89,9 @@ async def schedule_all_matches(
     time or any match duration or margin changes.
     """
     if tournament is None:
-        tournament = await sql_get_tournament(conn, tournament_id)
+        tournament = await sql_get_tournament(session, tournament_id)
     if stages is None:
-        stages = await get_full_tournament_details(conn, tournament_id)
+        stages = await get_full_tournament_details(session, tournament_id)
     matches = {
         match.id: match
         for stage in stages
@@ -111,14 +111,14 @@ async def schedule_all_matches(
         != (timing.start_time, timing.duration_minutes, timing.margin_minutes)
     ]
     if changed_timings:
-        await sql_update_match_timings(conn, changed_timings)
+        await sql_update_match_timings(session, changed_timings)
         for timing in changed_timings:
             match = matches[timing.match_id]
             match.start_time = timing.start_time
             match.duration_minutes = timing.duration_minutes
             match.margin_minutes = timing.margin_minutes
     # Adding/removing competitors can change conflicts even when every time stays the same.
-    await handle_conflicts(conn, stages)
+    await handle_conflicts(session, stages)
 
 
 class ScheduleDelay(NamedTuple):
@@ -212,11 +212,11 @@ def plan_schedule_delay(stages: list[StageWithStageItems]) -> ScheduleDelay | No
 
 
 async def delay_upcoming_matches(
-    conn: AsyncSession, tournament_id: TournamentId, minutes: int
+    session: AsyncSession, tournament_id: TournamentId, minutes: int
 ) -> None:
     """Move the rounds that are still to be played, for an event that runs late (or early)."""
-    tournament = await sql_get_tournament(conn, tournament_id)
-    stages = await get_full_tournament_details(conn, tournament_id)
+    tournament = await sql_get_tournament(session, tournament_id)
+    stages = await get_full_tournament_details(session, tournament_id)
     delay = plan_schedule_delay(stages)
     if delay is None:
         raise HTTPException(
@@ -225,22 +225,29 @@ async def delay_upcoming_matches(
         )
 
     if delay.moves_tournament_start:
-        await sql_move_tournament_start(conn, tournament_id, minutes)
+        await sql_move_tournament_start(session, tournament_id, minutes)
     else:
-        if minutes < 0:
-            affected = set(delay.match_ids)
-            available_break = min(
-                (
-                    match.custom_margin_minutes
-                    if match.custom_margin_minutes is not None
-                    else tournament.margin_minutes
-                )
-                for stage in stages
-                for stage_item in stage.stage_items
-                for round_ in stage_item.rounds
-                for match in round_.matches
-                if match.id in affected
+        affected = set(delay.match_ids)
+        margins = [
+            match.custom_margin_minutes
+            if match.custom_margin_minutes is not None
+            else tournament.margin_minutes
+            for stage in stages
+            for stage_item in stage.stage_items
+            for round_ in stage_item.rounds
+            for match in round_.matches
+            if match.id in affected
+        ]
+        if minutes > MAX_MINUTES - max(margins):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"The remaining rounds can move later by at most {MAX_MINUTES - max(margins)} "
+                    f"minutes without exceeding the maximum break of {MAX_MINUTES} minutes."
+                ),
             )
+        if minutes < 0:
+            available_break = min(margins)
             if -minutes > available_break:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -249,6 +256,8 @@ async def delay_upcoming_matches(
                         "minutes without overlapping the previous round."
                     ),
                 )
-        await sql_add_margin_to_matches(conn, delay.match_ids, tournament.margin_minutes, minutes)
+        await sql_add_margin_to_matches(
+            session, delay.match_ids, tournament.margin_minutes, minutes
+        )
 
-    await schedule_all_matches(conn, tournament_id)
+    await schedule_all_matches(session, tournament_id)

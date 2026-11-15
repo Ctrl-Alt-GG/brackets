@@ -67,19 +67,20 @@ def get_conflicting_matches(stages: list[StageWithStageItems]) -> dict[MatchId, 
     }
 
 
-async def handle_conflicts(conn: AsyncSession, stages: list[StageWithStageItems]) -> None:
+async def handle_conflicts(session: AsyncSession, stages: list[StageWithStageItems]) -> None:
     """Store only changed conflict flags in one batch."""
     conflicts = await run_in_threadpool(get_conflicting_matches, stages)
+    matches = {match.id: match for match in _all_matches(stages)}
     changes = [
         (match.id, *conflicts[match.id])
-        for match in _all_matches(stages)
+        for match in matches.values()
         if (match.stage_item_input1_conflict, match.stage_item_input2_conflict)
         != conflicts[match.id]
     ]
     if not changes:
         return
 
-    await conn.execute(
+    await session.execute(
         update(orm.Match),
         [
             {
@@ -90,3 +91,7 @@ async def handle_conflicts(conn: AsyncSession, stages: list[StageWithStageItems]
             for match_id, conflict1, conflict2 in changes
         ],
     )
+    for match_id, conflict1, conflict2 in changes:
+        match = matches[match_id]
+        match.stage_item_input1_conflict = conflict1
+        match.stage_item_input2_conflict = conflict2

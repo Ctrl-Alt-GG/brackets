@@ -7,9 +7,9 @@ from bracket.utils.id_types import RankingId, StageItemId, TournamentId
 
 
 async def get_all_rankings_in_tournament(
-    conn: AsyncSession, tournament_id: TournamentId
+    session: AsyncSession, tournament_id: TournamentId
 ) -> list[Ranking]:
-    entities = await conn.scalars(
+    entities = await session.scalars(
         select(orm.Ranking)
         .where(orm.Ranking.tournament_id == tournament_id)
         .order_by(orm.Ranking.position, orm.Ranking.id)
@@ -19,9 +19,9 @@ async def get_all_rankings_in_tournament(
 
 
 async def get_default_rankings_in_tournament(
-    conn: AsyncSession, tournament_id: TournamentId
+    session: AsyncSession, tournament_id: TournamentId
 ) -> Ranking:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Ranking)
         .where(orm.Ranking.tournament_id == tournament_id)
         .order_by(orm.Ranking.position, orm.Ranking.id)
@@ -34,9 +34,9 @@ async def get_default_rankings_in_tournament(
 
 
 async def get_ranking_for_stage_item(
-    conn: AsyncSession, tournament_id: TournamentId, stage_item_id: StageItemId
+    session: AsyncSession, tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> Ranking | None:
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Ranking)
         .join(orm.StageItem, orm.StageItem.ranking_id == orm.Ranking.id)
         .where(orm.Ranking.tournament_id == tournament_id, orm.StageItem.id == stage_item_id)
@@ -46,80 +46,80 @@ async def get_ranking_for_stage_item(
 
 
 async def sql_update_ranking(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
     ranking_body: RankingBody,
 ) -> None:
     """Change the points rule of a ranking, and move it to its new position."""
-    entity = await conn.scalar(
+    entity = await session.scalar(
         select(orm.Ranking).where(
             orm.Ranking.tournament_id == tournament_id, orm.Ranking.id == ranking_id
         )
     )
     if entity is not None:
-        entity.win_points = float(ranking_body.win_points)
-        entity.draw_points = float(ranking_body.draw_points)
-        entity.loss_points = float(ranking_body.loss_points)
+        entity.win_points = ranking_body.win_points
+        entity.draw_points = ranking_body.draw_points
+        entity.loss_points = ranking_body.loss_points
         entity.add_score_points = ranking_body.add_score_points
-        await conn.flush()
+        await session.flush()
 
     order = [
         ranking.id
-        for ranking in await get_all_rankings_in_tournament(conn, tournament_id)
+        for ranking in await get_all_rankings_in_tournament(session, tournament_id)
         if ranking.id != ranking_id
     ]
     order.insert(min(ranking_body.position, len(order)), ranking_id)
-    await sql_set_ranking_order(conn, tournament_id, order)
+    await sql_set_ranking_order(session, tournament_id, order)
 
 
 async def sql_set_ranking_order(
-    conn: AsyncSession, tournament_id: TournamentId, ranking_ids: list[RankingId]
+    session: AsyncSession, tournament_id: TournamentId, ranking_ids: list[RankingId]
 ) -> None:
     """Number the rankings 0, 1, 2, ... in this order, so that no two share a position."""
     if not ranking_ids:
         return
     positions = {ranking_id: position for position, ranking_id in enumerate(ranking_ids)}
-    entities = await conn.scalars(
+    entities = await session.scalars(
         select(orm.Ranking).where(
             orm.Ranking.tournament_id == tournament_id, orm.Ranking.id.in_(ranking_ids)
         )
     )
     for entity in entities:
         entity.position = positions[RankingId(entity.id)]
-    await conn.flush()
+    await session.flush()
 
 
 async def sql_delete_ranking(
-    conn: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
+    session: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
 ) -> None:
     """Delete a ranking. The ones after it move up, so the positions stay 0, 1, 2, ..."""
-    await conn.execute(
+    await session.execute(
         delete(orm.Ranking).where(
             orm.Ranking.id == ranking_id, orm.Ranking.tournament_id == tournament_id
         )
     )
     await sql_set_ranking_order(
-        conn,
+        session,
         tournament_id,
-        [ranking.id for ranking in await get_all_rankings_in_tournament(conn, tournament_id)],
+        [ranking.id for ranking in await get_all_rankings_in_tournament(session, tournament_id)],
     )
 
 
 async def sql_create_ranking(
-    conn: AsyncSession,
+    session: AsyncSession,
     tournament_id: TournamentId,
     ranking_body: RankingCreateBody,
     position: int,
 ) -> None:
-    conn.add(
+    session.add(
         orm.Ranking(
             tournament_id=tournament_id,
-            win_points=float(ranking_body.win_points),
-            draw_points=float(ranking_body.draw_points),
-            loss_points=float(ranking_body.loss_points),
+            win_points=ranking_body.win_points,
+            draw_points=ranking_body.draw_points,
+            loss_points=ranking_body.loss_points,
             add_score_points=ranking_body.add_score_points,
             position=position,
         )
     )
-    await conn.flush()
+    await session.flush()

@@ -84,7 +84,7 @@ async def get_me(
 
 @router.put("/users/{user_id}", response_model=UserPublicResponse)
 async def update_user_details(
-    conn: DbSession,
+    session: DbSession,
     request: Request,
     user_id: UserId,
     user_to_update: UserToUpdate,
@@ -95,16 +95,16 @@ async def update_user_details(
     # Whoever holds a session can use it, so changing the address the account signs in with
     # takes the password as well.
     if user_to_update.email != user_public.email:
-        user = assert_some(await get_user_in_db(conn, user_public.id))
+        user = assert_some(await get_user_in_db(session, user_public.id))
         if not await current_password_is_valid(request, user, user_to_update.current_password):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Enter your current password to change your email"
             )
 
     with check_unique_constraint_violation(EMAIL_UNIQUE_INDEXES):
-        await update_user(conn, user_public.id, user_to_update)
+        await update_user(session, user_public.id, user_to_update)
 
-    user_updated = await get_user_by_id(conn, user_id)
+    user_updated = await get_user_by_id(session, user_id)
     return UserPublicResponse(data=assert_some(user_updated))
 
 
@@ -113,7 +113,7 @@ async def update_user_details(
 async def put_user_password(
     request: Request,
     response: Response,
-    conn: DbSession,
+    session: DbSession,
     user_id: UserId,
     user_to_update: UserPasswordToUpdate,
     user_public: UserPublic = Depends(user_authenticated),
@@ -125,7 +125,7 @@ async def put_user_password(
     """
     check_is_same_user(user_public, user_id)
 
-    user = assert_some(await get_user_in_db(conn, user_public.id))
+    user = assert_some(await get_user_in_db(session, user_public.id))
     if not await current_password_is_valid(request, user, user_to_update.current_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "The current password is incorrect")
 
@@ -137,7 +137,7 @@ async def put_user_password(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     password_hash = await hash_password_in_thread(user_to_update.password)
-    await update_user_password(conn, user.id, password_hash)
+    await update_user_password(session, user.id, password_hash)
     issue_token(response, user.id, user.name, password_hash)
     return SuccessResponse()
 
@@ -149,7 +149,7 @@ async def put_user_password(
 )
 @limiter.limit("5/15minutes")
 async def register_user(
-    conn: DbSession, request: Request, response: Response, user_to_register: UserToRegister
+    session: DbSession, request: Request, response: Response, user_to_register: UserToRegister
 ) -> TokenResponse:
     if not config.allow_user_registration:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account creation is unavailable for now")
@@ -161,11 +161,11 @@ async def register_user(
         created=datetime_utc.now(),
         account_type=UserAccountType.REGULAR,
     )
-    if await check_whether_email_is_in_use(conn, user.email):
+    if await check_whether_email_is_in_use(session, user.email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address already in use")
 
     with check_unique_constraint_violation(EMAIL_UNIQUE_INDEXES):
-        user_created = await create_user(conn, user)
+        user_created = await create_user(session, user)
 
     return TokenResponse(
         data=issue_token(
