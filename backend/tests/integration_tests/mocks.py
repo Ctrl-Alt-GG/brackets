@@ -3,9 +3,9 @@ from zoneinfo import ZoneInfo
 
 from heliclockter import datetime_utc
 
-from bracket.models.db.account import UserAccountType
+from bracket.logic.authentication import create_access_token
 from bracket.models.db.user import User, UserInDB, UserInsertable
-from bracket.routes.auth import create_access_token
+from bracket.models.enums import UserAccountType
 from bracket.utils.types import assert_some
 
 MOCK_NOW = datetime_utc(

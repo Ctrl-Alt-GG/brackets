@@ -1,9 +1,17 @@
+import random
 from datetime import timedelta
 
-from bracket.logic.planning.conflicts import get_conflicting_matches
-from bracket.models.db.util import StageWithStageItems
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME
-from bracket.utils.id_types import StageId, StageItemInputId, TournamentId
+import pytest
+
+from bracket.logic.planning.conflicts import (
+    get_conflicting_matches,
+    matches_overlap,
+    overlapping_matches,
+)
+from bracket.models.db.match import Match
+from bracket.models.db.stage_tree import StageWithStageItems
+from bracket.utils.id_types import MatchId, RoundId, StageId, StageItemInputId, TournamentId
+from tests.dummy_records import DUMMY_MOCK_TIME
 from tests.integration_tests.mocks import MOCK_NOW
 from tests.unit_tests.mocks import (
     get_2_definitive_matches_mock,
@@ -93,3 +101,48 @@ def test_conflicts_follow_teams_across_different_slots() -> None:
     )
 
     assert get_conflicting_matches([stage]) == {-1: (True, False), -2: (True, False)}
+
+
+def timed_match(match_id: int, rng: random.Random) -> Match:
+    return Match(
+        id=MatchId(match_id),
+        created=DUMMY_MOCK_TIME,
+        # Some matches aren't planned yet, and many start or end on the same minute.
+        start_time=(
+            None
+            if rng.random() < 0.1
+            else DUMMY_MOCK_TIME + timedelta(minutes=rng.randrange(0, 180, 5))
+        ),
+        duration_minutes=rng.choice((5, 10, 15, 30)),
+        margin_minutes=rng.choice((0, 5)),
+        round_id=RoundId(1),
+        stage_item_input1_score=0,
+        stage_item_input2_score=0,
+        stage_item_input1_conflict=False,
+        stage_item_input2_conflict=False,
+    )
+
+
+@pytest.mark.parametrize("seed", range(50))
+def test_the_sweep_finds_the_matches_that_overlap_another(seed: int) -> None:
+    rng = random.Random(seed)
+    matches = [timed_match(match_id, rng) for match_id in range(rng.randrange(0, 15))]
+    expected = {
+        match.id
+        for match in matches
+        if any(other is not match and matches_overlap(match, other) for other in matches)
+    }
+    assert overlapping_matches(matches) == expected
+
+
+def test_matches_that_touch_do_not_overlap() -> None:
+    first = timed_match(1, random.Random(0)).model_copy(
+        update={"start_time": DUMMY_MOCK_TIME, "duration_minutes": 10, "margin_minutes": 5}
+    )
+    second = first.model_copy(
+        update={"id": MatchId(2), "start_time": DUMMY_MOCK_TIME + timedelta(minutes=15)}
+    )
+    assert overlapping_matches([first, second]) == set()
+    assert overlapping_matches(
+        [first, second.model_copy(update={"start_time": DUMMY_MOCK_TIME + timedelta(minutes=14)})]
+    ) == {1, 2}

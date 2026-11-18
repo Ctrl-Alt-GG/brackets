@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
@@ -13,15 +13,17 @@ import {
 } from '../../openapi/@tanstack/react-query.gen';
 import { ScoreForm } from '../components/score-form';
 import { confirm } from '../confirm';
+import { useCreateForm } from '../create-form';
+import { formatDateTime } from '../format';
 import {
   activeTeamInputs,
-  formatDateTime,
   inputLabel,
   inputTeamId,
   isBracket,
   isEmptySlot,
   isScored,
-} from '../utils';
+} from '../matches';
+import { Disclosure } from '../ui';
 
 type Match = OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive;
 type Round = OpenApi.RoundWithMatches;
@@ -373,7 +375,7 @@ function AddPairingForm({
   roundId: number;
   teams: OpenApi.StageItemInputFinal[];
 }) {
-  const form = useForm({ defaultValues: { first: '', second: '' } });
+  const form = useCreateForm({ defaultValues: { first: '', second: '' } });
   const [firstId, secondId] = useWatch({ control: form.control, name: ['first', 'second'] });
   const add = useMutation({
     ...createMatchApiTournamentsTournamentIdMatchesPostMutation(),
@@ -383,61 +385,56 @@ function AddPairingForm({
   return (
     <form
       className="flex flex-wrap items-center gap-3"
-      onSubmit={form.handleSubmit(({ first, second }) =>
-        add.mutate(
-          {
-            body: {
-              round_id: roundId,
-              stage_item_input1_id: Number(first),
-              stage_item_input1_winner_from_match_id: null,
-              stage_item_input2_id: Number(second),
-              stage_item_input2_winner_from_match_id: null,
-            },
-            path: { tournament_id: context.tournamentId },
+      onSubmit={form.submitWith(({ first, second }) =>
+        add.mutateAsync({
+          body: {
+            round_id: roundId,
+            stage_item_input1_id: Number(first),
+            stage_item_input1_winner_from_match_id: null,
+            stage_item_input2_id: Number(second),
+            stage_item_input2_winner_from_match_id: null,
           },
-          { onSuccess: () => form.reset() },
-        ),
+          path: { tournament_id: context.tournamentId },
+        }),
       )}
     >
-      <select
-        aria-label="First team"
-        className="select w-auto min-w-44"
-        {...form.register('first', {
-          onChange: (event) => {
-            if (event.target.value === form.getValues('second')) form.setValue('second', '');
-          },
-        })}
-      >
-        <option value="">Pick a team</option>
-        {teams.map((input) => (
-          <option key={input.id} value={input.id}>
-            {input.team.name}
-          </option>
-        ))}
-      </select>
-      <span className="text-sm text-base-content/70">vs</span>
-      <select
-        aria-label="Second team"
-        className="select w-auto min-w-44"
-        {...form.register('second')}
-      >
-        <option value="">Pick a team</option>
-        {teams
-          .filter((input) => String(input.id) !== firstId)
-          .map((input) => (
+      <fieldset className="contents" disabled={form.locked}>
+        <select
+          aria-label="First team"
+          className="select w-auto min-w-44"
+          {...form.register('first', {
+            onChange: (event) => {
+              if (event.target.value === form.getValues('second')) form.setValue('second', '');
+            },
+          })}
+        >
+          <option value="">Pick a team</option>
+          {teams.map((input) => (
             <option key={input.id} value={input.id}>
               {input.team.name}
-              {firstId && playedPairs.has(pairKey(Number(firstId), input.id)) ? ' (rematch)' : ''}
             </option>
           ))}
-      </select>
-      <button
-        className="btn btn-soft"
-        disabled={disabled || add.isPending || !firstId || !secondId}
-        type="submit"
-      >
-        {add.isPending ? 'Adding…' : 'Add pairing'}
-      </button>
+        </select>
+        <span className="text-sm text-base-content/70">vs</span>
+        <select
+          aria-label="Second team"
+          className="select w-auto min-w-44"
+          {...form.register('second')}
+        >
+          <option value="">Pick a team</option>
+          {teams
+            .filter((input) => String(input.id) !== firstId)
+            .map((input) => (
+              <option key={input.id} value={input.id}>
+                {input.team.name}
+                {firstId && playedPairs.has(pairKey(Number(firstId), input.id)) ? ' (rematch)' : ''}
+              </option>
+            ))}
+        </select>
+        <button className="btn btn-soft" disabled={disabled || !firstId || !secondId} type="submit">
+          {add.isPending ? 'Adding…' : 'Add pairing'}
+        </button>
+      </fieldset>
     </form>
   );
 }
@@ -464,19 +461,24 @@ function PublishedRound({
   });
 
   return (
-    <details className="collapse collapse-arrow border border-base-300 bg-base-100/50" open={open}>
-      <summary className="collapse-title">
-        <span className="flex flex-wrap items-center gap-2 font-semibold">
-          {round.name}
-          {round.matches.length > 0 && played === round.matches.length ? (
-            <span className="badge badge-soft badge-success badge-sm">Done</span>
-          ) : null}
-        </span>
-        <span className="block text-sm text-base-content/70">
-          {startTime ? formatDateTime(startTime) : 'Not scheduled yet'} · {played} of{' '}
-          {round.matches.length} matches played
-        </span>
-      </summary>
+    <Disclosure
+      className="collapse collapse-arrow border border-base-300 bg-base-100/50"
+      open={open}
+      summary={
+        <>
+          <span className="flex flex-wrap items-center gap-2 font-semibold">
+            {round.name}
+            {round.matches.length > 0 && played === round.matches.length ? (
+              <span className="badge badge-soft badge-success badge-sm">Done</span>
+            ) : null}
+          </span>
+          <span className="block text-sm text-base-content/70">
+            {startTime ? formatDateTime(startTime) : 'Not scheduled yet'} · {played} of{' '}
+            {round.matches.length} matches played
+          </span>
+        </>
+      }
+    >
       <div className="collapse-content space-y-2">
         {round.matches.map((match) => (
           <ScoreForm
@@ -511,6 +513,6 @@ function PublishedRound({
           </button>
         ) : null}
       </div>
-    </details>
+    </Disclosure>
   );
 }

@@ -9,25 +9,21 @@ import { MatchCard } from '../components/match-card';
 import { MatchScoreEditor } from '../components/match-score-editor';
 import { TeamLink } from '../components/team-link';
 import { teamPath, useTournamentContext } from '../tournament-context';
+import { pointsPhrase } from '../format';
 import {
-  cx,
   inputLabel,
   inputTeamId,
   involvesTeam,
   isBracket,
-  isInProgress,
   isScored,
-  isStageHappeningNow,
-  matchStatus,
+  type MatchOutcome,
   matchWinner,
-  nextMatch,
-  pointsPhrase,
-  sortTeamsByName,
   stageItemName,
   stageItemStandings,
   stageTypeName,
-  type MatchOutcome,
-} from '../utils';
+} from '../matches';
+import { isInProgress, isStageHappeningNow, matchStatus, nextMatch } from '../tournament-rules';
+import { cx, sortTeamsByName } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 function MyTeamPanel({

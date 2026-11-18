@@ -65,11 +65,8 @@ jobs:
         run: uv run pytest tests/migration_tests
 
       - name: Run tests
-        # The tests create the tables from the metadata. Stamping the empty database at the latest
-        # migration first keeps the app from replaying every migration on top of them at startup.
-        run: |
-          uv run alembic stamp head
-          uv run pytest tests/unit_tests tests/integration_tests
+        # The integration tests create a database of their own on the server PG_DSN names.
+        run: uv run pytest tests/unit_tests tests/integration_tests
 
   frontend:
     name: Frontend
@@ -110,3 +107,116 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+  frontend-api:
+    # The browser regressions answer the page's requests themselves. These tests run the page
+    # against the real API instead: request bodies, answers and the session cookie as they are.
+    name: Frontend against the API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: bracket
+          POSTGRES_PASSWORD: bracket
+          POSTGRES_DB: bracket_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username bracket"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      JWT_SECRET: only-for-the-tests-and-at-least-32-characters-long
+      PG_DSN: postgresql://bracket:bracket@localhost:5432/bracket_smoke
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Install the API's dependencies
+        working-directory: backend
+        run: uv sync --locked
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run smoke tests against the API
+        run: pnpm run test:smoke
+
+  frontend-image:
+    name: Frontend image
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the image
+        run: docker build --tag bracket-frontend:checks .
+
+      - name: Refuse an API address with a path
+        # The entrypoint stops the container with status 1. A container that started instead runs
+        # until the timeout, which ends with another status.
+        run: |
+          status=0
+          timeout 60 docker run --rm --env API_BASE_URL=https://api.example.org/api bracket-frontend:checks || status=$?
+          test "$status" -eq 1
+
+      - name: Start the image
+        # The API's address is the image's own, so the tests can answer the page's API requests.
+        run: >-
+          docker run --detach --publish 127.0.0.1:8080:8080
+          --env API_BASE_URL=http://127.0.0.1:8080 bracket-frontend:checks
+
+      - name: Run smoke tests against the image
+        env:
+          BRACKET_IMAGE_URL: http://127.0.0.1:8080
+        run: pnpm run test:image

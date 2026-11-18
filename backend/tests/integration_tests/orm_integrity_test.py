@@ -13,10 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.database import engine
-from bracket.models.db.account import UserAccountType
 from bracket.models.db.ranking import RankingBody, RankingCreateBody
-from bracket.models.db.stage_item import StageType
-from bracket.models.db.user_x_club import UserXClubRelation
+from bracket.models.enums import StageType, UserAccountType, UserXClubRelation
 from bracket.sql.rankings import sql_create_ranking, sql_update_ranking
 from bracket.sql.tournaments import sql_delete_tournament
 from bracket.utils.id_types import RankingId, TournamentId
@@ -406,4 +404,10 @@ async def test_tournament_deletion_cascades_through_scoped_foreign_keys(
         orm.Player,
         orm.Ranking,
     ):
-        assert list(await d.session.scalars(select(entity.tournament_id))) == [d.tournaments[1].id]
+        assert list(
+            await d.session.scalars(
+                select(entity.tournament_id).where(
+                    entity.tournament_id.in_([tournament.id for tournament in d.tournaments])
+                )
+            )
+        ) == [d.tournaments[1].id]

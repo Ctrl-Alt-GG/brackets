@@ -1,5 +1,6 @@
-from fastapi import HTTPException
-from heliclockter import datetime_utc
+from collections.abc import Awaitable, Callable
+from typing import NamedTuple, assert_never
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
@@ -11,71 +12,69 @@ from bracket.logic.scheduling.round_robin import (
     build_round_robin_stage_item,
     get_number_of_rounds_to_create_round_robin,
 )
-from bracket.models.db.round import RoundInsertable
-from bracket.models.db.stage_item import StageItem, StageType
+from bracket.models.db.stage_item import StageItem
 from bracket.models.db.stage_item_inputs import (
     StageItemInputFinal,
     StageItemInputOptionFinal,
     StageItemInputOptionTentative,
     StageItemInputTentative,
 )
+from bracket.models.db.stage_tree import StageItemWithRounds, StageWithStageItems
 from bracket.models.db.team import FullTeamWithPlayers
-from bracket.models.db.util import StageWithStageItems
+from bracket.models.db.tournament import Tournament
+from bracket.models.enums import StageType
 from bracket.sql.rounds import sql_create_rounds
 from bracket.sql.stage_items import get_stage_item
+from bracket.sql.tournaments import sql_get_tournament
 from bracket.utils.id_types import StageId, StageItemId, TournamentId
 
+MatchBuilder = Callable[[AsyncSession, Tournament, StageItemWithRounds], Awaitable[None]]
 
-async def create_rounds_for_new_stage_item(
-    session: AsyncSession, tournament_id: TournamentId, stage_item: StageItem
-) -> None:
-    rounds_count: int
-    match stage_item.type:
+
+class StageFormat(NamedTuple):
+    """The rounds a new stage item gets, and what fills them with matches."""
+
+    rounds: int
+    # `None` for Swiss, whose rounds are drawn one at a time later.
+    build_matches: MatchBuilder | None
+
+
+def get_stage_format(stage_type: StageType, team_count: int) -> StageFormat:
+    match stage_type:
         case StageType.ROUND_ROBIN:
-            rounds_count = get_number_of_rounds_to_create_round_robin(stage_item.team_count)
-        case StageType.SINGLE_ELIMINATION:
-            rounds_count = get_number_of_rounds_to_create_single_elimination(stage_item.team_count)
-        case StageType.SWISS:
-            return None
-        case other:
-            raise NotImplementedError(f"No round creation implementation for {other}")
-
-    await sql_create_rounds(
-        session,
-        tournament_id,
-        [
-            RoundInsertable(
-                created=datetime_utc.now(),
-                is_draft=False,
-                stage_item_id=stage_item.id,
-                name=f"Round {index + 1:02d}",
+            return StageFormat(
+                get_number_of_rounds_to_create_round_robin(team_count),
+                build_round_robin_stage_item,
             )
-            for index in range(rounds_count)
-        ],
-    )
+        case StageType.SINGLE_ELIMINATION:
+            return StageFormat(
+                get_number_of_rounds_to_create_single_elimination(team_count),
+                build_single_elimination_stage_item,
+            )
+        case StageType.SWISS:
+            return StageFormat(0, None)
+        case _:
+            assert_never(stage_type)
 
 
 async def build_matches_for_stage_item(
     session: AsyncSession, stage_item: StageItem, tournament_id: TournamentId
 ) -> None:
-    await create_rounds_for_new_stage_item(session, tournament_id, stage_item)
+    """Give a new stage item the rounds and matches of its format."""
+    stage_format = get_stage_format(stage_item.type, stage_item.team_count)
+    if stage_format.build_matches is None:
+        return
+
+    await sql_create_rounds(
+        session,
+        tournament_id,
+        stage_item.id,
+        [f"Round {index + 1:02d}" for index in range(stage_format.rounds)],
+        is_draft=False,
+    )
     stage_item_with_rounds = await get_stage_item(session, tournament_id, stage_item.id)
-
-    match stage_item.type:
-        case StageType.ROUND_ROBIN:
-            await build_round_robin_stage_item(session, tournament_id, stage_item_with_rounds)
-        case StageType.SINGLE_ELIMINATION:
-            await build_single_elimination_stage_item(
-                session, tournament_id, stage_item_with_rounds
-            )
-        case StageType.SWISS:
-            return None
-
-        case _:
-            raise HTTPException(
-                400, f"Cannot automatically create matches for stage type {stage_item.type}"
-            )
-
+    tournament = await sql_get_tournament(session, tournament_id)
+    await stage_format.build_matches(session, tournament, stage_item_with_rounds)
     await recalculate_ranking_for_stage_item(session, tournament_id, stage_item_with_rounds)
 
 

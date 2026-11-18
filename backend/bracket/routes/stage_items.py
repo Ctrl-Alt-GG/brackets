@@ -1,41 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException
-from starlette import status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.planning.matches import schedule_all_matches
-from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
-from bracket.logic.ranking.elimination import (
-    update_inputs_in_complete_elimination_stage_item,
-)
-from bracket.logic.scheduling.builder import (
-    build_matches_for_stage_item,
-)
-from bracket.logic.subscriptions import check_requirement
-from bracket.models.db.match import is_played
-from bracket.models.db.stage_item import (
-    StageItemCreateBody,
-    StageItemUpdateBody,
-    StageType,
-)
+from bracket.logic import stage_items as stage_item_logic
+from bracket.models.db.stage_item import StageItemCreateBody, StageItemUpdateBody
+from bracket.models.db.stage_tree import StageItemWithRounds
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.models.db.util import StageItemWithRounds
-from bracket.routes.auth import (
-    user_authenticated_for_tournament,
-)
+from bracket.routes.access import user_authenticated_for_tournament
 from bracket.routes.models import SuccessResponse
-from bracket.routes.util import disallow_archived_tournament, stage_item_dependency
-from bracket.sql.stage_items import (
-    sql_create_stage_item_with_empty_inputs,
-    sql_delete_stage_item,
-    sql_update_stage_item_name,
-)
-from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.validation import validate_stage_item_create
+from bracket.routes.resources import disallow_archived_tournament, stage_item_dependency
 from bracket.utils.id_types import StageItemId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
+
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
+LoadedStageItem = Annotated[StageItemWithRounds, Depends(stage_item_dependency)]
 
 
 @router.delete(
@@ -45,9 +28,9 @@ async def delete_stage_item(
     session: DbSession,
     tournament_id: TournamentId,
     stage_item_id: StageItemId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: StageItemWithRounds = Depends(stage_item_dependency),
-    ___: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    __: LoadedStageItem,
+    ___: OpenTournament,
 ) -> SuccessResponse:
     """
     Delete a stage item with its rounds and matches.
@@ -55,29 +38,7 @@ async def delete_stage_item(
     Slots of later stage items that take a team from it become open again. That is refused
     once such a stage item has results, which belong to the teams that advanced.
     """
-    stages = await get_full_tournament_details(session, tournament_id)
-    fed_with_results = sorted(
-        {
-            stage_item.name
-            for stage in stages
-            for stage_item in stage.stage_items
-            if any(
-                input_.winner_from_stage_item_id == stage_item_id for input_ in stage_item.inputs
-            )
-            and any(is_played(match) for round_ in stage_item.rounds for match in round_.matches)
-        }
-    )
-    if fed_with_results:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"{', '.join(fed_with_results)} takes teams from this stage item and already "
-                "has results. Delete it first."
-            ),
-        )
-
-    await sql_delete_stage_item(session, stage_item_id)
-    await schedule_all_matches(session, tournament_id)
+    await stage_item_logic.delete_stage_item(session, tournament_id, stage_item_id)
     return SuccessResponse()
 
 
@@ -86,18 +47,10 @@ async def create_stage_item(
     session: DbSession,
     tournament_id: TournamentId,
     stage_body: StageItemCreateBody,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    _: OpenTournament,
 ) -> SuccessResponse:
-    await validate_stage_item_create(session, tournament_id, stage_body)
-
-    stages = await get_full_tournament_details(session, tournament_id)
-    existing_stage_items = [stage_item for stage in stages for stage_item in stage.stage_items]
-    check_requirement(existing_stage_items, user, "max_stage_items")
-
-    stage_item = await sql_create_stage_item_with_empty_inputs(session, tournament_id, stage_body)
-    await build_matches_for_stage_item(session, stage_item, tournament_id)
-    await schedule_all_matches(session, tournament_id)
+    await stage_item_logic.create_stage_item(session, tournament_id, stage_body, user)
     return SuccessResponse()
 
 
@@ -107,14 +60,12 @@ async def create_stage_item(
 async def update_stage_item(
     session: DbSession,
     tournament_id: TournamentId,
-    stage_item_id: StageItemId,
     stage_item_body: StageItemUpdateBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    stage_item: StageItemWithRounds = Depends(stage_item_dependency),
+    _: TournamentOrganizer,
+    __: OpenTournament,
+    stage_item: LoadedStageItem,
 ) -> SuccessResponse:
-    await sql_update_stage_item_name(session, stage_item.id, stage_item_body.name)
-    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
-    if stage_item.type == StageType.SINGLE_ELIMINATION:
-        await update_inputs_in_complete_elimination_stage_item(session, stage_item)
+    await stage_item_logic.rename_stage_item(
+        session, tournament_id, stage_item, stage_item_body.name
+    )
     return SuccessResponse()

@@ -5,20 +5,16 @@ from heliclockter import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
-from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
+from bracket.models.db.stage_item import StageItemWithInputsCreate
 from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputCreateBodyTentative,
 )
+from bracket.models.enums import StageType
 from bracket.sql.stage_items import sql_create_stage_item_with_inputs, sql_delete_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament
-from bracket.utils.dummy_records import (
-    DUMMY_STAGE2,
-    DUMMY_STAGE_ITEM1,
-    DUMMY_STAGE_ITEM3,
-    DUMMY_TEAM1,
-)
+from tests.dummy_records import DUMMY_STAGE2, DUMMY_STAGE_ITEM1, DUMMY_STAGE_ITEM3, DUMMY_TEAM1
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_tournament_request,

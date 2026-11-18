@@ -9,23 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.config import config
 from bracket.database import engine
-from bracket.models.db.account import UserAccountType
-from bracket.routes.auth import (
+from bracket.logic.authentication import (
     CSRF_HEADER,
     CSRF_HEADER_VALUE,
     SESSION_COOKIE,
     create_access_token,
     get_auth_hash,
 )
+from bracket.models.enums import UserAccountType
 from bracket.sql.clubs import sql_delete_club
-from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
 from bracket.utils.rate_limit import (
+    ACCOUNT_LOCKOUT_LIMIT,
     get_account_lockout_key,
-    get_account_lockout_retry_after,
+    get_retry_after,
     record_account_failure,
     reset_account_failures,
 )
 from bracket.utils.types import JsonDict
+from tests.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import (
     get_root_uvicorn_url,
     send_auth_request,
@@ -112,6 +113,8 @@ async def test_invalid_token(startup_and_shutdown_uvicorn_server: None) -> None:
 @pytest.mark.parametrize(
     "claims",
     [
+        # Unchanged, the token is valid, so each case below fails because of its own claim.
+        {},
         {"aud": "another-api"},
         {"iss": "https://another-issuer.example.org"},
         {"type": "refresh"},
@@ -119,6 +122,14 @@ async def test_invalid_token(startup_and_shutdown_uvicorn_server: None) -> None:
         {"nbf": datetime_utc.now() + timedelta(hours=1)},
         # Issued before the password changed.
         {"auth_hash": get_auth_hash("$argon2id$an-old-password-hash")},
+        # Signed, but not the shapes this application issues.
+        {"sid": []},
+        {"sid": ""},
+        {"sid": "x" * 65},
+        {"auth_hash": {}},
+        {"auth_hash": "not a hash"},
+        {"sub": "0"},
+        {"sub": "-1"},
     ],
 )
 async def test_signed_token_with_wrong_claims(
@@ -136,6 +147,7 @@ async def test_signed_token_with_wrong_claims(
             "exp": now + timedelta(minutes=5),
             "type": "access",
             "auth_hash": get_auth_hash(auth_context.user.password_hash),
+            "sid": uuid4().hex,
             **claims,
         },
         config.jwt_secret,
@@ -144,7 +156,10 @@ async def test_signed_token_with_wrong_claims(
     headers = {"Authorization": f"Bearer {token}"}
 
     response = JsonDict(await send_request(HTTPMethod.GET, "users/me", {}, None, headers))
-    assert response == {"detail": "Could not validate credentials"}
+    if claims:
+        assert response == {"detail": "Could not validate credentials"}
+    else:
+        assert response["data"]["id"] == auth_context.user.id
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -314,19 +329,20 @@ async def test_session_cookie_is_renewed_while_it_is_used(
     assert "Set-Cookie" not in with_bearer.headers
 
 
-def test_failed_logins_are_counted_per_account_and_address() -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_failed_logins_are_counted_per_account_and_address() -> None:
     """Someone failing on purpose only locks out their own address, not the organizer's."""
     organizer = get_account_lockout_key("organizer@example.org", address="203.0.113.7")
     attacker = get_account_lockout_key("organizer@example.org", address="198.51.100.9")
 
     for _ in range(6):
-        record_account_failure(attacker)
+        await record_account_failure(attacker)
 
     try:
-        assert get_account_lockout_retry_after(attacker) is not None
-        assert get_account_lockout_retry_after(organizer) is None
+        assert await get_retry_after(ACCOUNT_LOCKOUT_LIMIT, attacker) is not None
+        assert await get_retry_after(ACCOUNT_LOCKOUT_LIMIT, organizer) is None
     finally:
-        reset_account_failures(attacker)
+        await reset_account_failures(attacker)
 
 
 @pytest.mark.asyncio(loop_scope="session")

@@ -6,16 +6,16 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import Session
 
 from bracket import orm
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
     StageItemInput,
     StageItemInputEmpty,
     StageItemInputFinal,
     StageItemInputTentative,
 )
-from bracket.models.db.util import StageItemWithRounds
+from bracket.models.db.stage_tree import StageItemWithRounds
+from bracket.models.enums import StageType
 from bracket.orm.types import StageTypeEnum
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1
 
 
 @pytest.mark.parametrize(

@@ -7,17 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.match import MatchWithDetailsDefinitive
-from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
+from bracket.models.db.stage_item import StageItemWithInputsCreate
 from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputFinal,
 )
+from bracket.models.enums import StageType
 from bracket.sql.stage_items import (
     get_stage_item,
     sql_create_stage_item_with_inputs,
     sql_delete_stage_item,
 )
-from bracket.utils.dummy_records import DUMMY_PLAYER1, DUMMY_STAGE1, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_PLAYER1, DUMMY_STAGE1, DUMMY_TEAM1
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_request,

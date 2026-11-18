@@ -170,6 +170,7 @@ const en = {
     title_other: 'Brackets',
     pendingKnockout: 'The bracket appears here once the matches have been drawn.',
     pendingSwiss: 'The rounds appear here once the first one has been drawn.',
+    drawFailed: "The bracket couldn't be drawn.",
   },
   teams: {
     noneYet: 'No teams have signed up yet.',
@@ -369,6 +370,7 @@ const hu: Translation = {
     title_other: 'Ágrajzok',
     pendingKnockout: 'Az ágrajz itt jelenik meg, amint kisorsolják a meccseket.',
     pendingSwiss: 'A fordulók itt jelennek meg, amint kisorsolják az elsőt.',
+    drawFailed: 'Az ágrajzot nem sikerült megjeleníteni.',
   },
   teams: {
     noneYet: 'Még nem jelentkezett csapat.',

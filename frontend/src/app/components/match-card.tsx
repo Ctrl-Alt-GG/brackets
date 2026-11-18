@@ -4,16 +4,10 @@ import { useTranslation } from 'react-i18next';
 import * as OpenApi from '../../openapi';
 import { useTournamentContext } from '../tournament-context';
 import type { FlattenedMatch } from '../types';
-import {
-  cx,
-  formatMatchTime,
-  inputLabel,
-  inputTeamId,
-  matchStatus,
-  matchWinner,
-  stageItemName,
-  type MatchStatus,
-} from '../utils';
+import { formatMatchTime } from '../format';
+import { inputLabel, inputTeamId, matchWinner, stageItemName } from '../matches';
+import { matchStatus, type MatchStatus } from '../tournament-rules';
+import { cx } from '../utils';
 import { TeamLink } from './team-link';
 
 const STATUS_BADGES: Record<MatchStatus, string> = {

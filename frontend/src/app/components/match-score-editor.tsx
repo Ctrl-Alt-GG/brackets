@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import type { FlattenedMatch } from '../types';
-import { inputLabel, inputTeamId, isBracket } from '../utils';
+import { inputLabel, inputTeamId, isBracket } from '../matches';
 
 // Only organizers enter results, so the form and its validation load when one of them needs it.
 const ScoreForm = lazy(() =>

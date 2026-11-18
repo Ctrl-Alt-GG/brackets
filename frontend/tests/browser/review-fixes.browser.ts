@@ -1,27 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type User = { id: number; email: string; name: string; created: string };
-const initialUser: User = {
-  id: 1,
-  email: 'owner@example.org',
-  name: 'Initial name',
-  created: '2026-01-01T00:00:00Z',
-};
+import type * as OpenApi from '../../src/openapi';
+import {
+  deferred,
+  inputs,
+  match,
+  refresh,
+  round,
+  signIn,
+  stage,
+  tournament,
+  tournamentApi,
+  user,
+} from './fixtures';
 
-async function signedIn(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('bracket:session', JSON.stringify({ name: 'Initial name', user_id: 1 }));
-  });
-}
-
-async function refresh(page: Page) {
-  await page.evaluate(async () => {
-    // Exercise the same refetch path as polling, without waiting a minute between assertions.
-    const modulePath = '/src/app/query-client.ts';
-    const { queryClient } = await import(/* @vite-ignore */ modulePath);
-    await queryClient.invalidateQueries();
-  });
-}
+const initialUser = { ...user, name: 'Initial name' } satisfies OpenApi.UserPublic;
 
 async function profileApi(page: Page) {
   const state = {
@@ -38,7 +31,9 @@ async function profileApi(page: Page) {
       state.submitted.push(body);
       await state.delaySave;
       state.user = { ...state.user, email: body.email, name: body.name };
-      return route.fulfill({ json: { data: state.user } });
+      return route.fulfill({
+        json: { data: state.user } satisfies OpenApi.UserPublicResponse,
+      });
     }
     if (path === '/api/tournaments') return route.fulfill({ json: { data: [] } });
     if (path === '/api/clubs') return route.fulfill({ json: { data: [] } });
@@ -50,7 +45,7 @@ async function profileApi(page: Page) {
 test('a saved profile follows remote updates and does not write an old name back', async ({
   page,
 }) => {
-  await signedIn(page);
+  await signIn(page.context());
   const state = await profileApi(page);
   await page.goto('/user');
   await page.getByLabel('Display name').fill('First saved name');
@@ -68,18 +63,16 @@ test('a saved profile follows remote updates and does not write an old name back
 
 for (const afterSubmit of ['Typed while saving', initialUser.name]) {
   test(`a save preserves a later edit to ${JSON.stringify(afterSubmit)}`, async ({ page }) => {
-    await signedIn(page);
+    await signIn(page.context());
     const state = await profileApi(page);
-    let release!: () => void;
-    state.delaySave = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const save = deferred();
+    state.delaySave = save.promise;
     await page.goto('/user');
     await page.getByLabel('Display name').fill('Submitted name');
     await page.getByRole('button', { name: 'Save profile' }).click();
     await expect.poll(() => state.submitted.length).toBe(1);
     await page.getByLabel('Display name').fill(afterSubmit);
-    release();
+    save.release();
     await expect(page.getByText('Account saved.', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Display name')).toHaveValue(afterSubmit);
     state.user.name = 'Another remote name';
@@ -94,44 +87,30 @@ for (const afterSubmit of ['Typed while saving', initialUser.name]) {
   });
 }
 
-const tournament = {
-  id: 7,
-  club_id: 1,
-  name: 'Live tournament',
-  created: '2026-01-01T00:00:00Z',
-  start_time: '2030-06-01T10:00:00Z',
-  duration_minutes: 30,
-  margin_minutes: 5,
-  dashboard_public: true,
-  dashboard_endpoint: null,
-  logo_path: null,
-  players_can_be_in_multiple_teams: false,
-  status: 'OPEN',
-  matches_total: 0,
-  matches_played: 0,
-  last_match_end: null,
-};
+const liveTournament = tournament({ dashboard_endpoint: null, name: 'Live tournament' });
+
+function details(name: string) {
+  return {
+    data: {
+      players: [],
+      rankings: [],
+      stages: [],
+      standings: {},
+      teams: [],
+      tournament: { ...liveTournament, name },
+    },
+  } satisfies OpenApi.TournamentDetailsResponse;
+}
 
 test('failed tournament refresh keeps data, warns with last update and recovers on retry', async ({
   page,
 }) => {
   let fail = false;
-  let name = tournament.name;
+  let name = liveTournament.name;
   await page.route('**/api/tournaments/7/details', (route) =>
     fail
       ? route.fulfill({ status: 503, json: { detail: 'Temporarily unavailable' } })
-      : route.fulfill({
-          json: {
-            data: {
-              tournament: { ...tournament, name },
-              players: [],
-              teams: [],
-              rankings: [],
-              stages: [],
-              standings: {},
-            },
-          },
-        }),
+      : route.fulfill({ json: details(name) }),
   );
   await page.goto('/tournaments/7/dashboard/schedule');
   await expect(page.getByRole('heading', { name: 'Live tournament' })).toBeVisible();
@@ -154,20 +133,9 @@ test('failed tournament refresh keeps data, warns with last update and recovers 
 test('going offline before refresh warns on paused updates and recovers online', async ({
   page,
 }) => {
-  let name = tournament.name;
+  let name = liveTournament.name;
   await page.route('**/api/tournaments/7/details', (route) =>
-    route.fulfill({
-      json: {
-        data: {
-          tournament: { ...tournament, name },
-          players: [],
-          teams: [],
-          rankings: [],
-          stages: [],
-          standings: {},
-        },
-      },
-    }),
+    route.fulfill({ json: details(name) }),
   );
   await page.goto('/tournaments/7/dashboard/schedule');
   await expect(page.getByRole('heading', { name: 'Live tournament' })).toBeVisible();
@@ -194,19 +162,18 @@ test('going offline before refresh warns on paused updates and recovers online',
 });
 
 test('event loading and failures are distinct from having no events', async ({ page }) => {
-  await signedIn(page);
+  await signIn(page.context());
   await profileApi(page);
-  let finishLoading!: () => void;
-  const waiting = new Promise<void>((resolve) => {
-    finishLoading = resolve;
-  });
+  const loading = deferred();
   let fail = true;
   await page.route('**/api/clubs', async (route) => {
-    await waiting;
+    await loading.promise;
     return fail
       ? route.fulfill({ status: 503, json: { detail: 'Events unavailable' } })
       : route.fulfill({
-          json: { data: [{ id: 1, name: 'My event', created: initialUser.created }] },
+          json: {
+            data: [{ created: initialUser.created, id: 1, name: 'My event' }],
+          } satisfies OpenApi.ClubsResponse,
         });
   });
   await page.goto('/');
@@ -214,7 +181,7 @@ test('event loading and failures are distinct from having no events', async ({ p
   await expect(
     page.getByText('You need an event before you can create a tournament.'),
   ).toBeHidden();
-  finishLoading();
+  loading.release();
   await expect(page.getByRole('heading', { name: 'Unable to load events' })).toBeVisible();
   await expect(
     page.getByText('You need an event before you can create a tournament.'),
@@ -227,13 +194,8 @@ test('event loading and failures are distinct from having no events', async ({ p
 test('failed logout remains signed in and a successful retry ends the session', async ({
   page,
 }) => {
-  await signedIn(page);
+  await signIn(page.context());
   await profileApi(page);
-  await page
-    .context()
-    .addCookies([
-      { name: 'bracket_session', value: 'session', url: 'http://127.0.0.1:5188', httpOnly: true },
-    ]);
   let fail = true;
   await page.route('**/api/logout', (route) =>
     fail
@@ -272,114 +234,41 @@ test('failed logout remains signed in and a successful retry ends the session', 
 test('Swiss regeneration uses one atomic request and retains pairings after a failure', async ({
   page,
 }) => {
-  await signedIn(page);
-  const teams = ['Alpha', 'Bravo'].map((name, index) => ({
-    id: index + 1,
-    tournament_id: 7,
-    name,
-    active: true,
-    players: [],
-    logo_path: null,
-  }));
-  const inputs = teams.map((team, index) => ({
-    id: index + 11,
-    stage_item_id: 3,
-    tournament_id: 7,
-    slot: index + 1,
-    team_id: team.id,
-    team,
-    winner_from_stage_item_id: null,
-    winner_position: null,
-    wins: 0,
-    draws: 0,
-    losses: 0,
-    points: '1200',
-  }));
-  const writes: string[] = [];
+  await signIn(page.context());
+  const slots = inputs(3, [1, 2]);
+  const swiss = (matchId: number) =>
+    stage(1, true, [
+      {
+        created: liveTournament.created,
+        id: 3,
+        inputs: slots,
+        name: 'Swiss group',
+        ranking_id: 1,
+        rounds: [
+          round(5, 3, [match(matchId, 5, slots[0], slots[1])], {
+            is_draft: true,
+            name: 'Round 01',
+          }),
+        ],
+        stage_id: 1,
+        team_count: 2,
+        type: 'SWISS',
+        type_name: 'Swiss',
+      },
+    ]);
   let fail = true;
-  let matchId = 1;
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (path === '/api/users/me') return route.fulfill({ json: { data: initialUser } });
-    if (request.method() !== 'GET') {
-      writes.push(`${request.method()} ${path}`);
-      if (path.endsWith('/rounds/5/regenerate')) {
-        if (fail)
-          return route.fulfill({
-            status: 400,
-            json: { detail: 'No replacement pairing is available' },
-          });
-        matchId += 1;
-        return route.fulfill({ json: { success: true } });
+  const { state, writes } = await tournamentApi(
+    page,
+    { stages: [swiss(1)], tournament: liveTournament },
+    (write) => {
+      if (write.path !== '/api/tournaments/7/rounds/5/regenerate') {
+        return { json: { detail: 'Unexpected destructive request' }, status: 500 };
       }
-      return route.fulfill({ status: 500, json: { detail: 'Unexpected destructive request' } });
-    }
-    const endpoint = path.replace('/api/tournaments/7', '');
-    const data: Record<string, unknown> = {
-      '': tournament,
-      '/stages': [
-        {
-          id: 1,
-          name: 'Swiss stage',
-          is_active: true,
-          tournament_id: 7,
-          custom_duration_minutes: null,
-          stage_items: [
-            {
-              id: 3,
-              stage_id: 1,
-              name: 'Swiss group',
-              type: 'SWISS',
-              type_name: 'Swiss',
-              team_count: 2,
-              ranking_id: 1,
-              inputs,
-              rounds: [
-                {
-                  id: 5,
-                  stage_item_id: 3,
-                  name: 'Round 01',
-                  is_draft: true,
-                  matches: [
-                    {
-                      id: matchId,
-                      round_id: 5,
-                      stage_item_input1: inputs[0],
-                      stage_item_input2: inputs[1],
-                      stage_item_input1_id: 11,
-                      stage_item_input2_id: 12,
-                      played: false,
-                      stage_item_input1_score: 0,
-                      stage_item_input2_score: 0,
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      '/players': { count: 0, players: [] },
-      '/teams': { count: teams.length, teams },
-      '/rankings': [
-        {
-          id: 1,
-          position: 0,
-          win_points: '3',
-          draw_points: '1',
-          loss_points: '0',
-          add_score_points: false,
-        },
-      ],
-      '/standings': {},
-      '/available_inputs': {},
-      '/next_stage_rankings': {},
-    };
-    return Object.hasOwn(data, endpoint)
-      ? route.fulfill({ json: { data: data[endpoint] } })
-      : route.fulfill({ status: 404, json: { detail: path } });
-  });
+      if (fail) return { json: { detail: 'No replacement pairing is available' }, status: 400 };
+      state.stages = [swiss(2)];
+      return undefined;
+    },
+  );
   await page.goto('/tournaments/7/stages');
   const pairing = page.locator('li').filter({ hasText: 'Alpha' });
   const regenerate = async () => {
@@ -396,7 +285,7 @@ test('Swiss regeneration uses one atomic request and retains pairings after a fa
   fail = false;
   await regenerate();
   await expect(page.getByText('New pairings generated.', { exact: true })).toBeVisible();
-  expect(writes).toEqual([
+  expect(writes.map((write) => `${write.method} ${write.path}`)).toEqual([
     'POST /api/tournaments/7/rounds/5/regenerate',
     'POST /api/tournaments/7/rounds/5/regenerate',
   ]);

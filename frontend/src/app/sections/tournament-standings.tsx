@@ -6,17 +6,9 @@ import * as OpenApi from '../../openapi';
 import { TeamLink } from '../components/team-link';
 import { useTournamentContext } from '../tournament-context';
 import type { TournamentBundle } from '../types';
-import {
-  cx,
-  formatPoints,
-  formatScoreDifference,
-  isBracket,
-  pointsLabel,
-  pointsPhrase,
-  stageItemName,
-  stageItemStandings,
-  stageTypeName,
-} from '../utils';
+import { formatPoints, formatScoreDifference, pointsLabel, pointsPhrase } from '../format';
+import { isBracket, stageItemName, stageItemStandings, stageTypeName } from '../matches';
+import { cx } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 /** How the teams of a group earn their place, in a few words next to its table. */

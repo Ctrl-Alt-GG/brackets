@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
-import { tournamentPhase, type TournamentPhase } from '../utils';
+import { tournamentPhase, type TournamentPhase } from '../tournament-rules';
 
 const PHASE_CLASSES: Record<TournamentPhase, string> = {
   finished: '',
@@ -9,9 +9,16 @@ const PHASE_CLASSES: Record<TournamentPhase, string> = {
   upcoming: 'badge-accent',
 };
 
-export function TournamentStatusBadge({ tournament }: { tournament: OpenApi.Tournament }) {
+/** Where the tournament stands at `now`, by default when the badge is drawn. */
+export function TournamentStatusBadge({
+  now,
+  tournament,
+}: {
+  now?: number;
+  tournament: OpenApi.Tournament;
+}) {
   const { t } = useTranslation();
-  const phase = tournamentPhase(tournament);
+  const phase = tournamentPhase(tournament, now);
   return (
     <span className={`badge badge-soft badge-sm ${PHASE_CLASSES[phase]}`}>
       {phase === 'running' ? (

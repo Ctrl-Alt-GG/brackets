@@ -57,8 +57,8 @@ class Match(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    margin_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    margin_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     custom_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     custom_margin_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     round_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -126,13 +126,8 @@ class Match(Base):
             "OR stage_item_input1_id <> stage_item_input2_id",
             name="ck_matches_distinct_inputs",
         ),
-        CheckConstraint(
-            "duration_minutes IS NULL OR duration_minutes BETWEEN 1 AND 1440",
-            name="ck_matches_duration",
-        ),
-        CheckConstraint(
-            "margin_minutes IS NULL OR margin_minutes BETWEEN 0 AND 1440", name="ck_matches_margin"
-        ),
+        CheckConstraint("duration_minutes BETWEEN 1 AND 1440", name="ck_matches_duration"),
+        CheckConstraint("margin_minutes BETWEEN 0 AND 1440", name="ck_matches_margin"),
         CheckConstraint(
             "custom_duration_minutes IS NULL OR custom_duration_minutes BETWEEN 1 AND 1440",
             name="ck_matches_custom_duration",

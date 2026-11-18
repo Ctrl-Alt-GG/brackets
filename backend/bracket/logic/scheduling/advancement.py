@@ -1,37 +1,22 @@
+"""Which teams take the slots of a stage when it is activated."""
+
 from collections import defaultdict
 from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from bracket.logic.ranking.calculation import (
-    get_team_rankings_lookup_for_tournament,
-    recalculate_ranking_for_stage_item,
-)
-from bracket.logic.ranking.elimination import update_inputs_in_complete_elimination_stage_item
+from bracket.logic.ranking.calculation import get_team_rankings_lookup_for_tournament
 from bracket.models.db.match import is_played
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
     StageItemInputFinal,
     StageItemInputTentative,
+    StageItemInputUpdate,
 )
+from bracket.models.db.stage_tree import StageItemWithRounds, StageWithStageItems
 from bracket.models.db.team import Team
-from bracket.models.db.util import StageItemWithRounds, StageWithStageItems
-from bracket.sql.matches import clear_results_for_matches_in_stage_item
-from bracket.sql.stage_item_inputs import sql_set_team_id_for_stage_item_input
-from bracket.sql.stage_items import get_stage_item
-from bracket.utils.errors import UniqueIndex, check_unique_constraint_violation
 from bracket.utils.id_types import StageId, StageItemId, StageItemInputId, TeamId, TournamentId
-
-
-class StageItemInputUpdate(BaseModel):
-    stage_item_input: StageItemInputTentative
-    team: Team
-    # A team that is level with `team` on every criterion, but goes elsewhere or doesn't go
-    # through: only their seeding decided which of the two takes this slot.
-    tied_team: Team | None = None
 
 
 def get_adjacent_stage(
@@ -185,55 +170,6 @@ def check_teams_take_one_slot_each(
             )
 
 
-async def update_matches_in_activated_stage(
-    session: AsyncSession,
-    tournament_id: TournamentId,
-    stages: list[StageWithStageItems],
-    stage_id: StageId,
-) -> None:
-    """
-    Puts the teams that move on into the slots of the newly activated stage.
-    """
-    updates_per_stage_item = await get_updates_to_inputs_in_activated_stage(
-        session, tournament_id, stages, stage_id, strict=True
-    )
-    activated_stage = next(stage for stage in stages if stage.id == stage_id)
-    for stage_item in activated_stage.stage_items:
-        check_teams_take_one_slot_each(
-            stage_item, updates_per_stage_item.get(stage_item.id, []), stages
-        )
-
-    with check_unique_constraint_violation(
-        {UniqueIndex.stage_item_inputs_stage_item_id_team_id_key}
-    ):
-        for stage_item_updates in updates_per_stage_item.values():
-            for update in stage_item_updates:
-                await sql_set_team_id_for_stage_item_input(
-                    session, tournament_id, update.stage_item_input.id, update.team.id
-                )
-
-    resolved_inputs = {
-        update.stage_item_input.id: StageItemInputFinal.model_validate(
-            update.stage_item_input.model_dump() | {"team_id": update.team.id, "team": update.team}
-        )
-        for updates in updates_per_stage_item.values()
-        for update in updates
-    }
-    # Slots also appear inside matches. Replace every copy so the same loaded tree can be used
-    # for conflict checks after activation, without a second eager graph load.
-    for stage in stages:
-        for stage_item in stage.stage_items:
-            stage_item.inputs = [
-                resolved_inputs.get(input_.id, input_) for input_ in stage_item.inputs
-            ]
-            for round_ in stage_item.rounds:
-                for match in round_.matches:
-                    if match.stage_item_input1_id in resolved_inputs:
-                        match.stage_item_input1 = resolved_inputs[match.stage_item_input1_id]
-                    if match.stage_item_input2_id in resolved_inputs:
-                        match.stage_item_input2 = resolved_inputs[match.stage_item_input2_id]
-
-
 def count_results_in_stage(stage: StageWithStageItems) -> int:
     """How many matches of the stage have a result, which going back a stage discards."""
     return sum(
@@ -242,32 +178,3 @@ def count_results_in_stage(stage: StageWithStageItems) -> int:
         for round_ in stage_item.rounds
         for match in round_.matches
     )
-
-
-async def update_matches_in_deactivated_stage(
-    session: AsyncSession, tournament_id: TournamentId, deactivated_stage: StageWithStageItems
-) -> None:
-    """
-    Releases the teams that advanced into the deactivated stage, and discards its results.
-
-    The results belong to the teams that had advanced. Going forward again can put other teams in
-    those slots, so the results can't be kept.
-    """
-    for stage_item in deactivated_stage.stage_items:
-        await clear_results_for_matches_in_stage_item(session, tournament_id, stage_item.id)
-
-        for stage_item_input in stage_item.inputs:
-            if stage_item_input.winner_from_stage_item_id is not None:
-                await sql_set_team_id_for_stage_item_input(
-                    session, tournament_id, stage_item_input.id, None
-                )
-
-        # Without results there are no winners, so the later rounds of a bracket empty out, and
-        # the statistics kept with every slot start over.
-        cleared_stage_item = await get_stage_item(session, tournament_id, stage_item.id)
-        if cleared_stage_item.type is StageType.SINGLE_ELIMINATION:
-            await update_inputs_in_complete_elimination_stage_item(session, cleared_stage_item)
-
-        await recalculate_ranking_for_stage_item(
-            session, tournament_id, await get_stage_item(session, tournament_id, stage_item.id)
-        )

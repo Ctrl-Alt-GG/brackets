@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket.app import app
 from bracket.config import config
 from bracket.database import engine, session_scope
-from bracket.models.db.account import UserAccountType
 from bracket.models.db.user import UserInsertable
+from bracket.models.enums import UserAccountType
 from bracket.sql.clubs import get_clubs_by_name_or_id, sql_make_club_owner
 from bracket.sql.users import (
     check_whether_email_is_in_use,
@@ -25,10 +25,8 @@ from bracket.sql.users import (
     get_user,
     update_user_password,
 )
-from bracket.utils.db_init import sql_create_dev_db
 from bracket.utils.rate_limit import get_account_lockout_key, reset_account_failures
 from bracket.utils.security import hash_password, normalize_email, validate_password_strength
-from openapi import openapi  # noqa: F401
 
 OPENAPI_JSON_PATH = "openapi/openapi.json"
 
@@ -105,14 +103,17 @@ def hash_password_cmd() -> None:
 def clear_user_lock(email: str, address: str) -> None:
     """Lift the lock that repeated failed logins put on an account for one client address."""
     normalized_email = normalize_email(email)
-    reset_account_failures(get_account_lockout_key(normalized_email, address=address))
+    asyncio.run(reset_account_failures(get_account_lockout_key(normalized_email, address=address)))
     logger.info(f"Cleared login lock for {normalized_email} from {address}")
 
 
 @cli.command()
 @run_async
 async def create_dev_db(session: AsyncSession) -> None:
-    await sql_create_dev_db(session)
+    """Replace the database's contents with an example tournament, for development."""
+    from bracket.development_seed import create_dev_db as create_example_data
+
+    await create_example_data(session)
 
 
 def checked_password(password: str, email: str, name: str) -> str:

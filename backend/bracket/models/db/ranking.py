@@ -2,9 +2,9 @@ from decimal import Decimal
 from typing import Annotated
 
 from heliclockter import datetime_utc
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from bracket.models.db.shared import BaseModelORM
+from bracket.models.db.shared import ApiModel, BaseModelORM
 from bracket.utils.id_types import RankingId, TournamentId
 
 # Points rules have at most six decimal places and are stored exactly in PostgreSQL NUMERIC.
@@ -14,7 +14,7 @@ RankingPoints = Annotated[
 ]
 
 
-class RankingInsertable(BaseModel):
+class RankingInsertable(BaseModelORM):
     tournament_id: TournamentId
     win_points: Decimal
     draw_points: Decimal
@@ -23,12 +23,12 @@ class RankingInsertable(BaseModel):
     position: int
 
 
-class Ranking(BaseModelORM, RankingInsertable):
+class Ranking(RankingInsertable):
     id: RankingId
     created: datetime_utc
 
 
-class RankingBody(BaseModel):
+class RankingBody(ApiModel):
     win_points: RankingPoints
     draw_points: RankingPoints
     loss_points: RankingPoints
@@ -38,7 +38,7 @@ class RankingBody(BaseModel):
     position: int = Field(ge=0)
 
 
-class RankingCreateBody(BaseModel):
+class RankingCreateBody(ApiModel):
     win_points: RankingPoints = Decimal("1.0")
     draw_points: RankingPoints = Decimal("0.5")
     loss_points: RankingPoints = Decimal("0.0")

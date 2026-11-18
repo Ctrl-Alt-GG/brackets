@@ -15,8 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from bracket.models.db.account import UserAccountType
-from bracket.models.db.user_x_club import UserXClubRelation
+from bracket.models.enums import UserAccountType, UserXClubRelation
 from bracket.orm.base import Base
 
 if TYPE_CHECKING:

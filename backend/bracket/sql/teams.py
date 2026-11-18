@@ -1,30 +1,36 @@
+"""
+Teams as they are stored.
+
+Their results are worked out from the matches instead: see `bracket.logic.teams`, which also owns
+sorting by results.
+"""
+
 from collections.abc import Mapping
+from typing import Any
 
 from heliclockter import datetime_utc
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
 from bracket import orm
-from bracket.logic.ranking.statistics import START_ELO, TeamStatistics, TeamTotals
-from bracket.logic.ranking.team_totals import get_team_totals
 from bracket.models.db.player import Player
 from bracket.models.db.team import FullTeamWithPlayers, Team, TeamBody
-from bracket.utils.id_types import PlayerId, StageItemInputId, TeamId, TournamentId
-from bracket.utils.pagination import PaginationTeams
+from bracket.models.results import START_ELO
+from bracket.utils.id_types import PlayerId, TeamId, TournamentId
+from bracket.utils.pagination import ParticipantPagination
+
+STORED_SORT_COLUMNS: Mapping[str, InstrumentedAttribute[Any]] = {
+    "name": orm.Team.name,
+    "active": orm.Team.active,
+    "created": orm.Team.created,
+}
 
 
 async def get_teams_by_id(
-    session: AsyncSession,
-    team_ids: set[TeamId],
-    tournament_id: TournamentId,
-    *,
-    with_totals: bool = False,
+    session: AsyncSession, team_ids: set[TeamId], tournament_id: TournamentId
 ) -> list[Team]:
-    """
-    `with_totals` fills in the teams' results, which replays every match of the tournament. Only
-    answers that show the teams need it: without it, they carry the never-updated result columns.
-    """
     if not team_ids:
         return []
     entities = await session.scalars(
@@ -32,23 +38,13 @@ async def get_teams_by_id(
         .where(orm.Team.id.in_(team_ids), orm.Team.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
     )
-    teams = [Team.model_validate(entity) for entity in entities]
-    if not teams or not with_totals:
-        return teams
-    totals = await get_team_totals(session, tournament_id)
-    return [
-        team.model_copy(update=totals.get(team.id, TeamTotals()).model_dump()) for team in teams
-    ]
+    return [Team.model_validate(entity) for entity in entities]
 
 
 async def get_team_by_id(
-    session: AsyncSession,
-    team_id: TeamId,
-    tournament_id: TournamentId,
-    *,
-    with_totals: bool = False,
+    session: AsyncSession, team_id: TeamId, tournament_id: TournamentId
 ) -> Team | None:
-    result = await get_teams_by_id(session, {team_id}, tournament_id, with_totals=with_totals)
+    result = await get_teams_by_id(session, {team_id}, tournament_id)
     return result[0] if result else None
 
 
@@ -58,10 +54,12 @@ async def get_teams_with_members(
     *,
     only_active_teams: bool = False,
     team_id: TeamId | None = None,
-    pagination: PaginationTeams | None = None,
-    totals: Mapping[TeamId, TeamTotals] | None = None,
+    pagination: ParticipantPagination | None = None,
 ) -> list[FullTeamWithPlayers]:
-    totals_sort = pagination is None or pagination.sort_by in TeamTotals.model_fields
+    """
+    The teams with their players, by name. With `pagination` that sorts by a stored field, only
+    that page in that order.
+    """
     query = (
         select(orm.Team)
         .where(orm.Team.tournament_id == tournament_id)
@@ -72,13 +70,10 @@ async def get_teams_with_members(
         query = query.where(orm.Team.active.is_(True))
     if team_id is not None:
         query = query.where(orm.Team.id == team_id)
-    if pagination is not None and not totals_sort:
-        sort_columns = {
-            "name": orm.Team.name,
-            "active": orm.Team.active,
-            "created": orm.Team.created,
-        }
-        sort_column = sort_columns[pagination.sort_by]
+    if pagination is not None and pagination.sorts_by_results:
+        raise ValueError("Results aren't stored: sorting by them happens in bracket.logic")
+    if pagination is not None:
+        sort_column = STORED_SORT_COLUMNS[pagination.sort_by]
         query = (
             query.order_by(
                 sort_column.desc() if pagination.sort_direction == "desc" else sort_column.asc(),
@@ -89,26 +84,7 @@ async def get_teams_with_members(
         )
     else:
         query = query.order_by(orm.Team.name, orm.Team.id)
-    entities = (await session.scalars(query)).all()
-    if not entities:
-        return []
-    if totals is None:
-        totals = await get_team_totals(session, tournament_id)
-    teams = [
-        FullTeamWithPlayers.model_validate(entity).model_copy(
-            update=totals.get(TeamId(entity.id), TeamTotals()).model_dump()
-        )
-        for entity in entities
-    ]
-    if pagination is None:
-        teams.sort(key=lambda team: (-team.elo_score, -team.wins, team.name, team.id))
-    elif totals_sort:
-        teams.sort(
-            key=lambda team: getattr(team, pagination.sort_by),
-            reverse=pagination.sort_direction == "desc",
-        )
-        teams = teams[pagination.offset : pagination.offset + pagination.limit]
-    return teams
+    return [FullTeamWithPlayers.model_validate(entity) for entity in await session.scalars(query)]
 
 
 async def get_team_count(
@@ -123,31 +99,6 @@ async def get_team_count(
     if only_active_teams:
         query = query.where(orm.Team.active.is_(True))
     return int(await session.scalar(query) or 0)
-
-
-async def update_stage_item_input_statistics(
-    session: AsyncSession,
-    tournament_id: TournamentId,
-    statistics: dict[StageItemInputId, TeamStatistics],
-) -> None:
-    """Store the results of these slots, in one round trip to the database."""
-    if not statistics:
-        return
-    await session.execute(
-        update(orm.StageItemInput)
-        .where(orm.StageItemInput.tournament_id == tournament_id)
-        .execution_options(synchronize_session=False),
-        [
-            {
-                "id": stage_item_input_id,
-                "wins": input_statistics.wins,
-                "draws": input_statistics.draws,
-                "losses": input_statistics.losses,
-                "points": input_statistics.points,
-            }
-            for stage_item_input_id, input_statistics in statistics.items()
-        ],
-    )
 
 
 async def sql_create_team(
@@ -190,30 +141,49 @@ async def sql_update_team_logo(
         await session.flush()
 
 
-async def sql_add_team_player(
-    session: AsyncSession, tournament_id: TournamentId, team_id: TeamId, player_id: PlayerId
+async def sql_add_team_players(
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    team_id: TeamId,
+    player_ids: list[PlayerId],
 ) -> None:
-    session.add(orm.PlayerXTeam(tournament_id=tournament_id, team_id=team_id, player_id=player_id))
+    session.add_all(
+        orm.PlayerXTeam(tournament_id=tournament_id, team_id=team_id, player_id=player_id)
+        for player_id in player_ids
+    )
     await session.flush()
 
 
-async def sql_set_team_members(
+async def sql_replace_team_members(
     session: AsyncSession,
     tournament_id: TournamentId,
     team_id: TeamId,
     player_ids: set[PlayerId],
-    previous_ids: set[PlayerId],
 ) -> None:
-    session.add_all(
-        orm.PlayerXTeam(tournament_id=tournament_id, team_id=team_id, player_id=player_id)
-        for player_id in player_ids - previous_ids
-    )
-    await session.flush()
+    """
+    Make these players the team's members. Both changes are limited to the tournament: a team of
+    another one keeps its members, and players of another one can't join.
+    """
     await session.execute(
         delete(orm.PlayerXTeam).where(
-            orm.PlayerXTeam.player_id.not_in(player_ids), orm.PlayerXTeam.team_id == team_id
+            orm.PlayerXTeam.tournament_id == tournament_id,
+            orm.PlayerXTeam.team_id == team_id,
+            orm.PlayerXTeam.player_id.not_in(player_ids),
         )
     )
+    if player_ids:
+        await session.execute(
+            insert(orm.PlayerXTeam)
+            .values(
+                [
+                    {"tournament_id": tournament_id, "team_id": team_id, "player_id": player_id}
+                    for player_id in sorted(player_ids)
+                ]
+            )
+            .on_conflict_do_nothing(
+                index_elements=[orm.PlayerXTeam.team_id, orm.PlayerXTeam.player_id]
+            )
+        )
 
 
 async def sql_delete_team(
@@ -261,13 +231,3 @@ async def find_player_in_other_team(
     )
     row = result.first()
     return (Player.model_validate(row[0]), row[1]) if row is not None else None
-
-
-async def get_team_logo_paths(
-    session: AsyncSession, tournament_id: TournamentId
-) -> list[str | None]:
-    return list(
-        await session.scalars(
-            select(orm.Team.logo_path).where(orm.Team.tournament_id == tournament_id)
-        )
-    )

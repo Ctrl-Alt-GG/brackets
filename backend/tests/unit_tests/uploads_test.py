@@ -1,13 +1,17 @@
+import asyncio
 import struct
+import threading
 import zlib
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from PIL import Image
 
 from bracket.config import config
+from bracket.utils import uploads
 from bracket.utils.uploads import normalize_image
 
 
@@ -56,3 +60,33 @@ def test_normalized_logo_is_resized_and_drops_metadata() -> None:
     with Image.open(BytesIO(normalized[1])) as stored:
         assert stored.size == (512, 256)
         assert not stored.getexif()
+
+
+@pytest.mark.asyncio
+async def test_images_are_processed_outside_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The event loop answers other requests while an upload is decoded and encoded."""
+    processing, finish = threading.Event(), threading.Event()
+
+    def slow_normalize(content: bytes) -> tuple[str, bytes]:
+        processing.set()
+        # Only the event loop can let this finish.
+        if not finish.wait(timeout=5):
+            raise TimeoutError("the event loop was blocked while the image was processed")
+        return "PNG", content
+
+    monkeypatch.setattr(uploads, "normalize_image", slow_normalize)
+    session = SimpleNamespace(info={})
+    stored = asyncio.create_task(
+        uploads.store_validated_image_upload(
+            UploadFile(BytesIO(b"an image"), filename="logo.png"),
+            uploads.UploadFolder.TEAM_LOGOS,
+            session,  # type: ignore[arg-type]
+        )
+    )
+    await asyncio.to_thread(processing.wait, 5)
+    finish.set()
+    upload = await stored
+    assert session.info[uploads.NEW_UPLOADS] == [upload]
+    upload.path.unlink()

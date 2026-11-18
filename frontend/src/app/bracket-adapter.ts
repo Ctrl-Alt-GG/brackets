@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import * as OpenApi from '../openapi';
-import { inputLabel, isEmptySlot, isScored, stageItemName } from './utils';
+import { inputLabel, isEmptySlot, isScored, stageItemName } from './matches';
 
 // Subset of brackets-model that brackets-viewer's render() consumes.
 type ParticipantResult = {

@@ -3,27 +3,24 @@ from zoneinfo import ZoneInfo
 
 from heliclockter import datetime_utc
 
-from bracket.models.db.account import UserAccountType
 from bracket.models.db.club import ClubInsertable
 from bracket.models.db.match import MatchInsertable
 from bracket.models.db.player import PlayerInsertable
-from bracket.models.db.player_x_team import PlayerXTeamInsertable
 from bracket.models.db.ranking import RankingInsertable
 from bracket.models.db.round import RoundInsertable
 from bracket.models.db.stage import StageInsertable
-from bracket.models.db.stage_item import StageItemInsertable, StageType
+from bracket.models.db.stage_item import StageItemInsertable
 from bracket.models.db.team import TeamInsertable
 from bracket.models.db.tournament import TournamentInsertable
 from bracket.models.db.user import UserInsertable
+from bracket.models.enums import StageType, UserAccountType
 from bracket.utils.id_types import (
     ClubId,
-    PlayerId,
     RankingId,
     RoundId,
     StageId,
     StageItemId,
     StageItemInputId,
-    TeamId,
     TournamentId,
 )
 from bracket.utils.security import hash_password
@@ -222,11 +219,6 @@ DUMMY_PLAYER8 = PlayerInsertable(
     active=True,
     created=DUMMY_MOCK_TIME,
     tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-)
-
-DUMMY_PLAYER_X_TEAM = PlayerXTeamInsertable(
-    player_id=PlayerId(DB_PLACEHOLDER_ID),
-    team_id=TeamId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_RANKING1 = RankingInsertable(

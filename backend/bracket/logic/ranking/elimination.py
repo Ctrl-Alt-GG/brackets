@@ -1,25 +1,18 @@
-from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.models.db.match import Match, MatchWithDetails, MatchWithDetailsDefinitive
+from bracket.logic.tournament_graph import TournamentGraph
+from bracket.models.db.match import Match, MatchWithSlots, with_slots
 from bracket.models.db.stage_item_inputs import StageItemInput
-from bracket.models.db.util import StageItemWithRounds
-from bracket.sql.matches import (
-    sql_set_input_ids_for_match,
-)
-from bracket.utils.id_types import (
-    MatchId,
-    RoundId,
-)
-
-_match_details = TypeAdapter(MatchWithDetailsDefinitive | MatchWithDetails)
+from bracket.models.db.stage_tree import StageItemWithRounds
+from bracket.sql.matches import sql_set_input_ids_for_match
+from bracket.utils.id_types import MatchId, RoundId
 
 
 def get_inputs_to_update_in_subsequent_elimination_rounds(
     current_round_id: RoundId,
     stage_item: StageItemWithRounds,
     match_ids: set[MatchId] | None = None,
-) -> dict[MatchId, MatchWithDetailsDefinitive | MatchWithDetails]:
+) -> dict[MatchId, MatchWithSlots]:
     """
     Determine the updates of stage item input IDs in the elimination tree.
 
@@ -39,7 +32,7 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
         for match in current_round.matches
         if match_ids is None or match.id in match_ids
     }
-    updates: dict[MatchId, MatchWithDetailsDefinitive | MatchWithDetails] = {}
+    updates: dict[MatchId, MatchWithSlots] = {}
 
     for round_ in rounds:
         if round_.id <= current_round.id:
@@ -64,19 +57,13 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
                     updated_inputs[index] = source_match.get_winner()
 
             if original_inputs != updated_inputs:
-                input_ids = [input_.id if input_ else None for input_ in updated_inputs]
-                # Filling or clearing a slot can change which match variant validates.
-                updated_match = _match_details.validate_python(
-                    subsequent_match.model_dump()
-                    | {
-                        "stage_item_input1_id": input_ids[0],
-                        "stage_item_input2_id": input_ids[1],
-                        "stage_item_input1": updated_inputs[0],
-                        "stage_item_input2": updated_inputs[1],
-                        "stage_item_input1_score": 0,
-                        "stage_item_input2_score": 0,
-                        "scoreless_result": False,
-                    }
+                updated_match = with_slots(
+                    subsequent_match,
+                    updated_inputs[0],
+                    updated_inputs[1],
+                    stage_item_input1_score=0,
+                    stage_item_input2_score=0,
+                    scoreless_result=False,
                 )
                 updates[subsequent_match.id] = updated_match
                 known_matches[subsequent_match.id] = updated_match
@@ -88,10 +75,12 @@ def get_inputs_to_update_in_subsequent_elimination_rounds(
 
 async def update_inputs_in_subsequent_elimination_rounds(
     session: AsyncSession,
-    current_round_id: RoundId,
+    graph: TournamentGraph,
     stage_item: StageItemWithRounds,
+    current_round_id: RoundId,
     match_ids: set[MatchId] | None = None,
 ) -> None:
+    """Store the competitors the results of the round decide, in the database and the graph."""
     updates = get_inputs_to_update_in_subsequent_elimination_rounds(
         current_round_id, stage_item, match_ids
     )
@@ -103,18 +92,15 @@ async def update_inputs_in_subsequent_elimination_rounds(
             [match.stage_item_input1_id, match.stage_item_input2_id],
             reset_result=True,
         )
-    # Callers can continue using the same tree for rankings, scheduling and conflict checks.
-    for round_ in stage_item.rounds:
-        round_.matches = [updates.get(match.id, match) for match in round_.matches]
+    graph.replace_matches(updates)
 
 
 async def update_inputs_in_complete_elimination_stage_item(
-    session: AsyncSession,
-    stage_item: StageItemWithRounds,
+    session: AsyncSession, graph: TournamentGraph, stage_item: StageItemWithRounds
 ) -> None:
     """Work out every slot of the bracket again, starting from the results of the first round."""
     if len(stage_item.rounds) < 1:
         return
 
     first_round = min(stage_item.rounds, key=lambda round_: round_.id)
-    await update_inputs_in_subsequent_elimination_rounds(session, first_round.id, stage_item)
+    await update_inputs_in_subsequent_elimination_rounds(session, graph, stage_item, first_round.id)

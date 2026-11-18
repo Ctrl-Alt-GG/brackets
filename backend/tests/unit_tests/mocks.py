@@ -1,19 +1,13 @@
 from heliclockter import datetime_utc
 
 from bracket.models.db.match import MatchWithDetails, MatchWithDetailsDefinitive
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
 from bracket.models.db.team import Team
-from bracket.models.db.util import RoundWithMatches, StageItemWithRounds
-from bracket.utils.dummy_records import (
-    DUMMY_MOCK_TIME,
-    DUMMY_TEAM1,
-    DUMMY_TEAM2,
-    DUMMY_TEAM3,
-    DUMMY_TEAM4,
-)
+from bracket.models.enums import StageType
 from bracket.utils.id_types import (
     MatchId,
+    RankingId,
     RoundId,
     StageId,
     StageItemId,
@@ -21,11 +15,13 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TEAM2, DUMMY_TEAM3, DUMMY_TEAM4
 
 
 def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInputFinal]:
     return [
         StageItemInputFinal(
+            stage_item_id=StageItemId(-1),
             id=StageItemInputId(-1),
             team_id=TeamId(-1),
             slot=1,
@@ -33,6 +29,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(-1)),
         ),
         StageItemInputFinal(
+            stage_item_id=StageItemId(-1),
             id=StageItemInputId(-2),
             team_id=TeamId(-2),
             slot=2,
@@ -40,6 +37,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team=Team(**DUMMY_TEAM2.model_dump(), id=TeamId(-2)),
         ),
         StageItemInputFinal(
+            stage_item_id=StageItemId(-1),
             id=StageItemInputId(-1),
             team_id=TeamId(-1),
             slot=3,
@@ -47,6 +45,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team=Team(**DUMMY_TEAM3.model_dump(), id=TeamId(-3)),
         ),
         StageItemInputFinal(
+            stage_item_id=StageItemId(-1),
             id=StageItemInputId(-4),
             team_id=TeamId(-4),
             slot=4,
@@ -172,9 +171,8 @@ def get_stage_item_mock(
     return StageItemWithRounds(
         rounds=rounds,
         inputs=[stage_item_inputs[0], stage_item_inputs[1]],
-        type_name="Single Elimination",
         team_count=4,
-        ranking_id=None,
+        ranking_id=RankingId(-1),
         id=StageItemId(-1),
         stage_id=StageId(-1),
         name="",

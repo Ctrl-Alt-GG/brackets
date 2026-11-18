@@ -12,7 +12,10 @@ import {
 /**
  * An editor follows the server except for genuine unsaved edits. A successful mutation makes
  * its submission the new baseline, retaining anything typed while that request was in flight.
- * Spread saveCallbacks into the editor's mutation; create forms do not need this lifecycle.
+ * Spread saveCallbacks into the editor's mutation; create forms use `useCreateForm` instead.
+ *
+ * Edits are found by comparing the inputs with `values`, so `values` has to be what the inputs
+ * hold: numbers for inputs registered with `valueAsNumber`, even where the API sends text.
  *
  * React Hook Form's own `values` with `resetOptions: { keepDirtyValues: true }` follows the
  * server too, but it can't replace this. It judges an edit against the values from before a save,
@@ -76,8 +79,9 @@ export function useSavedForm<TValues extends FieldValues, TContext = unknown, TO
     const saved = submission.current;
     if (!saved) return;
     const current = getValues();
-    // The global mutation callback refetches first. Prefer that response when it has arrived,
-    // including server normalization; a failed refetch still leaves the saved submission clean.
+    // The refresh after a change runs in the background. When it has already arrived, its values
+    // are the baseline, including the server's normalization. Otherwise the submission is, and
+    // the effect above applies the refresh once it arrives, to every field not edited since.
     const baseline = equal(serverValues.current, saved.server)
       ? saved.values
       : serverValues.current;

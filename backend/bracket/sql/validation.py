@@ -7,13 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket import orm
 from bracket.models.db.match import MatchCreateBodyFrontend
 from bracket.models.db.round import Round, RoundCreateBody
-from bracket.models.db.stage_item import StageItem, StageItemCreateBody, StageType
+from bracket.models.db.stage_item import StageItem, StageItemCreateBody
 from bracket.models.db.stage_item_inputs import (
     StageItemInput,
     StageItemInputUpdateBody,
     StageItemInputUpdateBodyFinal,
     StageItemInputUpdateBodyTentative,
 )
+from bracket.models.enums import StageType
 from bracket.utils.id_types import PlayerId, TournamentId
 
 

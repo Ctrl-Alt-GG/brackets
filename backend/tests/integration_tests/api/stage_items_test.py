@@ -4,11 +4,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputCreateBodyFinal
-from bracket.models.db.tournament import TournamentStatus
+from bracket.models.enums import StageType, TournamentStatus
 from bracket.sql.stage_items import get_stage_item
-from bracket.utils.dummy_records import (
+from tests.dummy_records import (
     DUMMY_RANKING1,
     DUMMY_STAGE1,
     DUMMY_STAGE2,

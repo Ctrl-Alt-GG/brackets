@@ -1,18 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useWatch } from 'react-hook-form';
 import { Link } from 'react-router';
 import { z } from 'zod';
 
 import * as OpenApi from '../../openapi';
 import {
   getUserApiUsersMeGetOptions,
+  getUserApiUsersMeGetQueryKey,
   putUserPasswordApiUsersUserIdPasswordPutMutation,
   updateUserDetailsApiUsersUserIdPutMutation,
 } from '../../openapi/@tanstack/react-query.gen';
 import { zUserPasswordToUpdate, zUserToUpdate } from '../../openapi/zod.gen';
+import { useCreateForm } from '../create-form';
 import { useSession } from '../hooks';
+import { queryClient } from '../query-client';
 import { useSavedForm } from '../saved-form';
 import {
   CheckboxField,
@@ -24,10 +27,10 @@ import {
   Surface,
   SurfaceHeading,
 } from '../ui';
-import { formatDateTime, getErrorMessage } from '../utils';
+import { getErrorMessage } from '../errors';
+import { formatDateTime } from '../format';
 
 function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
-  const [session, setSession] = useSession();
   const form = useSavedForm({
     resolver: zodResolver(zUserToUpdate),
     values: { current_password: '', email: user.email, name: user.name },
@@ -37,11 +40,11 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
   const update = useMutation({
     ...form.saveCallbacks,
     ...updateUserDetailsApiUsersUserIdPutMutation(),
-    meta: { successMessage: 'Account saved.' },
-    onSuccess: ({ data }) => {
+    // The answer is the saved account, which is all that changed. The header follows its name.
+    meta: { invalidates: [], successMessage: 'Account saved.' },
+    onSuccess: (response) => {
+      queryClient.setQueryData(getUserApiUsersMeGetQueryKey(), response);
       form.saveCallbacks.onSuccess();
-      // The header shows the name the session remembers.
-      if (session) setSession({ ...session, name: data.name });
       form.resetField('current_password', { defaultValue: '' });
     },
   });
@@ -95,63 +98,62 @@ const passwordSchema = zUserPasswordToUpdate
 
 function PasswordForm({ userId }: { userId: number }) {
   const [showPasswords, setShowPasswords] = useState(false);
-  const form = useForm({
+  const form = useCreateForm({
     defaultValues: { current_password: '', password: '', repeated_password: '' },
     resolver: zodResolver(passwordSchema),
   });
   const update = useMutation({
     ...putUserPasswordApiUsersUserIdPasswordPutMutation(),
-    meta: { successMessage: 'Password updated.' },
+    meta: { invalidates: [], successMessage: 'Password updated.' },
   });
   const { errors } = form.formState;
   const type = showPasswords ? 'text' : 'password';
 
   return (
     <form
-      onSubmit={form.handleSubmit(({ current_password, password }) =>
-        update.mutate(
-          { body: { current_password, password }, path: { user_id: userId } },
-          { onSuccess: () => form.reset() },
-        ),
+      onSubmit={form.submitWith(({ current_password, password }) =>
+        update.mutateAsync({ body: { current_password, password }, path: { user_id: userId } }),
       )}
     >
-      <Field error={errors.current_password?.message} label="Current password">
-        <input
-          autoComplete="current-password"
-          className="input w-full"
-          required
-          type={type}
-          {...form.register('current_password')}
+      <fieldset className="contents" disabled={form.locked}>
+        <Field error={errors.current_password?.message} label="Current password">
+          <input
+            autoComplete="current-password"
+            className="input w-full"
+            required
+            type={type}
+            {...form.register('current_password')}
+          />
+        </Field>
+        <Field error={errors.password?.message} label="New password">
+          <input
+            autoComplete="new-password"
+            className="input w-full"
+            placeholder="At least twelve characters"
+            required
+            type={type}
+            {...form.register('password')}
+          />
+        </Field>
+        <Field error={errors.repeated_password?.message} label="Repeat the new password">
+          <input
+            autoComplete="new-password"
+            className="input w-full"
+            required
+            type={type}
+            {...form.register('repeated_password')}
+          />
+        </Field>
+        <CheckboxField
+          checked={showPasswords}
+          className="mt-3"
+          label="Show the passwords"
+          onChange={(event) => setShowPasswords(event.target.checked)}
         />
-      </Field>
-      <Field error={errors.password?.message} label="New password">
-        <input
-          autoComplete="new-password"
-          className="input w-full"
-          placeholder="At least twelve characters"
-          required
-          type={type}
-          {...form.register('password')}
-        />
-      </Field>
-      <Field error={errors.repeated_password?.message} label="Repeat the new password">
-        <input
-          autoComplete="new-password"
-          className="input w-full"
-          required
-          type={type}
-          {...form.register('repeated_password')}
-        />
-      </Field>
-      <CheckboxField
-        checked={showPasswords}
-        className="mt-3"
-        label="Show the passwords"
-        onChange={(event) => setShowPasswords(event.target.checked)}
-      />
-      <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
-        {update.isPending ? 'Updating…' : 'Update password'}
-      </button>
+        <button className="btn btn-primary mt-4" type="submit">
+          {update.isPending ? 'Updating…' : 'Update password'}
+        </button>
+      </fieldset>
     </form>
   );
 }

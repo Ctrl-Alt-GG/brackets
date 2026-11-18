@@ -1,17 +1,51 @@
+"""
+Events, called clubs in the code, and who runs them.
+
+Commands that involve an event lock its row first, before the rows of its tournaments or of
+accounts, in these strengths:
+
+- Changing who runs an event, or the event itself: `lock_club`, which excludes every other lock.
+- Creating a tournament: `lock_club_for_new_tournament`. It serializes creations, so that two of
+  them can't both take the last place the limit allows, and waits for membership changes.
+- Any command on one of its tournaments: `lock_club_of_tournament`, which only excludes
+  `lock_club`. A command that was let in finishes before someone loses access, and one that waits
+  for the event sees the membership as it is after the change.
+"""
+
 from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.models.db.club import Club, ClubCreateBody, ClubMember, ClubUpdateBody
-from bracket.models.db.user_x_club import UserXClubRelation
-from bracket.utils.id_types import ClubId, UserId
+from bracket.models.enums import UserXClubRelation
+from bracket.utils.id_types import ClubId, TournamentId, UserId
 
 
 async def lock_club(session: AsyncSession, club_id: ClubId) -> bool:
-    """Serialize event membership changes before checking access or changing its owner."""
+    """Lock the event against every other command on it. `False` when it doesn't exist."""
     return (
         await session.scalar(select(orm.Club.id).where(orm.Club.id == club_id).with_for_update())
+    ) is not None
+
+
+async def lock_club_for_new_tournament(session: AsyncSession, club_id: ClubId) -> bool:
+    return (
+        await session.scalar(
+            select(orm.Club.id).where(orm.Club.id == club_id).with_for_update(key_share=True)
+        )
+    ) is not None
+
+
+async def lock_club_of_tournament(session: AsyncSession, tournament_id: TournamentId) -> bool:
+    """`False` when the tournament doesn't exist."""
+    return (
+        await session.scalar(
+            select(orm.Club.id)
+            .join(orm.Tournament, orm.Tournament.club_id == orm.Club.id)
+            .where(orm.Tournament.id == tournament_id)
+            .with_for_update(read=True, key_share=True, of=orm.Club)
+        )
     ) is not None
 
 
@@ -89,6 +123,16 @@ async def get_clubs_for_user_id(
     if relation is not None:
         query = query.where(orm.UserXClub.relation == relation)
     return [Club.model_validate(entity) for entity in await session.scalars(query)]
+
+
+async def count_clubs_for_user_id(session: AsyncSession, user_id: UserId) -> int:
+    """How many events the user runs, as their owner or helping."""
+    return int(
+        await session.scalar(
+            select(func.count()).select_from(orm.UserXClub).where(orm.UserXClub.user_id == user_id)
+        )
+        or 0
+    )
 
 
 async def get_club_by_id(session: AsyncSession, club_id: ClubId) -> Club:

@@ -6,7 +6,7 @@ from starlette.requests import Request
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.models.db.account import UserAccountType
+from bracket.logic.authentication import is_frontend_request, issue_token
 from bracket.models.db.user import (
     UserInDB,
     UserInsertable,
@@ -15,12 +15,8 @@ from bracket.models.db.user import (
     UserToRegister,
     UserToUpdate,
 )
-from bracket.routes.auth import (
-    is_frontend_request,
-    issue_token,
-    reject_cross_site_request,
-    user_authenticated,
-)
+from bracket.models.enums import UserAccountType
+from bracket.routes.access import AuthenticatedUser, reject_cross_site_request
 from bracket.routes.models import SuccessResponse, TokenResponse, UserPublicResponse
 from bracket.sql.users import (
     check_whether_email_is_in_use,
@@ -35,7 +31,7 @@ from bracket.utils.id_types import UserId
 from bracket.utils.rate_limit import (
     enforce_account_lockout,
     get_account_lockout_key,
-    limiter,
+    rate_limit,
     record_account_failure,
     reset_account_failures,
 )
@@ -58,26 +54,24 @@ def check_is_same_user(user_public: UserPublic, user_id: UserId) -> None:
 
 async def current_password_is_valid(request: Request, user: UserInDB, password: str | None) -> bool:
     key = get_account_lockout_key(user.email, request)
-    enforce_account_lockout(key)
+    await enforce_account_lockout(key)
     if password is None:
         return False
     is_valid, _ = await verify_password_in_thread(password, user.password_hash)
     if is_valid:
-        reset_account_failures(key)
+        await reset_account_failures(key)
         return True
-    record_account_failure(key)
+    await record_account_failure(key)
     return False
 
 
 @router.get("/users/me", response_model=UserPublicResponse)
-async def get_user(user_public: UserPublic = Depends(user_authenticated)) -> UserPublicResponse:
+async def get_user(user_public: AuthenticatedUser) -> UserPublicResponse:
     return UserPublicResponse(data=user_public)
 
 
 @router.get("/users/{user_id}", response_model=UserPublicResponse)
-async def get_me(
-    user_id: UserId, user_public: UserPublic = Depends(user_authenticated)
-) -> UserPublicResponse:
+async def get_me(user_id: UserId, user_public: AuthenticatedUser) -> UserPublicResponse:
     check_is_same_user(user_public, user_id)
     return UserPublicResponse(data=user_public)
 
@@ -88,7 +82,7 @@ async def update_user_details(
     request: Request,
     user_id: UserId,
     user_to_update: UserToUpdate,
-    user_public: UserPublic = Depends(user_authenticated),
+    user_public: AuthenticatedUser,
 ) -> UserPublicResponse:
     check_is_same_user(user_public, user_id)
 
@@ -108,15 +102,18 @@ async def update_user_details(
     return UserPublicResponse(data=assert_some(user_updated))
 
 
-@router.put("/users/{user_id}/password", response_model=SuccessResponse)
-@limiter.limit("10/5minutes")
+@router.put(
+    "/users/{user_id}/password",
+    response_model=SuccessResponse,
+    dependencies=[Depends(rate_limit("10/5minutes"))],
+)
 async def put_user_password(
     request: Request,
     response: Response,
     session: DbSession,
     user_id: UserId,
     user_to_update: UserPasswordToUpdate,
-    user_public: UserPublic = Depends(user_authenticated),
+    user_public: AuthenticatedUser,
 ) -> SuccessResponse:
     """
     Asks for the current password as well, so that a stolen session can't lock the owner out.
@@ -145,9 +142,8 @@ async def put_user_password(
 @router.post(
     "/users/register",
     response_model=TokenResponse,
-    dependencies=[Depends(reject_cross_site_request)],
+    dependencies=[Depends(reject_cross_site_request), Depends(rate_limit("5/15minutes"))],
 )
-@limiter.limit("5/15minutes")
 async def register_user(
     session: DbSession, request: Request, response: Response, user_to_register: UserToRegister
 ) -> TokenResponse:

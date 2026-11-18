@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from alembic import command
 from bracket import orm
+from bracket.bootstrap import init_db_when_empty
 from bracket.utils.alembic import get_alembic_config
-from bracket.utils.db_init import init_db_when_empty
 
 BASELINE = "b2e5c8d1f4a7"
 SCHEMA = Path(__file__).with_name("assets") / f"{BASELINE}.sql"

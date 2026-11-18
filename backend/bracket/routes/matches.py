@@ -1,135 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
-from starlette import status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.planning.conflicts import handle_conflicts
+from bracket.logic.matches import create_swiss_match, delete_swiss_match, record_match_result
 from bracket.logic.planning.matches import delay_upcoming_matches, schedule_all_matches
-from bracket.logic.ranking.calculation import (
-    recalculate_ranking_for_stage_item,
-)
-from bracket.logic.ranking.elimination import update_inputs_in_subsequent_elimination_rounds
-from bracket.models.db.match import (
-    Match,
-    MatchBody,
-    MatchCreateBody,
-    MatchCreateBodyFrontend,
-    ScheduleDelayBody,
-)
-from bracket.models.db.stage_item import StageType
-from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.match import Match, MatchBody, MatchCreateBodyFrontend, ScheduleDelayBody
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.routes.auth import user_authenticated_for_tournament
+from bracket.routes.access import user_authenticated_for_tournament
 from bracket.routes.models import SingleMatchResponse, SuccessResponse
-from bracket.routes.util import disallow_archived_tournament, match_dependency
-from bracket.sql.matches import (
-    sql_create_matches,
-    sql_delete_match,
-    sql_get_match,
-    sql_update_match,
-)
-from bracket.sql.rounds import get_round_by_id
-from bracket.sql.stage_items import get_stage_item
-from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.tournaments import sql_get_tournament
-from bracket.sql.validation import validate_match_create
-from bracket.utils.id_types import MatchId, TournamentId
+from bracket.routes.resources import disallow_archived_tournament, match_dependency
+from bracket.utils.id_types import TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
+
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
 
 
 @router.delete("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def delete_match(
     session: DbSession,
-    tournament_id: TournamentId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    match: Match = Depends(match_dependency),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
+    match: Annotated[Match, Depends(match_dependency)],
 ) -> SuccessResponse:
-    round_ = await get_round_by_id(session, tournament_id, match.round_id)
-    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
-
-    if not round_.is_draft or stage_item.type != StageType.SWISS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only delete matches from draft rounds in Swiss stage items",
-        )
-
-    await sql_delete_match(session, match.id)
-
-    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
-
-    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
-    await schedule_all_matches(session, tournament_id)
+    await delete_swiss_match(session, tournament, match)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/matches", response_model=SingleMatchResponse)
 async def create_match(
     session: DbSession,
-    tournament_id: TournamentId,
     match_body: MatchCreateBodyFrontend,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
 ) -> SingleMatchResponse:
-    round_metadata = await validate_match_create(session, tournament_id, match_body)
-    stage_item = await get_stage_item(session, tournament_id, round_metadata.stage_item_id)
-    round_ = next(round_ for round_ in stage_item.rounds if round_.id == round_metadata.id)
-
-    if not round_.is_draft or stage_item.type != StageType.SWISS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only create matches in draft rounds of Swiss stage items",
-        )
-
-    input_ids = [match_body.stage_item_input1_id, match_body.stage_item_input2_id]
-    local_inputs = {
-        input_.id for input_ in stage_item.inputs if isinstance(input_, StageItemInputFinal)
-    }
-    if any(input_id not in local_inputs for input_id in input_ids):
-        raise HTTPException(400, "Choose two assigned teams from this round's stage item")
-    if (
-        match_body.stage_item_input1_winner_from_match_id is not None
-        or match_body.stage_item_input2_winner_from_match_id is not None
-    ):
-        raise HTTPException(400, "Swiss matches use assigned teams, not winners of other matches")
-    if input_ids[0] is not None and input_ids[0] == input_ids[1]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A team can't play against itself",
-        )
-
-    input_ids_in_round = {
-        input_id
-        for match in round_.matches
-        for input_id in (match.stage_item_input1_id, match.stage_item_input2_id)
-        if input_id is not None
-    }
-    if any(input_id in input_ids_in_round for input_id in input_ids if input_id is not None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One of these teams already has a match in this round",
-        )
-
-    tournament = await sql_get_tournament(session, tournament_id)
-    body_with_durations = MatchCreateBody(
-        **match_body.model_dump(),
-        duration_minutes=tournament.duration_minutes,
-        margin_minutes=tournament.margin_minutes,
-    )
-
-    [match] = await sql_create_matches(session, tournament_id, [body_with_durations])
-    await schedule_all_matches(session, tournament_id)
-    return SingleMatchResponse(data=await sql_get_match(session, match.id))
+    return SingleMatchResponse(data=await create_swiss_match(session, tournament, match_body))
 
 
 @router.post("/tournaments/{tournament_id}/schedule_matches", response_model=SuccessResponse)
 async def schedule_matches(
     session: DbSession,
     tournament_id: TournamentId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    __: OpenTournament,
 ) -> SuccessResponse:
     await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
@@ -140,8 +57,8 @@ async def delay_schedule(
     session: DbSession,
     tournament_id: TournamentId,
     body: ScheduleDelayBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    __: OpenTournament,
 ) -> SuccessResponse:
     """
     Move every round that hasn't been played yet, and everything after it, for an event that
@@ -154,67 +71,10 @@ async def delay_schedule(
 @router.put("/tournaments/{tournament_id}/matches/{match_id}", response_model=SuccessResponse)
 async def update_match_by_id(
     session: DbSession,
-    tournament_id: TournamentId,
-    match_id: MatchId,
     match_body: MatchBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    tournament: Tournament = Depends(disallow_archived_tournament),
-    match: Match = Depends(match_dependency),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
+    match: Annotated[Match, Depends(match_dependency)],
 ) -> SuccessResponse:
-    stages = await get_full_tournament_details(session, tournament_id)
-    stage_item, round_ = next(
-        (stage_item, round_)
-        for stage in stages
-        for stage_item in stage.stage_items
-        for round_ in stage_item.rounds
-        if round_.id == match.round_id
-    )
-    current_match = next(candidate for candidate in round_.matches if candidate.id == match_id)
-    is_knockout = stage_item.type == StageType.SINGLE_ELIMINATION
-
-    has_result = (
-        match_body.stage_item_input1_score != 0
-        or match_body.stage_item_input2_score != 0
-        or match_body.scoreless_result
-    )
-    match_inputs = (current_match.stage_item_input1, current_match.stage_item_input2)
-    # Saving 0-0 takes a result back, which is always possible.
-    if has_result and not all(isinstance(input_, StageItemInputFinal) for input_ in match_inputs):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A match can only get a result once both of its teams are known",
-        )
-
-    is_draw = match_body.stage_item_input1_score == match_body.stage_item_input2_score
-    if is_knockout and is_draw and has_result:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "A knockout match needs a winner. Enter the score after overtime or the tiebreak."
-            ),
-        )
-
-    await sql_update_match(session, match_id, match_body)
-    current_match.stage_item_input1_score = match_body.stage_item_input1_score
-    current_match.stage_item_input2_score = match_body.stage_item_input2_score
-    current_match.scoreless_result = match_body.scoreless_result
-    current_match.custom_duration_minutes = match_body.custom_duration_minutes
-    current_match.custom_margin_minutes = match_body.custom_margin_minutes
-
-    if is_knockout:
-        # Propagation updates both the stored competitors and this loaded tree, so conflict and
-        # ranking calculations see cleared downstream results without fetching the tree again.
-        await update_inputs_in_subsequent_elimination_rounds(
-            session, round_.id, stage_item, {match_id}
-        )
-
-    if (
-        match_body.custom_duration_minutes != match.custom_duration_minutes
-        or match_body.custom_margin_minutes != match.custom_margin_minutes
-    ):
-        await schedule_all_matches(session, tournament_id, stages=stages, tournament=tournament)
-    elif is_knockout:
-        await handle_conflicts(session, stages)
-
-    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
+    await record_match_result(session, tournament, match, match_body)
     return SuccessResponse()

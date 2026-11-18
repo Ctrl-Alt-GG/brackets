@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket.logic.planning.conflicts import handle_conflicts
+from bracket.logic.tournament_graph import TournamentGraph
 from bracket.models.db.match import MAX_MINUTES, MatchTiming, is_played
+from bracket.models.db.stage_tree import RoundWithMatches, StageWithStageItems
 from bracket.models.db.tournament import Tournament
-from bracket.models.db.util import RoundWithMatches, StageWithStageItems
 from bracket.sql.matches import sql_add_margin_to_matches, sql_update_match_timings
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament, sql_move_tournament_start
@@ -79,46 +80,40 @@ async def schedule_all_matches(
     session: AsyncSession,
     tournament_id: TournamentId,
     *,
-    stages: list[StageWithStageItems] | None = None,
+    graph: TournamentGraph | None = None,
     tournament: Tournament | None = None,
 ) -> None:
     """
     Update the start time of every match whose planned time has changed.
 
     Call this whenever rounds or matches are added or removed, or when the tournament's start
-    time or any match duration or margin changes.
+    time or any match duration or margin changes. A command that has the whole tournament's
+    graph passes it, which also gets the new times.
     """
     if tournament is None:
         tournament = await sql_get_tournament(session, tournament_id)
-    if stages is None:
-        stages = await get_full_tournament_details(session, tournament_id)
-    matches = {
-        match.id: match
-        for stage in stages
-        for stage_item in stage.stage_items
-        for round_ in stage_item.rounds
-        for match in round_.matches
-    }
+    if graph is None:
+        graph = TournamentGraph(await get_full_tournament_details(session, tournament_id))
 
-    changed_timings = [
-        timing
-        for timing in plan_match_timings(stages, tournament)
-        if (
-            matches[timing.match_id].start_time,
-            matches[timing.match_id].duration_minutes,
-            matches[timing.match_id].margin_minutes,
+    changed_timings: list[MatchTiming] = []
+    for timing in plan_match_timings(graph.stages, tournament):
+        match = graph.match(timing.match_id)
+        if (match.start_time, match.duration_minutes, match.margin_minutes) != (
+            timing.start_time,
+            timing.duration_minutes,
+            timing.margin_minutes,
+        ):
+            changed_timings.append(timing)
+    await sql_update_match_timings(session, changed_timings)
+    for timing in changed_timings:
+        graph.update_match(
+            timing.match_id,
+            start_time=timing.start_time,
+            duration_minutes=timing.duration_minutes,
+            margin_minutes=timing.margin_minutes,
         )
-        != (timing.start_time, timing.duration_minutes, timing.margin_minutes)
-    ]
-    if changed_timings:
-        await sql_update_match_timings(session, changed_timings)
-        for timing in changed_timings:
-            match = matches[timing.match_id]
-            match.start_time = timing.start_time
-            match.duration_minutes = timing.duration_minutes
-            match.margin_minutes = timing.margin_minutes
     # Adding/removing competitors can change conflicts even when every time stays the same.
-    await handle_conflicts(session, stages)
+    await handle_conflicts(session, graph)
 
 
 class ScheduleDelay(NamedTuple):

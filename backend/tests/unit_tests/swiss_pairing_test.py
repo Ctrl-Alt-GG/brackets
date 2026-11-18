@@ -3,13 +3,13 @@ from decimal import Decimal
 
 from bracket.logic.scheduling.swiss import get_swiss_pairing
 from bracket.models.db.match import MatchWithDetailsDefinitive
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInput, StageItemInputFinal
+from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
 from bracket.models.db.team import Team
-from bracket.models.db.util import RoundWithMatches, StageItemWithRounds
-from bracket.utils.dummy_records import DUMMY_MATCH1, DUMMY_MOCK_TIME, DUMMY_TEAM1
+from bracket.models.enums import StageType
 from bracket.utils.id_types import (
     MatchId,
+    RankingId,
     RoundId,
     StageId,
     StageItemId,
@@ -17,10 +17,12 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
+from tests.dummy_records import DUMMY_MATCH1, DUMMY_MOCK_TIME, DUMMY_TEAM1
 
 
 def get_team(team_id: int, points: int = 1200, active: bool = True) -> StageItemInputFinal:
     return StageItemInputFinal(
+        stage_item_id=StageItemId(-1),
         id=StageItemInputId(team_id),
         slot=team_id,
         tournament_id=TournamentId(-1),
@@ -64,9 +66,8 @@ def get_stage_item(
         name="Swiss",
         created=DUMMY_MOCK_TIME,
         type=StageType.SWISS,
-        type_name="Swiss",
         team_count=len(teams),
-        ranking_id=None,
+        ranking_id=RankingId(-1),
         inputs=list[StageItemInput](teams),
         rounds=rounds,
     )

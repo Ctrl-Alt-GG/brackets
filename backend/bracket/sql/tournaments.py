@@ -7,17 +7,25 @@ from sqlalchemy.orm import aliased, with_expression
 from sqlalchemy.sql.elements import ColumnElement
 
 from bracket import orm
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.tournament import (
     Tournament,
     TournamentBody,
     TournamentChangeStatusBody,
-    TournamentStatus,
     TournamentUpdateBody,
 )
+from bracket.models.enums import StageType, TournamentStatus
 from bracket.utils.id_types import ClubId, TournamentId
 
 TournamentFilter = Literal["ALL", "OPEN", "ARCHIVED"]
+# The records a tournament has, which limits count.
+TournamentRecord = (
+    type[orm.Stage]
+    | type[orm.StageItem]
+    | type[orm.Round]
+    | type[orm.Team]
+    | type[orm.Player]
+    | type[orm.Ranking]
+)
 
 
 def with_progress(stmt: Select[orm.Tournament]) -> Select[orm.Tournament]:
@@ -35,13 +43,7 @@ def with_progress(stmt: Select[orm.Tournament]) -> Select[orm.Tournament]:
             func.max(
                 orm.Match.start_time
                 + func.make_interval(
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    func.coalesce(orm.Match.duration_minutes, 0)
-                    + func.coalesce(orm.Match.margin_minutes, 0),
+                    0, 0, 0, 0, 0, orm.Match.duration_minutes + orm.Match.margin_minutes
                 )
             ).label("last_match_end"),
         )
@@ -86,6 +88,40 @@ def with_progress(stmt: Select[orm.Tournament]) -> Select[orm.Tournament]:
             with_expression(orm.Tournament.more_rounds_possible, more_rounds),
         )
         .execution_options(populate_existing=True)
+    )
+
+
+async def lock_tournament(session: AsyncSession, tournament_id: TournamentId) -> bool:
+    """
+    Serialize the commands of a tournament. Whether a slot is unused and assigning its replacement
+    can't interleave with a score being recorded, for example. `False` when it doesn't exist.
+    """
+    return (
+        await session.scalar(
+            select(orm.Tournament.id).where(orm.Tournament.id == tournament_id).with_for_update()
+        )
+    ) is not None
+
+
+async def count_tournament_records(
+    session: AsyncSession, record: TournamentRecord, tournament_id: TournamentId
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count()).select_from(record).where(record.tournament_id == tournament_id)
+        )
+        or 0
+    )
+
+
+async def count_tournaments_of_club(session: AsyncSession, club_id: ClubId) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(orm.Tournament)
+            .where(orm.Tournament.club_id == club_id)
+        )
+        or 0
     )
 
 
@@ -152,6 +188,19 @@ async def sql_delete_tournament(session: AsyncSession, tournament_id: Tournament
     await session.execute(delete(orm.Match).where(orm.Match.tournament_id == tournament_id))
     await session.execute(delete(orm.Stage).where(orm.Stage.tournament_id == tournament_id))
     await session.execute(delete(orm.Tournament).where(orm.Tournament.id == tournament_id))
+
+
+async def get_tournament_logo_paths(
+    session: AsyncSession, tournament_id: TournamentId
+) -> tuple[str | None, list[str | None]]:
+    """The logo of the tournament and those of its teams."""
+    tournament_logo = await session.scalar(
+        select(orm.Tournament.logo_path).where(orm.Tournament.id == tournament_id)
+    )
+    team_logos = await session.scalars(
+        select(orm.Team.logo_path).where(orm.Team.tournament_id == tournament_id)
+    )
+    return tournament_logo, list(team_logos)
 
 
 async def sql_update_tournament(

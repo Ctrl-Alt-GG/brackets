@@ -8,7 +8,7 @@ import { createTournamentApiTournamentsPostMutation } from '../../openapi/@tanst
 import { zTournamentBody } from '../../openapi/zod.gen';
 import { zDetailsLink, zLocalDateTime } from '../forms';
 import { CheckboxField, Field } from '../ui';
-import { DETAILS_PAGE_DESCRIPTION } from '../utils';
+import { DETAILS_PAGE_DESCRIPTION } from '../urls';
 
 const newTournamentSchema = zTournamentBody.extend({
   dashboard_endpoint: zDetailsLink,

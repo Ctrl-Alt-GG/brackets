@@ -2,11 +2,11 @@ from heliclockter import timedelta
 
 from bracket.logic.planning.matches import plan_match_timings
 from bracket.models.db.match import MatchWithDetails
-from bracket.models.db.stage_item import StageType
+from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds, StageWithStageItems
 from bracket.models.db.tournament import Tournament
-from bracket.models.db.util import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
-from bracket.utils.id_types import MatchId, RoundId, StageId, StageItemId, TournamentId
+from bracket.models.enums import StageType
+from bracket.utils.id_types import MatchId, RankingId, RoundId, StageId, StageItemId, TournamentId
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 
 
 def get_round(round_id: int, *matches: MatchWithDetails) -> RoundWithMatches:
@@ -54,9 +54,8 @@ def get_stage(
                 name="",
                 created=DUMMY_MOCK_TIME,
                 type=StageType.ROUND_ROBIN,
-                type_name="Round robin",
                 team_count=4,
-                ranking_id=None,
+                ranking_id=RankingId(-1),
                 inputs=[],
                 rounds=rounds,
             )

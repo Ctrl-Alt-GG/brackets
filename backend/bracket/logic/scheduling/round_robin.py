@@ -1,12 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.models.db.match import (
-    MatchCreateBody,
-)
-from bracket.models.db.util import StageItemWithRounds
+from bracket.models.db.match import MatchCreateBody
+from bracket.models.db.stage_tree import StageItemWithRounds
+from bracket.models.db.tournament import Tournament
 from bracket.sql.matches import sql_create_matches
-from bracket.sql.tournaments import sql_get_tournament
-from bracket.utils.id_types import TournamentId
 
 
 def get_round_robin_combinations(team_count: int) -> list[list[tuple[int, int]]]:
@@ -38,10 +35,9 @@ def get_round_robin_combinations(team_count: int) -> list[list[tuple[int, int]]]
 
 
 async def build_round_robin_stage_item(
-    session: AsyncSession, tournament_id: TournamentId, stage_item: StageItemWithRounds
+    session: AsyncSession, tournament: Tournament, stage_item: StageItemWithRounds
 ) -> None:
     matches = get_round_robin_combinations(stage_item.team_count)
-    tournament = await sql_get_tournament(session, tournament_id)
 
     suggestions: list[MatchCreateBody] = []
     for i, round_ in enumerate(stage_item.rounds):
@@ -64,7 +60,7 @@ async def build_round_robin_stage_item(
                     custom_margin_minutes=None,
                 )
                 suggestions.append(match)
-    await sql_create_matches(session, tournament_id, suggestions)
+    await sql_create_matches(session, tournament.id, suggestions)
 
 
 def get_number_of_rounds_to_create_round_robin(team_count: int) -> int:

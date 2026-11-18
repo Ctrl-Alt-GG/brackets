@@ -1,8 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.schema import CreateSchema, DropSchema
 
 from bracket import orm
 from bracket.database import engine
@@ -21,12 +23,13 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.models.db.team import Team, TeamInsertable
 from bracket.models.db.tournament import Tournament, TournamentInsertable
 from bracket.models.db.user import UserBase, UserInDB
-from bracket.models.db.user_x_club import UserXClub, UserXClubInsertable, UserXClubRelation
+from bracket.models.db.user_x_club import UserXClub, UserXClubInsertable
+from bracket.models.enums import UserXClubRelation
 from bracket.sql.matches import match_without_details
 from bracket.sql.stage_item_inputs import get_stage_item_input_by_id
 from bracket.sql.tournaments import sql_get_tournament
-from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_RANKING1, DUMMY_TOURNAMENT
 from bracket.utils.id_types import StageItemInputId, TeamId, TournamentId
+from tests.dummy_records import DUMMY_CLUB, DUMMY_RANKING1, DUMMY_TOURNAMENT
 from tests.integration_tests.mocks import get_mock_token, get_mock_user
 from tests.integration_tests.models import AuthContext
 
@@ -170,13 +173,18 @@ async def inserted_user_x_club(user_x_club: UserXClubInsertable) -> AsyncIterato
 
 
 @asynccontextmanager
-async def inserted_auth_context() -> AsyncIterator[AuthContext]:
+async def inserted_auth_context(
+    dashboard_endpoint: str | None = None,
+) -> AsyncIterator[AuthContext]:
+    """An organizer with an event and a tournament. Details links are unique: give each its own."""
     mock_user = get_mock_user()
     async with (
         inserted_user(mock_user) as user_inserted,
         inserted_club(DUMMY_CLUB) as club_inserted,
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(update={"club_id": club_inserted.id})
+            DUMMY_TOURNAMENT.model_copy(
+                update={"club_id": club_inserted.id, "dashboard_endpoint": dashboard_endpoint}
+            )
         ) as tournament_inserted,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": tournament_inserted.id})
@@ -197,3 +205,20 @@ async def inserted_auth_context() -> AsyncIterator[AuthContext]:
             user_x_club=user_x_club_inserted,
             ranking=ranking_inserted,
         )
+
+
+@asynccontextmanager
+async def isolated_schema() -> AsyncIterator[AsyncEngine]:
+    """An engine whose tables live in a schema of their own, which is dropped afterwards."""
+    schema_name = f"isolated_{uuid4().hex}"
+    async with engine.begin() as connection:
+        await connection.execute(CreateSchema(schema_name))
+    isolated = create_async_engine(
+        engine.url, connect_args={"server_settings": {"search_path": schema_name}}
+    )
+    try:
+        yield isolated
+    finally:
+        await isolated.dispose()
+        async with engine.begin() as connection:
+            await connection.execute(DropSchema(schema_name, cascade=True))

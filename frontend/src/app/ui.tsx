@@ -1,10 +1,18 @@
-import type { ComponentProps, ReactNode } from 'react';
+import {
+  cloneElement,
+  useId,
+  useState,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, useLocation } from 'react-router';
 
 import { LANGUAGES } from './locales';
 import type { Session } from './types';
-import { cx, loginPath } from './utils';
+import { loginPath } from './urls';
+import { cx } from './utils';
 
 export function PageShell({
   children,
@@ -67,7 +75,13 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** A labelled form control with its validation message, or a hint while there is none. */
+type ControlProps = Pick<ComponentProps<'input'>, 'aria-describedby' | 'aria-invalid' | 'id'>;
+
+/**
+ * A labelled form control with its validation message, or a hint while there is none. The control
+ * gets the id the label points to, and the message as its description, so screen readers read it
+ * with the control. A field with more than one control, such as `LogoField`, has its own markup.
+ */
 export function Field({
   children,
   className,
@@ -75,31 +89,44 @@ export function Field({
   hint,
   label,
 }: {
-  children: ReactNode;
+  children: ReactElement<ControlProps>;
   className?: string;
   error?: string;
   hint?: string;
   label: string;
 }) {
+  const id = useId();
+  const messageId = `${id}-message`;
+  const message = error || hint;
+
   return (
-    <label className={cx('fieldset', className)}>
-      <span className="fieldset-legend">{label}</span>
-      {children}
-      {error ? (
-        <span className="label text-error">{error}</span>
-      ) : hint ? (
-        <span className="label whitespace-normal">{hint}</span>
+    <div className={cx('fieldset', className)}>
+      <label className="fieldset-legend" htmlFor={id}>
+        {label}
+      </label>
+      {cloneElement(children, {
+        'aria-describedby': message ? messageId : undefined,
+        'aria-invalid': error ? true : undefined,
+        id,
+      })}
+      {message ? (
+        <span className={cx('label', error ? 'text-error' : 'whitespace-normal')} id={messageId}>
+          {message}
+        </span>
       ) : null}
-    </label>
+    </div>
   );
 }
 
+/** A checkbox with its label, and a description that screen readers read after the label. */
 export function CheckboxField({
   className,
   description,
   label,
   ...props
 }: Omit<ComponentProps<'input'>, 'type'> & { description?: string; label: string }) {
+  const id = useId();
+
   return (
     <label
       className={cx(
@@ -107,14 +134,58 @@ export function CheckboxField({
         className,
       )}
     >
-      <input {...props} className="checkbox checkbox-primary checkbox-sm mt-0.5" type="checkbox" />
+      <input
+        {...props}
+        aria-describedby={description ? `${id}-description` : undefined}
+        aria-labelledby={`${id}-label`}
+        className="checkbox checkbox-primary checkbox-sm mt-0.5"
+        type="checkbox"
+      />
       <span className="space-y-1">
-        <span className="block">{label}</span>
+        <span className="block" id={`${id}-label`}>
+          {label}
+        </span>
         {description ? (
-          <span className="block text-xs text-base-content/70">{description}</span>
+          <span className="block text-xs text-base-content/70" id={`${id}-description`}>
+            {description}
+          </span>
         ) : null}
       </span>
     </label>
+  );
+}
+
+/**
+ * A native `<details>` whose content is made the first time it opens, and kept from then on. A long
+ * list of closed editors costs only their summaries, and an editor that was opened keeps what was
+ * typed into it when it is closed again or a filter hides it.
+ */
+export function Disclosure({
+  children,
+  className,
+  open = false,
+  summary,
+}: {
+  /** Its content, with the `collapse-content` class. */
+  children: ReactNode;
+  className?: string;
+  /** Opens it, also when this becomes true later on. */
+  open?: boolean;
+  summary: ReactNode;
+}) {
+  const [opened, setOpened] = useState(open);
+
+  return (
+    <details
+      className={className}
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpened(true);
+      }}
+      open={open}
+    >
+      <summary className="collapse-title">{summary}</summary>
+      {opened ? children : null}
+    </details>
   );
 }
 

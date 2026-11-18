@@ -8,21 +8,26 @@ import {
   getClubsApiClubsGetOptions,
   getTournamentsApiTournamentsGetOptions,
 } from '../../openapi/@tanstack/react-query.gen';
+import { useServerNow } from '../clock';
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { useSession } from '../hooks';
 import { EmptyState, ErrorState, LoadingState, PageShell, Surface, SurfaceHeading } from '../ui';
-import {
-  getErrorMessage,
-  publicTournamentPath,
-  tournamentDateLabel,
-  tournamentPhase,
-} from '../utils';
+import { getErrorMessage } from '../errors';
+import { tournamentDateLabel } from '../format';
+import { tournamentPhase } from '../tournament-rules';
+import { publicTournamentPath } from '../urls';
 
 function byStartTime(left: OpenApi.Tournament, right: OpenApi.Tournament) {
   return new Date(left.start_time).getTime() - new Date(right.start_time).getTime();
 }
 
-function TournamentCard({ tournament }: { tournament: OpenApi.TournamentWithAccess }) {
+function TournamentCard({
+  now,
+  tournament,
+}: {
+  now: number;
+  tournament: OpenApi.TournamentWithAccess;
+}) {
   const { t } = useTranslation();
   const detailsPath = publicTournamentPath(tournament);
   const canManage = tournament.can_manage;
@@ -31,9 +36,9 @@ function TournamentCard({ tournament }: { tournament: OpenApi.TournamentWithAcce
     <article className="card relative border border-base-300 bg-base-100/50 transition hover:border-primary/50 hover:bg-base-100/80">
       <div className="card-body gap-4">
         <div className="space-y-2">
-          <TournamentStatusBadge tournament={tournament} />
+          <TournamentStatusBadge now={now} tournament={tournament} />
           <h3 className="card-title font-display text-xl">{tournament.name}</h3>
-          <p className="text-sm text-base-content/70">{tournamentDateLabel(tournament, t)}</p>
+          <p className="text-sm text-base-content/70">{tournamentDateLabel(tournament, t, now)}</p>
           {canManage ? (
             <p className="text-sm text-base-content/70">
               {t('home.timing', {
@@ -69,10 +74,12 @@ function TournamentCard({ tournament }: { tournament: OpenApi.TournamentWithAcce
 
 function TournamentGroup({
   nested,
+  now,
   title,
   tournaments,
 }: {
   nested: boolean;
+  now: number;
   title: string;
   tournaments: OpenApi.TournamentWithAccess[];
 }) {
@@ -84,7 +91,7 @@ function TournamentGroup({
       <Heading className="font-display text-xl font-semibold">{title}</Heading>
       <div className="grid gap-4 md:grid-cols-2">
         {tournaments.map((tournament) => (
-          <TournamentCard key={tournament.id} tournament={tournament} />
+          <TournamentCard key={tournament.id} now={now} tournament={tournament} />
         ))}
       </div>
     </section>
@@ -97,25 +104,37 @@ function TournamentGroup({
  */
 function TournamentList({
   nested = false,
+  now,
   tournaments,
 }: {
   /** Under a heading of its own, which makes the groups subheadings. */
   nested?: boolean;
+  now: number;
   tournaments: OpenApi.TournamentWithAccess[];
 }) {
   const { t } = useTranslation();
   const active = tournaments
-    .filter((tournament) => tournamentPhase(tournament) !== 'finished')
+    .filter((tournament) => tournamentPhase(tournament, now) !== 'finished')
     .toSorted(byStartTime);
   const finished = tournaments
-    .filter((tournament) => tournamentPhase(tournament) === 'finished')
+    .filter((tournament) => tournamentPhase(tournament, now) === 'finished')
     .toSorted(byStartTime)
     .toReversed();
 
   return (
     <div className="space-y-8">
-      <TournamentGroup nested={nested} title={t('home.runningAndUpcoming')} tournaments={active} />
-      <TournamentGroup nested={nested} title={t('home.finished')} tournaments={finished} />
+      <TournamentGroup
+        nested={nested}
+        now={now}
+        title={t('home.runningAndUpcoming')}
+        tournaments={active}
+      />
+      <TournamentGroup
+        nested={nested}
+        now={now}
+        title={t('home.finished')}
+        tournaments={finished}
+      />
     </div>
   );
 }
@@ -129,6 +148,8 @@ export function HomePage() {
   const { t } = useTranslation();
   const [session] = useSession();
   const canManage = Boolean(session);
+  // The page stays open at the venue: a tournament that starts meanwhile moves on to running.
+  const now = useServerNow();
   // Everyone sees the public tournaments: the running ones, and finished ones with the Details
   // page enabled. Organizers also see all tournaments of their events, and which they manage.
   const tournaments = useQuery(
@@ -162,7 +183,7 @@ export function HomePage() {
       <section className="space-y-6">
         <h2 className="font-display text-2xl font-semibold">{t('home.yours')}</h2>
         {mine.length > 0 ? (
-          <TournamentList nested tournaments={mine} />
+          <TournamentList nested now={now} tournaments={mine} />
         ) : (
           <p className="text-sm text-base-content/70">{t('home.emptyOrganizer')}</p>
         )}
@@ -170,12 +191,12 @@ export function HomePage() {
       {others.length > 0 ? (
         <section className="space-y-6">
           <h2 className="font-display text-2xl font-semibold">{t('home.others')}</h2>
-          <TournamentList nested tournaments={others} />
+          <TournamentList nested now={now} tournaments={others} />
         </section>
       ) : null}
     </div>
   ) : (
-    <TournamentList tournaments={all} />
+    <TournamentList now={now} tournaments={all} />
   );
 
   return (

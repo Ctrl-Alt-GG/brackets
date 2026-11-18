@@ -9,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.database import engine
-from bracket.models.db.account import UserAccountType
+from bracket.logic.users import delete_user_and_owned_clubs
 from bracket.models.db.user import User, UserInsertable
+from bracket.models.enums import UserAccountType
 from bracket.sql.clubs import get_club_members
-from bracket.sql.users import create_user, delete_user, delete_user_and_owned_clubs
+from bracket.sql.users import create_user, delete_user
 from bracket.utils.security import hash_password
 from tests.integration_tests.api.shared import send_auth_request, send_tournament_request
 from tests.integration_tests.mocks import get_mock_token

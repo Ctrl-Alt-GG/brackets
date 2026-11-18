@@ -14,11 +14,12 @@ from bracket.database import session_factory
 from bracket.logic.scheduling.builder import build_matches_for_stage_item
 from bracket.models.db.match import MatchCreateBodyFrontend
 from bracket.models.db.round import RoundCreateBody
-from bracket.models.db.stage_item import StageItem, StageItemCreateBody, StageType
+from bracket.models.db.stage_item import StageItem, StageItemCreateBody
 from bracket.models.db.stage_item_inputs import (
     StageItemInputUpdateBodyFinal,
     StageItemInputUpdateBodyTentative,
 )
+from bracket.models.enums import StageType
 from bracket.sql.stage_item_inputs import get_stage_item_input_by_id
 from bracket.sql.stage_items import sql_create_stage_item_with_empty_inputs
 from bracket.sql.validation import (
@@ -28,7 +29,6 @@ from bracket.sql.validation import (
     validate_stage_item_create,
     validate_stage_item_input_update,
 )
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME
 from bracket.utils.id_types import (
     PlayerId,
     RankingId,
@@ -38,6 +38,7 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
+from tests.dummy_records import DUMMY_MOCK_TIME
 
 
 @dataclass

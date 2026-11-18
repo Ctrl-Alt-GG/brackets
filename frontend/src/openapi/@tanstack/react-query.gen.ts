@@ -52,6 +52,7 @@ import {
   getTournamentDetailsByIdApiTournamentsTournamentIdDetailsGet,
   getTournamentLogoApiTournamentsTournamentIdLogoGet,
   getTournamentsApiTournamentsGet,
+  getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGet,
   getUserApiUsersMeGet,
   loginForAccessTokenApiTokenPost,
   logoutApiLogoutPost,
@@ -197,6 +198,9 @@ import type {
   GetTournamentsApiTournamentsGetData,
   GetTournamentsApiTournamentsGetError,
   GetTournamentsApiTournamentsGetResponse,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetError,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponse,
   GetUserApiUsersMeGetData,
   GetUserApiUsersMeGetResponse,
   LoginForAccessTokenApiTokenPostData,
@@ -2109,6 +2113,38 @@ export const createMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostMutation
   };
   return mutationOptions;
 };
+
+export const getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetQueryKey = (
+  options: Options<GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData>,
+) => createQueryKey('getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGet', options);
+
+/**
+ * Get Tournament Workspace
+ *
+ * Everything the organizers' pages of a tournament show, in one answer from one snapshot: the
+ * stages with their draft rounds, players, teams, rankings, standings, what the stages' slots
+ * can take and who would advance into the next stage.
+ */
+export const getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetOptions = (
+  options: Options<GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData>,
+) =>
+  queryOptions<
+    GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponse,
+    AxiosError<GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetError>,
+    GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponse,
+    ReturnType<typeof getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGet({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetQueryKey(options),
+  });
 
 export const getUserApiUsersMeGetQueryKey = (options?: Options<GetUserApiUsersMeGetData>) =>
   createQueryKey('getUserApiUsersMeGet', options);

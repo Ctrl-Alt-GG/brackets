@@ -15,7 +15,7 @@ import {
 } from '../../openapi/zod.gen';
 import { useSession } from '../hooks';
 import { EmptyState, Field, PageShell, Surface } from '../ui';
-import { safeNextPath } from '../utils';
+import { safeNextPath } from '../urls';
 
 const loginSchema = zBodyLoginForAccessTokenApiTokenPost.pick({ password: true, username: true });
 
@@ -32,7 +32,7 @@ export function LoginPage() {
     ...loginForAccessTokenApiTokenPostMutation(),
     meta: { successMessage: 'Logged in successfully.' },
     onSuccess: ({ name, user_id }) => {
-      setSession({ name, user_id });
+      setSession({ name, started: Date.now(), user_id });
       // Back to where the organizer was, such as the tournament their session ended on.
       navigate(safeNextPath(searchParams.get('next')));
     },
@@ -115,7 +115,7 @@ export function RegisterPage() {
     ...registerUserApiUsersRegisterPostMutation(),
     meta: { successMessage: 'Account created successfully.' },
     onSuccess: ({ data: { name, user_id } }) => {
-      setSession({ name, user_id });
+      setSession({ name, started: Date.now(), user_id });
       navigate('/');
     },
   });

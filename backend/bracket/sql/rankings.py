@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.models.db.ranking import Ranking, RankingBody, RankingCreateBody
-from bracket.utils.id_types import RankingId, StageItemId, TournamentId
+from bracket.utils.id_types import RankingId, TournamentId
 
 
 async def get_all_rankings_in_tournament(
@@ -33,13 +33,12 @@ async def get_default_rankings_in_tournament(
     return Ranking.model_validate(entity)
 
 
-async def get_ranking_for_stage_item(
-    session: AsyncSession, tournament_id: TournamentId, stage_item_id: StageItemId
+async def get_ranking(
+    session: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
 ) -> Ranking | None:
     entity = await session.scalar(
         select(orm.Ranking)
-        .join(orm.StageItem, orm.StageItem.ranking_id == orm.Ranking.id)
-        .where(orm.Ranking.tournament_id == tournament_id, orm.StageItem.id == stage_item_id)
+        .where(orm.Ranking.id == ranking_id, orm.Ranking.tournament_id == tournament_id)
         .execution_options(populate_existing=True)
     )
     return Ranking.model_validate(entity) if entity is not None else None

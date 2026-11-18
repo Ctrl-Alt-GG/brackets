@@ -12,15 +12,15 @@ from secure import (
     XFrameOptions,
 )
 from secure.middleware import SecureASGIMiddleware
-from slowapi.errors import RateLimitExceeded
-from slowapi.extension import _rate_limit_exceeded_handler
 from sqlalchemy import func, select
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
+from bracket.bootstrap import init_db_when_empty
 from bracket.config import Environment, config, environment
 from bracket.database import engine
 from bracket.routes import (
+    access,
     auth,
     clubs,
     internals,
@@ -36,10 +36,8 @@ from bracket.routes import (
     users,
 )
 from bracket.utils.alembic import alembic_run_migrations
-from bracket.utils.db_init import init_db_when_empty
 from bracket.utils.logging import logger
 from bracket.utils.proxy_headers import UntrustedProxyWarning
-from bracket.utils.rate_limit import limiter
 
 # Taken while the database is set up and migrated. Every worker process does that when it starts,
 # and they start together: one of them does the work while the others wait for the lock, and then
@@ -96,17 +94,9 @@ app = FastAPI(
     # The interactive docs load Swagger UI and ReDoc from a CDN, which the production security
     # headers don't allow, so only development serves them.
     openapi_url="/openapi.json" if is_development else None,
-    dependencies=[Depends(auth.protect_session_from_csrf)],
+    dependencies=[Depends(access.protect_session_from_csrf)],
 )
 
-
-async def handle_rate_limit_exceeded(request: Request, exc: Exception) -> Response:
-    assert isinstance(exc, RateLimitExceeded)
-    return _rate_limit_exceeded_handler(request, exc)
-
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
 
 app.add_middleware(UntrustedProxyWarning)
 

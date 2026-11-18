@@ -71,15 +71,17 @@ function RootLayout() {
     onSuccess: () => setSession(null),
   });
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      setSession(null);
-      toast.error('Your session expired. Please log in again.');
-      // The browser would keep sending the session cookie, which the page can't remove, until it
-      // expires. Logging out needs no valid session and always removes it.
-      OpenApi.logoutApiLogoutPost().catch(() => {});
-    });
-  }, [setSession]);
+  useEffect(
+    () =>
+      setUnauthorizedHandler(() => {
+        setSession(null);
+        toast.error('Your session expired. Please log in again.');
+        // The browser would keep sending the session cookie, which the page can't remove, until
+        // it expires. Logging out needs no valid session and always removes it.
+        OpenApi.logoutApiLogoutPost().catch(() => {});
+      }),
+    [setSession],
+  );
 
   // The page only remembers who signed in. The session itself is a cookie, which can end without
   // the page noticing: it expires overnight, or the organizer signs out on another device. A

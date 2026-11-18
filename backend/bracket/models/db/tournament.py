@@ -1,18 +1,11 @@
-from enum import auto
-
 from heliclockter import datetime_utc
 from pydantic import Field
 
 from bracket.models.db.match import MAX_MINUTES
 from bracket.models.db.shared import BaseModelORM
+from bracket.models.enums import TournamentStatus
 from bracket.utils.id_types import ClubId, TournamentId
 from bracket.utils.pydantic import DashboardEndpoint, Name
-from bracket.utils.types import EnumAutoStr
-
-
-class TournamentStatus(EnumAutoStr):
-    OPEN = auto()
-    ARCHIVED = auto()
 
 
 class TournamentInsertable(BaseModelORM):

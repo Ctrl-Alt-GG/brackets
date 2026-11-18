@@ -2,7 +2,7 @@ from sqlalchemy import Enum
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
-from bracket.models.db.stage_item import StageType
+from bracket.models.enums import StageType
 
 
 class StageTypeEnum(TypeDecorator[StageType]):

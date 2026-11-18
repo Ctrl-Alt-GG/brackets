@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.sql.stages import get_full_tournament_details
-from bracket.utils.dummy_records import (
+from tests.dummy_records import (
     DUMMY_MOCK_TIME,
     DUMMY_ROUND1,
     DUMMY_STAGE1,

@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.database import engine
-from bracket.models.db.account import UserAccountType
+from bracket.logic.authentication import SESSION_COOKIE
 from bracket.models.db.user import User, UserInsertable
-from bracket.routes.auth import SESSION_COOKIE
+from bracket.models.enums import UserAccountType
 from bracket.sql.users import create_user, delete_user, get_user_by_id
 from bracket.utils.rate_limit import get_account_lockout_key, reset_account_failures
 from bracket.utils.security import hash_password, verify_password
@@ -286,7 +286,7 @@ async def test_email_and_password_changes_share_the_login_guessing_budget(
 ) -> None:
     async with temporary_user() as (user, headers), aiohttp.ClientSession() as session:
         key = get_account_lockout_key(user.email, address="127.0.0.1")
-        reset_account_failures(key)
+        await reset_account_failures(key)
         root = get_root_uvicorn_url()
         try:
             guesses = []
@@ -324,7 +324,7 @@ async def test_email_and_password_changes_share_the_login_guessing_budget(
             )
             await renamed.read()
 
-            reset_account_failures(key)
+            await reset_account_failures(key)
             recovered = await session.put(
                 f"{root}users/{user.id}",
                 headers=headers,
@@ -336,7 +336,7 @@ async def test_email_and_password_changes_share_the_login_guessing_budget(
             )
             await recovered.read()
         finally:
-            reset_account_failures(key)
+            await reset_account_failures(key)
 
     assert guesses == [400] * 5
     assert blocked.status == login.status == 429

@@ -11,7 +11,9 @@ import {
 import { MatchCard } from '../components/match-card';
 import { MatchScoreEditor } from '../components/match-score-editor';
 import type { FlattenedMatch } from '../types';
-import { cx, formatMatchTime, groupBy, matchStatus } from '../utils';
+import { formatMatchTime } from '../format';
+import { matchStatus } from '../tournament-rules';
+import { cx, groupBy } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
 /** Matches sorted by time, grouped under the time they start. */

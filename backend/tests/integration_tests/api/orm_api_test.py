@@ -53,7 +53,7 @@ async def test_tournament_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "bracket.routes.rounds.get_swiss_pairing",
+        "bracket.logic.rounds.get_swiss_pairing",
         partial(get_swiss_pairing, rng=random.Random(0)),
     )
     async with api_tournament(auth_context, "ORM contract") as flow:
@@ -96,7 +96,9 @@ async def test_tournament_contract(
         for name, result in (("activation", activation), ("score", score), ("details", details)):
             request.node.user_properties.append((name, json.dumps(result)))
             # A fixed fixture catches repeated graph loads and queries added per stage item.
-            assert result["queries"] <= {"activation": 20, "score": 14, "details": 15}[name]
+            # Commands lock the tournament's event before checking access, and then the
+            # tournament, which takes a query each.
+            assert result["queries"] <= {"activation": 20, "score": 15, "details": 15}[name]
         actual = canonical_tournament(actual, club_id=auth_context.club.id)
         assert actual == json.loads(GOLDEN.read_text())
         await assert_stage_filters(TournamentId(flow.id))

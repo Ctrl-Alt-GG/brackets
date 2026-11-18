@@ -1,22 +1,16 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
-from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile
 from starlette.responses import FileResponse
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.subscriptions import check_requirement
-from bracket.logic.teams import get_team_logo_path
-from bracket.models.db.player import PlayerBody
-from bracket.models.db.team import (
-    FullTeamWithPlayers,
-    Team,
-    TeamBody,
-    TeamMultiBody,
-)
+from bracket.logic import teams as team_logic
+from bracket.logic.teams import get_team_with_totals, get_teams_with_totals
+from bracket.models.db.team import FullTeamWithPlayers, Team, TeamBody, TeamMultiBody
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.routes.auth import (
+from bracket.routes.access import (
     user_authenticated_for_tournament,
     user_authenticated_or_public_dashboard,
     user_authenticated_or_rate_limited_visitor,
@@ -27,80 +21,39 @@ from bracket.routes.models import (
     SuccessResponse,
     TeamsWithPlayersResponse,
 )
-from bracket.routes.util import (
+from bracket.routes.resources import (
     disallow_archived_tournament,
     team_dependency,
     team_with_players_dependency,
 )
-from bracket.sql.players import get_all_players_in_tournament, insert_player
-from bracket.sql.teams import (
-    find_player_in_other_team,
-    get_team_by_id,
-    get_team_count,
-    get_team_player_ids,
-    get_teams_with_members,
-    sql_add_team_player,
-    sql_create_team,
-    sql_delete_team,
-    sql_set_team_members,
-    sql_update_team,
-    sql_update_team_logo,
-)
-from bracket.sql.validation import validate_player_ids
+from bracket.sql.teams import get_team_count, sql_delete_team, sql_update_team_logo
 from bracket.utils.errors import ForeignKey, check_foreign_key_violation
-from bracket.utils.id_types import PlayerId, TeamId, TournamentId
-from bracket.utils.pagination import PaginationTeams
-from bracket.utils.types import assert_some
+from bracket.utils.id_types import TournamentId
+from bracket.utils.pagination import ParticipantPagination
 from bracket.utils.uploads import (
-    get_image_media_type,
+    UploadFolder,
+    get_logo_response,
     remove_existing_upload,
     store_validated_image_upload,
 )
 
 router = APIRouter(prefix=config.api_prefix)
 
-
-async def check_players_are_free(
-    session: AsyncSession, team_id: TeamId, tournament: Tournament, player_ids: set[PlayerId]
-) -> None:
-    """Unless the tournament allows it, a player who joins a team isn't in another one."""
-    if tournament.players_can_be_in_multiple_teams or len(player_ids) < 1:
-        return
-
-    taken = await find_player_in_other_team(session, tournament.id, team_id, player_ids)
-    if taken is not None:
-        player, team_name = taken
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"{player.name} is already in {team_name}. Players can be in one team, "
-                "unless the tournament's settings allow more."
-            ),
-        )
-
-
-async def update_team_members(
-    session: AsyncSession, team_id: TeamId, tournament: Tournament, player_ids: set[PlayerId]
-) -> None:
-    previous_ids = await get_team_player_ids(session, tournament.id, team_id)
-    # Players who are already in the team stay in it. A tournament from before this rule, or one
-    # that allowed several teams for a while, can have them in a second team, and its teams must
-    # still be saveable.
-    await check_players_are_free(session, team_id, tournament, player_ids - previous_ids)
-
-    await sql_set_team_members(session, tournament.id, team_id, player_ids, previous_ids)
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
+LoadedTeam = Annotated[Team, Depends(team_dependency)]
 
 
 @router.get("/tournaments/{tournament_id}/teams", response_model=TeamsWithPlayersResponse)
 async def get_teams(
     session: DbSession,
     tournament_id: TournamentId,
-    pagination: PaginationTeams = Depends(),
-    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
+    pagination: Annotated[ParticipantPagination, Query()],
+    _: Annotated[UserPublic | None, Depends(user_authenticated_or_rate_limited_visitor)],
 ) -> TeamsWithPlayersResponse:
     return TeamsWithPlayersResponse(
         data=PaginatedTeams(
-            teams=await get_teams_with_members(session, tournament_id, pagination=pagination),
+            teams=await get_teams_with_totals(session, tournament_id, pagination=pagination),
             count=await get_team_count(session, tournament_id),
         )
     )
@@ -109,19 +62,13 @@ async def get_teams(
 @router.put("/tournaments/{tournament_id}/teams/{team_id}", response_model=SingleTeamResponse)
 async def update_team_by_id(
     session: DbSession,
-    tournament_id: TournamentId,
     team_body: TeamBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    tournament: Tournament = Depends(disallow_archived_tournament),
-    team: Team = Depends(team_dependency),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
+    team: LoadedTeam,
 ) -> SingleTeamResponse:
-    await validate_player_ids(session, tournament_id, team_body.player_ids)
-
-    await sql_update_team(session, tournament_id, team.id, team_body)
-    await update_team_members(session, team.id, tournament, team_body.player_ids)
-
     return SingleTeamResponse(
-        data=assert_some(await get_team_by_id(session, team.id, tournament_id, with_totals=True))
+        data=await team_logic.update_team(session, tournament, team.id, team_body)
     )
 
 
@@ -130,32 +77,27 @@ async def update_team_logo(
     session: DbSession,
     tournament_id: TournamentId,
     background_tasks: BackgroundTasks,
+    _: TournamentOrganizer,
+    __: OpenTournament,
+    team: LoadedTeam,
     file: UploadFile | None = None,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    team: Team = Depends(team_dependency),
 ) -> SingleTeamResponse:
-    filename = await store_validated_image_upload(file, "team-logos") if file else None
-    await sql_update_team_logo(session, team.id, filename)
-    # Background tasks run after the response, so the new logo is committed by then.
-    background_tasks.add_task(remove_existing_upload, "team-logos", team.logo_path)
-    return SingleTeamResponse(
-        data=assert_some(await get_team_by_id(session, team.id, tournament_id, with_totals=True))
+    upload = (
+        await store_validated_image_upload(file, UploadFolder.TEAM_LOGOS, session) if file else None
     )
+    await sql_update_team_logo(session, team.id, upload.filename if upload else None)
+    # Background tasks run after the response, so the new logo is committed by then. When the
+    # transaction fails, there is no response and the previous logo stays.
+    background_tasks.add_task(remove_existing_upload, UploadFolder.TEAM_LOGOS, team.logo_path)
+    return SingleTeamResponse(data=await get_team_with_totals(session, tournament_id, team.id))
 
 
 @router.get("/tournaments/{tournament_id}/teams/{team_id}/logo")
 async def get_team_logo(
-    session: DbSession,
-    tournament_id: TournamentId,
-    _: UserPublic | None = Depends(user_authenticated_or_public_dashboard),
-    team: Team = Depends(team_dependency),
+    _: Annotated[UserPublic | None, Depends(user_authenticated_or_public_dashboard)],
+    team: LoadedTeam,
 ) -> FileResponse:
-    logo_path = await get_team_logo_path(session, tournament_id, team.id)
-    if team.logo_path is None or logo_path is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
-
-    return FileResponse(logo_path, media_type=get_image_media_type(team.logo_path))
+    return await get_logo_response(UploadFolder.TEAM_LOGOS, team.logo_path)
 
 
 @router.delete("/tournaments/{tournament_id}/teams/{team_id}", response_model=SuccessResponse)
@@ -163,9 +105,9 @@ async def delete_team(
     session: DbSession,
     tournament_id: TournamentId,
     background_tasks: BackgroundTasks,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    team: FullTeamWithPlayers = Depends(team_with_players_dependency),
+    _: TournamentOrganizer,
+    __: OpenTournament,
+    team: Annotated[FullTeamWithPlayers, Depends(team_with_players_dependency)],
 ) -> SuccessResponse:
     with check_foreign_key_violation(
         {
@@ -177,7 +119,7 @@ async def delete_team(
         await sql_delete_team(session, tournament_id, team.id)
 
     # Background tasks run after the response, so the deletion is committed by then.
-    background_tasks.add_task(remove_existing_upload, "team-logos", team.logo_path)
+    background_tasks.add_task(remove_existing_upload, UploadFolder.TEAM_LOGOS, team.logo_path)
     return SuccessResponse()
 
 
@@ -185,23 +127,12 @@ async def delete_team(
 async def create_team(
     session: DbSession,
     team_to_insert: TeamBody,
-    tournament_id: TournamentId,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    tournament: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    tournament: OpenTournament,
 ) -> SingleTeamResponse:
-    await validate_player_ids(session, tournament_id, team_to_insert.player_ids)
-
-    existing_teams = range(await get_team_count(session, tournament_id))
-    check_requirement(existing_teams, user, "max_teams")
-
-    last_record_id = await sql_create_team(
-        session, tournament_id, team_to_insert.name, team_to_insert.active
+    return SingleTeamResponse(
+        data=await team_logic.create_team(session, tournament, team_to_insert, user)
     )
-    await update_team_members(session, last_record_id, tournament, team_to_insert.player_ids)
-
-    team_result = await get_team_by_id(session, last_record_id, tournament_id, with_totals=True)
-    assert team_result is not None
-    return SingleTeamResponse(data=team_result)
 
 
 @router.post("/tournaments/{tournament_id}/teams_multi", response_model=SuccessResponse)
@@ -209,24 +140,8 @@ async def create_multiple_teams(
     session: DbSession,
     team_body: TeamMultiBody,
     tournament_id: TournamentId,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    _: OpenTournament,
 ) -> SuccessResponse:
-    teams_with_players = team_body.teams_with_players
-    player_count = sum(len(player_names) for _, player_names in teams_with_players)
-
-    existing_teams = range(await get_team_count(session, tournament_id))
-    existing_players = await get_all_players_in_tournament(session, tournament_id)
-
-    check_requirement(existing_teams, user, "max_teams", additions=len(teams_with_players))
-    check_requirement(existing_players, user, "max_players", additions=player_count)
-
-    for team_name, player_names in teams_with_players:
-        team_id = await sql_create_team(session, tournament_id, team_name, team_body.active)
-        for player_name in player_names:
-            player_id = await insert_player(
-                session, PlayerBody(name=player_name, active=team_body.active), tournament_id
-            )
-            await sql_add_team_player(session, tournament_id, team_id, player_id)
-
+    await team_logic.create_teams_with_players(session, tournament_id, team_body, user)
     return SuccessResponse()

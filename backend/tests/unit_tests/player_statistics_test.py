@@ -3,17 +3,17 @@ from decimal import Decimal
 from heliclockter import datetime_utc, timedelta
 
 from bracket.logic.ranking.players import determine_player_statistics
-from bracket.logic.ranking.statistics import PlayerStatistics
 from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.models.db.player import Player
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds, StageWithStageItems
 from bracket.models.db.team import FullTeamWithPlayers, Team
-from bracket.models.db.util import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
+from bracket.models.enums import StageType
+from bracket.models.results import ResultTotals
 from bracket.utils.id_types import (
     MatchId,
     PlayerId,
+    RankingId,
     RoundId,
     StageId,
     StageItemId,
@@ -21,6 +21,7 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
 
 
 def make_team(team_id: int, player_ids: list[int]) -> FullTeamWithPlayers:
@@ -35,6 +36,7 @@ def make_team(team_id: int, player_ids: list[int]) -> FullTeamWithPlayers:
 
 def make_input(team_id: int) -> StageItemInputFinal:
     return StageItemInputFinal(
+        stage_item_id=StageItemId(-1),
         id=StageItemInputId(team_id),
         team_id=TeamId(team_id),
         slot=team_id,
@@ -54,7 +56,9 @@ def make_round(
             MatchWithDetailsDefinitive(
                 id=MatchId(round_id * 10 + index),
                 stage_item_input1=make_input(team1),
+                stage_item_input1_id=make_input(team1).id,
                 stage_item_input2=make_input(team2),
+                stage_item_input2_id=make_input(team2).id,
                 created=DUMMY_MOCK_TIME,
                 start_time=start_time,
                 duration_minutes=10,
@@ -91,8 +95,7 @@ def make_stages(rounds: list[RoundWithMatches]) -> list[StageWithStageItems]:
                     created=now,
                     type=StageType.ROUND_ROBIN,
                     team_count=3,
-                    ranking_id=None,
-                    type_name="",
+                    ranking_id=RankingId(-1),
                     rounds=rounds,
                     inputs=[make_input(1), make_input(2), make_input(3)],
                 )
@@ -115,13 +118,13 @@ def test_determine_player_statistics() -> None:
     # Every rating starts at 1200, so the first win is worth 16 points. The second match is a draw
     # between teams rated 1216 and 1184, which costs the stronger team a little.
     assert determine_player_statistics(stages, teams) == {
-        1: PlayerStatistics(
+        1: ResultTotals(
             wins=1, draws=1, losses=0, elo_score=Decimal("1215"), swiss_score=Decimal("1.5")
         ),
-        2: PlayerStatistics(
+        2: ResultTotals(
             wins=1, draws=1, losses=0, elo_score=Decimal("1215"), swiss_score=Decimal("1.5")
         ),
-        3: PlayerStatistics(
+        3: ResultTotals(
             wins=0, draws=1, losses=1, elo_score=Decimal("1185"), swiss_score=Decimal("0.5")
         ),
     }

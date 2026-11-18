@@ -1,17 +1,12 @@
-from collections.abc import Mapping
-
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from bracket import orm
-from bracket.logic.ranking.statistics import TeamTotals
-from bracket.logic.ranking.team_totals import get_team_totals
 from bracket.models.db.stage import Stage, StageUpdateBody
-from bracket.models.db.stage_item_inputs import StageItemInputFinal
-from bracket.models.db.util import StageWithStageItems
-from bracket.utils.id_types import RoundId, StageId, StageItemId, TeamId, TournamentId
+from bracket.models.db.stage_tree import StageWithStageItems
+from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
 
 
 async def get_full_tournament_details(
@@ -22,9 +17,11 @@ async def get_full_tournament_details(
     stage_item_ids: set[StageItemId] | None = None,
     *,
     no_draft_rounds: bool = False,
-    with_team_totals: bool = False,
 ) -> list[StageWithStageItems]:
-    """Load a tournament's stage tree, optionally enriching its teams with published results."""
+    """
+    Load a tournament's stage tree. Its teams carry their stored, unmaintained results:
+    `bracket.logic.ranking.team_totals` replaces them for answers that show them.
+    """
     item_loader = selectinload(orm.Stage.stage_items)
     if stage_item_ids is not None:
         item_loader = selectinload(orm.Stage.stage_items.and_(orm.StageItem.id.in_(stage_item_ids)))
@@ -58,44 +55,7 @@ async def get_full_tournament_details(
     if stage_item_ids is not None:
         stmt = stmt.where(orm.Stage.stage_items.any(orm.StageItem.id.in_(stage_item_ids)))
 
-    stages = [StageWithStageItems.model_validate(stage) for stage in await session.scalars(stmt)]
-    if with_team_totals:
-        await add_team_totals(session, tournament_id, stages)
-    return stages
-
-
-async def add_team_totals(
-    session: AsyncSession,
-    tournament_id: TournamentId,
-    stages: list[StageWithStageItems],
-    *,
-    totals: Mapping[TeamId, TeamTotals] | None = None,
-) -> None:
-    # The slots of a stage item and those in its matches are separate copies.
-    inputs = [
-        input_
-        for stage in stages
-        for stage_item in stage.stage_items
-        for input_ in (
-            *stage_item.inputs,
-            *(
-                match_input
-                for round_ in stage_item.rounds
-                for match in round_.matches
-                for match_input in (match.stage_item_input1, match.stage_item_input2)
-            ),
-        )
-        if isinstance(input_, StageItemInputFinal)
-    ]
-    if not inputs:
-        return
-
-    if totals is None:
-        totals = await get_team_totals(session, tournament_id)
-    for input_ in inputs:
-        input_.team = input_.team.model_copy(
-            update=totals.get(input_.team_id, TeamTotals()).model_dump()
-        )
+    return [StageWithStageItems.model_validate(stage) for stage in await session.scalars(stmt)]
 
 
 async def sql_delete_stage(

@@ -1,21 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from starlette import status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.ranking.calculation import (
-    recalculate_ranking_for_stage_item,
-)
-from bracket.logic.ranking.elimination import (
-    update_inputs_in_complete_elimination_stage_item,
-)
-from bracket.logic.subscriptions import check_requirement
+from bracket.logic import rankings as ranking_logic
 from bracket.logic.tournaments import get_tournament_standings
 from bracket.models.db.ranking import Ranking, RankingBody, RankingCreateBody
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.routes.auth import (
+from bracket.routes.access import (
     user_authenticated_for_tournament,
     user_authenticated_or_rate_limited_visitor,
 )
@@ -24,34 +18,30 @@ from bracket.routes.models import (
     StandingsResponse,
     SuccessResponse,
 )
-from bracket.routes.util import disallow_archived_tournament, ranking_dependency
-from bracket.sql.rankings import (
-    get_all_rankings_in_tournament,
-    sql_create_ranking,
-    sql_delete_ranking,
-    sql_update_ranking,
-)
-from bracket.sql.stage_item_inputs import get_stage_item_ids_by_ranking_id
-from bracket.sql.stage_items import get_stage_item
+from bracket.routes.resources import disallow_archived_tournament, ranking_dependency
+from bracket.sql.rankings import get_all_rankings_in_tournament
 from bracket.utils.id_types import RankingId, TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
 
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OrganizerOrVisitor = Annotated[
+    UserPublic | None, Depends(user_authenticated_or_rate_limited_visitor)
+]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
+LoadedRanking = Annotated[Ranking, Depends(ranking_dependency)]
+
 
 @router.get("/tournaments/{tournament_id}/rankings")
 async def get_rankings(
-    session: DbSession,
-    tournament_id: TournamentId,
-    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
+    session: DbSession, tournament_id: TournamentId, _: OrganizerOrVisitor
 ) -> RankingsResponse:
     return RankingsResponse(data=await get_all_rankings_in_tournament(session, tournament_id))
 
 
 @router.get("/tournaments/{tournament_id}/standings")
 async def get_standings(
-    session: DbSession,
-    tournament_id: TournamentId,
-    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
+    session: DbSession, tournament_id: TournamentId, _: OrganizerOrVisitor
 ) -> StandingsResponse:
     """
     Get the teams of every stage item, best first. Teams advance to the next stage in this order.
@@ -65,23 +55,11 @@ async def update_ranking_by_id(
     tournament_id: TournamentId,
     ranking_id: RankingId,
     ranking_body: RankingBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    ___: Ranking = Depends(ranking_dependency),
+    _: TournamentOrganizer,
+    __: OpenTournament,
+    ___: LoadedRanking,
 ) -> SuccessResponse:
-    await sql_update_ranking(
-        session,
-        tournament_id=tournament_id,
-        ranking_id=ranking_id,
-        ranking_body=ranking_body,
-    )
-    stage_item_ids = await get_stage_item_ids_by_ranking_id(session, tournament_id, ranking_id)
-    for stage_item_id in stage_item_ids:
-        stage_item = await get_stage_item(session, tournament_id, stage_item_id)
-        await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
-
-        if stage_item.type == StageType.SINGLE_ELIMINATION:
-            await update_inputs_in_complete_elimination_stage_item(session, stage_item)
+    await ranking_logic.update_ranking(session, tournament_id, ranking_id, ranking_body)
     return SuccessResponse()
 
 
@@ -90,27 +68,11 @@ async def delete_ranking(
     session: DbSession,
     tournament_id: TournamentId,
     ranking_id: RankingId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    ___: Ranking = Depends(ranking_dependency),
+    _: TournamentOrganizer,
+    __: OpenTournament,
+    ___: LoadedRanking,
 ) -> SuccessResponse:
-    stage_item_ids = await get_stage_item_ids_by_ranking_id(session, tournament_id, ranking_id)
-    if stage_item_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Could not delete ranking since it's used by {len(stage_item_ids)} stage items"
-            ),
-        )
-
-    # New stage items take the first ranking unless they name one.
-    if len(await get_all_rankings_in_tournament(session, tournament_id)) <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A tournament needs at least one ranking",
-        )
-
-    await sql_delete_ranking(session, tournament_id, ranking_id)
+    await ranking_logic.delete_ranking(session, tournament_id, ranking_id)
     return SuccessResponse()
 
 
@@ -119,14 +81,8 @@ async def create_ranking(
     session: DbSession,
     ranking_body: RankingCreateBody,
     tournament_id: TournamentId,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    _: OpenTournament,
 ) -> SuccessResponse:
-    existing_rankings = await get_all_rankings_in_tournament(session, tournament_id)
-    check_requirement(existing_rankings, user, "max_rankings")
-
-    highest_position = (
-        max(x.position for x in existing_rankings) if len(existing_rankings) > 0 else -1
-    )
-    await sql_create_ranking(session, tournament_id, ranking_body, highest_position + 1)
+    await ranking_logic.create_ranking(session, tournament_id, ranking_body, user)
     return SuccessResponse()

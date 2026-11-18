@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 
-from bracket.models.db.tournament import TournamentStatus
+from bracket.models.enums import TournamentStatus
 from bracket.orm.base import Base
 
 if TYPE_CHECKING:

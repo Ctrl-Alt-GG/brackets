@@ -20,14 +20,14 @@ export const zAuthFeatureFlagsResponse = z.object({
  * Body_login_for_access_token_api_token_post
  */
 export const zBodyLoginForAccessTokenApiTokenPost = z.object({
-  client_id: z.string().nullable(),
-  client_secret: z.string().nullable(),
+  client_id: z.string().nullish(),
+  client_secret: z.string().nullish(),
   grant_type: z
     .string()
     .regex(/^password$/)
-    .nullable(),
+    .nullish(),
   password: z.string(),
-  scope: z.string().default(''),
+  scope: z.string().optional().default(''),
   username: z.string(),
 });
 
@@ -35,14 +35,14 @@ export const zBodyLoginForAccessTokenApiTokenPost = z.object({
  * Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post
  */
 export const zBodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = z.object({
-  file: z.string().nullable(),
+  file: z.string().nullish(),
 });
 
 /**
  * Body_upload_logo_api_tournaments__tournament_id__logo_post
  */
 export const zBodyUploadLogoApiTournamentsTournamentIdLogoPost = z.object({
-  file: z.string().nullable(),
+  file: z.string().nullish(),
 });
 
 /**
@@ -100,11 +100,11 @@ export const zClubsResponse = z.object({
  * MatchBody
  */
 export const zMatchBody = z.object({
-  custom_duration_minutes: z.int().gte(1).lte(1440).nullable(),
-  custom_margin_minutes: z.int().gte(0).lte(1440).nullable(),
-  scoreless_result: z.boolean().default(false),
-  stage_item_input1_score: z.int().gte(0).lte(100000).default(0),
-  stage_item_input2_score: z.int().gte(0).lte(100000).default(0),
+  custom_duration_minutes: z.int().gte(1).lte(1440).nullish(),
+  custom_margin_minutes: z.int().gte(0).lte(1440).nullish(),
+  scoreless_result: z.boolean().optional().default(false),
+  stage_item_input1_score: z.int().gte(0).lte(100000).optional().default(0),
+  stage_item_input2_score: z.int().gte(0).lte(100000).optional().default(0),
 });
 
 /**
@@ -112,10 +112,10 @@ export const zMatchBody = z.object({
  */
 export const zMatchCreateBodyFrontend = z.object({
   round_id: z.int(),
-  stage_item_input1_id: z.int().nullable(),
-  stage_item_input1_winner_from_match_id: z.int().nullable(),
-  stage_item_input2_id: z.int().nullable(),
-  stage_item_input2_winner_from_match_id: z.int().nullable(),
+  stage_item_input1_id: z.int().nullish(),
+  stage_item_input1_winner_from_match_id: z.int().nullish(),
+  stage_item_input2_id: z.int().nullish(),
+  stage_item_input2_winner_from_match_id: z.int().nullish(),
 });
 
 /**
@@ -136,6 +136,8 @@ export const zPlayer = z.object({
 
 /**
  * FullTeamWithPlayers
+ *
+ * A team with its roster.
  */
 export const zFullTeamWithPlayers = z.object({
   active: z.boolean(),
@@ -220,10 +222,19 @@ export const zRankingBody = z.object({
  * RankingCreateBody
  */
 export const zRankingCreateBody = z.object({
-  add_score_points: z.boolean().default(false),
-  draw_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('0.5'),
-  loss_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('0.0'),
-  win_points: z.union([z.number().gte(-1000).lte(1000), z.string()]).default('1.0'),
+  add_score_points: z.boolean().optional().default(false),
+  draw_points: z
+    .union([z.number().gte(-1000).lte(1000), z.string()])
+    .optional()
+    .default('0.5'),
+  loss_points: z
+    .union([z.number().gte(-1000).lte(1000), z.string()])
+    .optional()
+    .default('0.0'),
+  win_points: z
+    .union([z.number().gte(-1000).lte(1000), z.string()])
+    .optional()
+    .default('1.0'),
 });
 
 /**
@@ -237,7 +248,7 @@ export const zRankingsResponse = z.object({
  * RoundCreateBody
  */
 export const zRoundCreateBody = z.object({
-  name: z.string().min(1).max(100).nullable(),
+  name: z.string().min(1).max(100).nullish(),
   stage_item_id: z.int(),
 });
 
@@ -267,12 +278,14 @@ export const zSinglePlayerResponse = z.object({
  * StageActivateBody
  */
 export const zStageActivateBody = z.object({
-  direction: z.enum(['next', 'previous']).default('next'),
-  discard_results: z.boolean().default(false),
+  direction: z.enum(['next', 'previous']).optional().default('next'),
+  discard_results: z.boolean().optional().default(false),
 });
 
 /**
  * StageItemInputEmpty
+ *
+ * Open: nothing fills it yet.
  */
 export const zStageItemInputEmpty = z.object({
   draws: z.int().default(0),
@@ -280,7 +293,7 @@ export const zStageItemInputEmpty = z.object({
   losses: z.int().default(0),
   points: z.string().default('0.0'),
   slot: z.int(),
-  stage_item_id: z.int().nullable(),
+  stage_item_id: z.int(),
   team_id: z.null(),
   tournament_id: z.int(),
   winner_from_stage_item_id: z.null(),
@@ -330,6 +343,8 @@ export const zStageItemInputStanding = z.object({
 
 /**
  * StageItemInputTentative
+ *
+ * Takes the team at a place of an earlier stage item once that stage is decided.
  */
 export const zStageItemInputTentative = z.object({
   draws: z.int().default(0),
@@ -337,7 +352,7 @@ export const zStageItemInputTentative = z.object({
   losses: z.int().default(0),
   points: z.string().default('0.0'),
   slot: z.int(),
-  stage_item_id: z.int().nullable(),
+  stage_item_id: z.int(),
   team_id: z.null(),
   tournament_id: z.int(),
   winner_from_stage_item_id: z.int(),
@@ -349,9 +364,9 @@ export const zStageItemInputTentative = z.object({
  * StageItemInputUpdateBodyEmpty
  */
 export const zStageItemInputUpdateBodyEmpty = z.object({
-  team_id: z.null(),
-  winner_from_stage_item_id: z.null(),
-  winner_position: z.null(),
+  team_id: z.null().optional(),
+  winner_from_stage_item_id: z.null().optional(),
+  winner_position: z.null().optional(),
 });
 
 /**
@@ -385,8 +400,8 @@ export const zStageType = z.enum(['ROUND_ROBIN', 'SINGLE_ELIMINATION', 'SWISS'])
  * StageItemCreateBody
  */
 export const zStageItemCreateBody = z.object({
-  name: z.string().min(1).max(100).nullable(),
-  ranking_id: z.int().nullable(),
+  name: z.string().min(1).max(100).nullish(),
+  ranking_id: z.int().nullish(),
   stage_id: z.int(),
   team_count: z.int().gte(2).lte(64),
   type: zStageType,
@@ -396,7 +411,7 @@ export const zStageItemCreateBody = z.object({
  * StageUpdateBody
  */
 export const zStageUpdateBody = z.object({
-  custom_duration_minutes: z.int().gte(1).lte(1440).nullable(),
+  custom_duration_minutes: z.int().gte(1).lte(1440).nullish(),
   name: z.string().min(1).max(100),
 });
 
@@ -440,6 +455,8 @@ export const zSingleTeamResponse = z.object({
 
 /**
  * StageItemInputFinal
+ *
+ * Has a team, assigned by an organizer or advanced from an earlier stage item.
  */
 export const zStageItemInputFinal = z.object({
   draws: z.int().default(0),
@@ -447,7 +464,7 @@ export const zStageItemInputFinal = z.object({
   losses: z.int().default(0),
   points: z.string().default('0.0'),
   slot: z.int(),
-  stage_item_id: z.int().nullable(),
+  stage_item_id: z.int(),
   team: zTeam,
   team_id: z.int(),
   tournament_id: z.int(),
@@ -489,7 +506,8 @@ export const zMatch = z.object({
 /**
  * MatchWithDetails
  *
- * MatchWithDetails has zero or one defined stage item inputs, but not both.
+ * A match with its slots loaded, of which at most one is known yet: a knockout match that waits
+ * for the winner of an earlier match.
  */
 export const zMatchWithDetails = z.object({
   created: z.iso.datetime(),
@@ -520,6 +538,9 @@ export const zMatchWithDetails = z.object({
 
 /**
  * MatchWithDetailsDefinitive
+ *
+ * A match with both of its slots known. Those can still be slots that wait for a team to
+ * advance from an earlier stage.
  */
 export const zMatchWithDetailsDefinitive = z.object({
   created: z.iso.datetime(),
@@ -537,7 +558,7 @@ export const zMatchWithDetailsDefinitive = z.object({
     zStageItemInputEmpty,
   ]),
   stage_item_input1_conflict: z.boolean(),
-  stage_item_input1_id: z.int().nullable(),
+  stage_item_input1_id: z.int(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z.union([
@@ -546,7 +567,7 @@ export const zMatchWithDetailsDefinitive = z.object({
     zStageItemInputEmpty,
   ]),
   stage_item_input2_conflict: z.boolean(),
-  stage_item_input2_id: z.int().nullable(),
+  stage_item_input2_id: z.int(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
   start_time: z.iso.datetime().nullable(),
@@ -573,6 +594,8 @@ export const zSingleMatchResponse = z.object({
 
 /**
  * StageItemInputUpdate
+ *
+ * A team that takes a slot when the slot's stage is activated.
  */
 export const zStageItemInputUpdate = z.object({
   stage_item_input: zStageItemInputTentative,
@@ -588,12 +611,12 @@ export const zStageItemWithRounds = z.object({
   id: z.int(),
   inputs: z.array(z.union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])),
   name: z.string(),
-  ranking_id: z.int().nullable(),
+  ranking_id: z.int(),
   rounds: z.array(zRoundWithMatches),
   stage_id: z.int(),
   team_count: z.int().gte(2).lte(64),
   type: zStageType,
-  type_name: z.string(),
+  type_name: z.string().readonly(),
 });
 
 /**
@@ -649,6 +672,8 @@ export const zTeamsWithPlayersResponse = z.object({
 
 /**
  * Token
+ *
+ * A signed-in session.
  */
 export const zToken = z.object({
   access_token: z.string(),
@@ -683,7 +708,7 @@ export const zTournamentAccessResponse = z.object({
  */
 export const zTournamentBody = z.object({
   club_id: z.int(),
-  dashboard_endpoint: z.string().nullable(),
+  dashboard_endpoint: z.string().nullish(),
   dashboard_public: z.boolean(),
   duration_minutes: z.int().gte(1).lte(1440),
   margin_minutes: z.int().gte(0).lte(1440),
@@ -758,7 +783,7 @@ export const zTournamentResponse = z.object({
  * TournamentUpdateBody
  */
 export const zTournamentUpdateBody = z.object({
-  dashboard_endpoint: z.string().nullable(),
+  dashboard_endpoint: z.string().nullish(),
   dashboard_public: z.boolean(),
   duration_minutes: z.int().gte(1).lte(1440),
   margin_minutes: z.int().gte(0).lte(1440),
@@ -788,6 +813,33 @@ export const zTournamentWithAccess = z.object({
   players_can_be_in_multiple_teams: z.boolean(),
   start_time: z.iso.datetime(),
   status: zTournamentStatus.default('OPEN'),
+});
+
+/**
+ * TournamentWorkspace
+ *
+ * What organizers work with, from one database snapshot, so that the stages, the choices for
+ * their slots, the standings and who would advance all agree.
+ */
+export const zTournamentWorkspace = z.object({
+  available_inputs: z.record(
+    z.string(),
+    z.array(z.union([zStageItemInputOptionTentative, zStageItemInputOptionFinal])),
+  ),
+  next_stage_rankings: z.record(z.string(), z.array(zStageItemInputUpdate)),
+  players: z.array(zPlayer),
+  rankings: z.array(zRanking),
+  stages: z.array(zStageWithStageItems),
+  standings: z.record(z.string(), z.array(zStageItemInputStanding)),
+  teams: z.array(zFullTeamWithPlayers),
+  tournament: zTournament,
+});
+
+/**
+ * TournamentWorkspaceResponse
+ */
+export const zTournamentWorkspaceResponse = z.object({
+  data: zTournamentWorkspace,
 });
 
 /**
@@ -841,7 +893,7 @@ export const zUserToRegister = z.object({
  * UserToUpdate
  */
 export const zUserToUpdate = z.object({
-  current_password: z.string().nullable(),
+  current_password: z.string().nullish(),
   email: z.email(),
   name: z.string().min(1).max(100),
 });
@@ -920,7 +972,8 @@ export const zMatchWritable = z.object({
 /**
  * MatchWithDetails
  *
- * MatchWithDetails has zero or one defined stage item inputs, but not both.
+ * A match with its slots loaded, of which at most one is known yet: a knockout match that waits
+ * for the winner of an earlier match.
  */
 export const zMatchWithDetailsWritable = z.object({
   created: z.iso.datetime(),
@@ -950,6 +1003,9 @@ export const zMatchWithDetailsWritable = z.object({
 
 /**
  * MatchWithDetailsDefinitive
+ *
+ * A match with both of its slots known. Those can still be slots that wait for a team to
+ * advance from an earlier stage.
  */
 export const zMatchWithDetailsDefinitiveWritable = z.object({
   created: z.iso.datetime(),
@@ -966,7 +1022,7 @@ export const zMatchWithDetailsDefinitiveWritable = z.object({
     zStageItemInputEmpty,
   ]),
   stage_item_input1_conflict: z.boolean(),
-  stage_item_input1_id: z.int().nullable(),
+  stage_item_input1_id: z.int(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z.union([
@@ -975,7 +1031,7 @@ export const zMatchWithDetailsDefinitiveWritable = z.object({
     zStageItemInputEmpty,
   ]),
   stage_item_input2_conflict: z.boolean(),
-  stage_item_input2_id: z.int().nullable(),
+  stage_item_input2_id: z.int(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
   start_time: z.iso.datetime().nullable(),
@@ -1008,12 +1064,11 @@ export const zStageItemWithRoundsWritable = z.object({
   id: z.int(),
   inputs: z.array(z.union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])),
   name: z.string(),
-  ranking_id: z.int().nullable(),
+  ranking_id: z.int(),
   rounds: z.array(zRoundWithMatchesWritable),
   stage_id: z.int(),
   team_count: z.int().gte(2).lte(64),
   type: zStageType,
-  type_name: z.string(),
 });
 
 /**
@@ -1055,6 +1110,33 @@ export const zTournamentDetailsWritable = z.object({
  */
 export const zTournamentDetailsResponseWritable = z.object({
   data: zTournamentDetailsWritable,
+});
+
+/**
+ * TournamentWorkspace
+ *
+ * What organizers work with, from one database snapshot, so that the stages, the choices for
+ * their slots, the standings and who would advance all agree.
+ */
+export const zTournamentWorkspaceWritable = z.object({
+  available_inputs: z.record(
+    z.string(),
+    z.array(z.union([zStageItemInputOptionTentative, zStageItemInputOptionFinal])),
+  ),
+  next_stage_rankings: z.record(z.string(), z.array(zStageItemInputUpdate)),
+  players: z.array(zPlayer),
+  rankings: z.array(zRanking),
+  stages: z.array(zStageWithStageItemsWritable),
+  standings: z.record(z.string(), z.array(zStageItemInputStanding)),
+  teams: z.array(zFullTeamWithPlayers),
+  tournament: zTournament,
+});
+
+/**
+ * TournamentWorkspaceResponse
+ */
+export const zTournamentWorkspaceResponseWritable = z.object({
+  data: zTournamentWorkspaceWritable,
 });
 
 /**
@@ -1317,7 +1399,6 @@ export const zGetPlayersApiTournamentsTournamentIdPlayersGetPath = z.object({
 });
 
 export const zGetPlayersApiTournamentsTournamentIdPlayersGetQuery = z.object({
-  not_in_team: z.boolean().optional().default(false),
   limit: z.int().gte(1).lte(500).optional().default(25),
   offset: z.int().gte(0).optional().default(0),
   sort_direction: z.enum(['asc', 'desc']).optional().default('asc'),
@@ -1325,6 +1406,7 @@ export const zGetPlayersApiTournamentsTournamentIdPlayersGetQuery = z.object({
     .enum(['name', 'elo_score', 'swiss_score', 'wins', 'draws', 'losses', 'active', 'created'])
     .optional()
     .default('name'),
+  not_in_team: z.boolean().optional().default(false),
 });
 
 /**
@@ -1527,8 +1609,8 @@ export const zUpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemI
 export const zUpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutPath =
   z.object({
     tournament_id: z.int(),
-    stage_item_id: z.int(),
     stage_item_input_id: z.int(),
+    stage_item_id: z.int(),
   });
 
 /**
@@ -1685,6 +1767,16 @@ export const zCreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostPath = 
  */
 export const zCreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
   zSuccessResponse;
+
+export const zGetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetPath = z.object({
+  tournament_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponse =
+  zTournamentWorkspaceResponse;
 
 /**
  * Successful Response

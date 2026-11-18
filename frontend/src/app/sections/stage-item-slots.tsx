@@ -2,7 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 
 import * as OpenApi from '../../openapi';
 import { updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
-import { isBracket, isEmptySlot } from '../utils';
+import { isBracket, isEmptySlot } from '../matches';
+import { Disclosure } from '../ui';
 
 type StageItemInput =
   | OpenApi.StageItemInputTentative
@@ -79,16 +80,18 @@ export function StageItemSlots({
     : null;
 
   return (
-    <details
+    <Disclosure
       className="collapse collapse-arrow border border-base-300 bg-base-200/60"
       open={filled < stageItem.inputs.length}
+      summary={
+        <>
+          <span className="font-semibold">Teams</span>
+          <span className="block text-sm text-base-content/70">
+            {filled} of {stageItem.inputs.length} slots filled
+          </span>
+        </>
+      }
     >
-      <summary className="collapse-title">
-        <span className="font-semibold">Teams</span>
-        <span className="block text-sm text-base-content/70">
-          {filled} of {stageItem.inputs.length} slots filled
-        </span>
-      </summary>
       <div className="collapse-content grid gap-3 md:grid-cols-2">
         {firstRound
           ? firstRound.map((pair, index) => (
@@ -130,7 +133,7 @@ export function StageItemSlots({
           </div>
         ) : null}
       </div>
-    </details>
+    </Disclosure>
   );
 }
 

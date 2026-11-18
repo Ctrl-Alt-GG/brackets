@@ -1,0 +1,6 @@
+{
+  // The browser tests and the tool configurations, which run in Node.js rather than the browser.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["tests/**/*.ts", "*.config.ts"]
+}

@@ -1,73 +1,40 @@
-import math
+"""The results of every team over the whole tournament."""
+
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
 
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
-from bracket import orm
-from bracket.logic.ranking.statistics import START_ELO, D, K, TeamTotals
+from bracket.logic.ranking.elo import K, expected_result
+from bracket.logic.tournament_graph import TournamentGraph
+from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.team import Team
+from bracket.models.results import START_ELO, ResultTotals, TeamMatchResult
+from bracket.sql.matches import get_played_team_results
 from bracket.utils.id_types import TeamId, TournamentId
 
+# A team's rating keeps one decimal place in answers, also before the team has played.
+NO_RESULTS = ResultTotals(elo_score=Decimal("1200.0"))
 
-async def get_team_totals(
-    session: AsyncSession, tournament_id: TournamentId
-) -> dict[TeamId, TeamTotals]:
-    """Replay published results in schedule order, including corrections and deletions.
 
-    Read the small match projection directly so team totals can also enrich embedded teams in
-    stage responses without recursing through the full stage loader.
+def determine_team_totals(results: Iterable[TeamMatchResult]) -> dict[TeamId, ResultTotals]:
     """
-    input1, input2 = aliased(orm.StageItemInput), aliased(orm.StageItemInput)
-    rows = await session.execute(
-        select(
-            input1.team_id.label("team1"),
-            input2.team_id.label("team2"),
-            orm.Match.stage_item_input1_score.label("score1"),
-            orm.Match.stage_item_input2_score.label("score2"),
-        )
-        .select_from(orm.Match)
-        .join(orm.Round, orm.Round.id == orm.Match.round_id)
-        .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
-        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
-        .join(
-            input1,
-            (input1.id == orm.Match.stage_item_input1_id)
-            & (input1.stage_item_id == orm.StageItem.id),
-        )
-        .join(
-            input2,
-            (input2.id == orm.Match.stage_item_input2_id)
-            & (input2.stage_item_id == orm.StageItem.id),
-        )
-        .where(
-            orm.Stage.tournament_id == tournament_id,
-            orm.Round.is_draft.is_(False),
-            input1.team_id.is_not(None),
-            input2.team_id.is_not(None),
-            input1.team_id != input2.team_id,
-            or_(
-                orm.Match.stage_item_input1_score != 0,
-                orm.Match.stage_item_input2_score != 0,
-                orm.Match.scoreless_result,
-            ),
-        )
-        .order_by(orm.Match.start_time.asc().nulls_last(), orm.Round.id, orm.Match.id)
-    )
-    totals: defaultdict[TeamId, TeamTotals] = defaultdict(TeamTotals)
+    Replay the results in order. Every result moves both teams' ratings by how far it is from the
+    expected one, which follows from their ratings before the match.
+    """
+    totals: defaultdict[TeamId, ResultTotals] = defaultdict(ResultTotals)
     ratings: defaultdict[TeamId, float] = defaultdict(lambda: float(START_ELO))
-    for row in rows:
-        team_ids = (TeamId(row.team1), TeamId(row.team2))
-        scores = (row.score1, row.score2)
+    for result in results:
+        team_ids = (result.team1_id, result.team2_id)
+        scores = (result.score1, result.score2)
         before = (ratings[team_ids[0]], ratings[team_ids[1]])
         for index, team_id in enumerate(team_ids):
             score, opponent_score = scores[index], scores[1 - index]
-            result = 1.0 if score > opponent_score else 0.5 if score == opponent_score else 0.0
-            expected = 1.0 / (1.0 + math.pow(10.0, (before[1 - index] - before[index]) / D))
-            ratings[team_id] += K * (result - expected)
+            outcome = 1.0 if score > opponent_score else 0.5 if score == opponent_score else 0.0
+            ratings[team_id] += K * (outcome - expected_result(before[index], before[1 - index]))
             total = totals[team_id]
-            total.swiss_score += Decimal(str(result))
+            total.swiss_score += Decimal(str(outcome))
             if score > opponent_score:
                 total.wins += 1
             elif score == opponent_score:
@@ -77,3 +44,36 @@ async def get_team_totals(
     for team_id, total in totals.items():
         total.elo_score = Decimal(str(round(ratings[team_id], 0)))
     return dict(totals)
+
+
+async def get_team_totals(
+    session: AsyncSession, tournament_id: TournamentId
+) -> dict[TeamId, ResultTotals]:
+    """Replay the published results in schedule order, including corrections and deletions."""
+    return determine_team_totals(await get_played_team_results(session, tournament_id))
+
+
+def with_totals[TeamT: Team](team: TeamT, totals: Mapping[TeamId, ResultTotals]) -> TeamT:
+    """The team with its replayed results in place of the stored ones, which aren't maintained."""
+    return team.model_copy(update=totals.get(team.id, NO_RESULTS).model_dump())
+
+
+async def add_team_totals(
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    graph: TournamentGraph,
+    *,
+    totals: Mapping[TeamId, ResultTotals] | None = None,
+) -> None:
+    """Give every team in the slots of the loaded stages its replayed results."""
+    slots = [slot for slot in graph.slots() if isinstance(slot, StageItemInputFinal)]
+    if not slots:
+        return
+    if totals is None:
+        totals = await get_team_totals(session, tournament_id)
+    graph.replace_slots(
+        {
+            slot.id: slot.model_copy(update={"team": with_totals(slot.team, totals)})
+            for slot in slots
+        }
+    )

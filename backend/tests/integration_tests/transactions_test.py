@@ -1,6 +1,4 @@
 import asyncio
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
@@ -10,25 +8,27 @@ from fastapi import FastAPI, HTTPException, Response
 from sqlalchemy import Connection, delete, event, func, inspect, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
+    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.schema import CreateSchema, DropSchema
 from starlette.requests import Request
 
 from bracket import database, orm
+from bracket.bootstrap import init_db_when_empty
 from bracket.config import config
 from bracket.database import DbSession, engine, session_scope
-from bracket.models.db.club import ClubOwnerUpdateBody
-from bracket.models.db.user_x_club import UserXClubRelation
-from bracket.routes import auth, clubs, tournaments
+from bracket.development_seed import create_dev_db
+from bracket.logic.authentication import Credentials
+from bracket.logic.clubs import remove_club_member, transfer_club_ownership
+from bracket.models.db.user import UserPublic
+from bracket.models.enums import UserXClubRelation
+from bracket.routes import access, tournaments
 from bracket.sql.clubs import get_club_members, sql_give_user_access_to_club
-from bracket.utils.db_init import init_db_when_empty, sql_create_dev_db
-from bracket.utils.dummy_records import DUMMY_USER
+from tests.dummy_records import DUMMY_USER
 from tests.integration_tests.api.shared import UvicornTestServer, find_free_port
 from tests.integration_tests.mocks import get_mock_token
-from tests.integration_tests.sql import inserted_auth_context, inserted_user
+from tests.integration_tests.sql import inserted_auth_context, inserted_user, isolated_schema
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -227,19 +227,19 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
             asyncio.Event(),
         )
         request = Request({"type": "http", "method": "PUT"})
-        owner_credentials = auth.Credentials(get_mock_token(context.user), from_cookie=False)
+        owner_credentials = Credentials(get_mock_token(context.user), from_cookie=False)
+
+        async def authorize(session: AsyncSession, credentials: Credentials) -> UserPublic:
+            user = await access.user_authenticated(session, Response(), credentials)
+            return await access.user_authenticated_for_club(context.club.id, session, request, user)
 
         async def transfer() -> None:
             async with session_scope() as session:
-                owner = await auth.user_authenticated_for_club(
-                    context.club.id, session, Response(), request, owner_credentials
-                )
-                await clubs.user_owns_club(context.club.id, session, owner)
+                owner = await authorize(session, owner_credentials)
+                await access.user_owns_club(context.club.id, session, owner)
                 lock_held.set()
                 await finish_transfer.wait()
-                await clubs.transfer_ownership(
-                    session, context.club.id, ClubOwnerUpdateBody(user_id=successor.id), owner
-                )
+                await transfer_club_ownership(session, context.club.id, successor.id)
 
         def on_statement(
             _connection: Connection,
@@ -257,18 +257,14 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
                 credentials = (
                     owner_credentials
                     if second_action == "transfer"
-                    else auth.Credentials(get_mock_token(successor), from_cookie=False)
+                    else Credentials(get_mock_token(successor), from_cookie=False)
                 )
-                user = await auth.user_authenticated_for_club(
-                    context.club.id, session, Response(), request, credentials
-                )
+                user = await authorize(session, credentials)
                 if second_action == "transfer":
-                    await clubs.user_owns_club(context.club.id, session, user)
-                    await clubs.transfer_ownership(
-                        session, context.club.id, ClubOwnerUpdateBody(user_id=another.id), user
-                    )
+                    await access.user_owns_club(context.club.id, session, user)
+                    await transfer_club_ownership(session, context.club.id, another.id)
                 else:
-                    await clubs.remove_member(session, context.club.id, successor.id, user)
+                    await remove_club_member(session, context.club.id, successor.id, user)
 
         first = asyncio.create_task(transfer())
         await asyncio.wait_for(lock_held.wait(), timeout=2)
@@ -299,24 +295,8 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
             assert owners == [successor.id]
 
 
-@asynccontextmanager
-async def isolated_bootstrap_schema() -> AsyncIterator[AsyncEngine]:
-    schema_name = f"bootstrap_{uuid4().hex}"
-    async with engine.begin() as connection:
-        await connection.execute(CreateSchema(schema_name))
-    isolated = create_async_engine(
-        engine.url, connect_args={"server_settings": {"search_path": schema_name}}
-    )
-    try:
-        yield isolated
-    finally:
-        await isolated.dispose()
-        async with engine.begin() as connection:
-            await connection.execute(DropSchema(schema_name, cascade=True))
-
-
 async def test_bootstrap_refuses_partial_database() -> None:
-    async with isolated_bootstrap_schema() as isolated:
+    async with isolated_schema() as isolated:
         async with isolated.begin() as connection:
             await connection.run_sync(orm.Base.metadata.tables["users"].create)
         async with isolated.begin() as connection:
@@ -328,7 +308,7 @@ async def test_bootstrap_refuses_partial_database() -> None:
 async def test_bootstrap_initializes_empty_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "admin_email", None)
     monkeypatch.setattr(config, "admin_password", None)
-    async with isolated_bootstrap_schema() as isolated:
+    async with isolated_schema() as isolated:
         async with isolated.begin() as connection:
             assert await init_db_when_empty(connection) is None
             tables = await connection.run_sync(lambda c: inspect(c).get_table_names())
@@ -341,10 +321,10 @@ async def test_development_seed_preserves_one_configured_owner(
 ) -> None:
     monkeypatch.setattr(config, "admin_email", admin_email)
     monkeypatch.setattr(config, "admin_password", "A configured administrator passphrase 42!")
-    async with isolated_bootstrap_schema() as isolated:
+    async with isolated_schema() as isolated:
         factory = async_sessionmaker(isolated, expire_on_commit=False)
         async with factory() as session, session.begin():
-            dummy_id = await sql_create_dev_db(session)
+            dummy_id = await create_dev_db(session)
             members = (
                 await session.execute(
                     select(orm.User.email, orm.UserXClub.relation).join(

@@ -1,205 +1,31 @@
-import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-const ORIGIN = 'http://127.0.0.1:5188';
-const CREATED = '2026-01-01T00:00:00Z';
-const user = { id: 1, email: 'owner@example.org', name: 'Owner', created: CREATED };
+import type * as OpenApi from '../../src/openapi';
+import {
+  bracket,
+  deferred,
+  ORIGIN,
+  signIn,
+  stage,
+  teams,
+  tournament,
+  tournamentApi,
+  user,
+  type Write,
+} from './fixtures';
 
-function tournament(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 7,
-    club_id: 1,
-    name: 'Summer Cup',
-    created: CREATED,
-    start_time: '2030-06-01T10:00:00Z',
-    duration_minutes: 30,
-    margin_minutes: 5,
-    dashboard_public: true,
-    dashboard_endpoint: 'summer-cup',
-    logo_path: null,
-    players_can_be_in_multiple_teams: false,
-    status: 'OPEN',
-    matches_total: 0,
-    matches_played: 0,
-    last_match_end: null,
-    more_rounds_possible: false,
-    ...overrides,
-  };
+function storedSession(page: Page) {
+  return page.evaluate(() => JSON.parse(localStorage.getItem('bracket:session') ?? 'null'));
 }
 
-const teams = ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((name, index) => ({
-  id: index + 1,
-  tournament_id: 7,
-  name,
-  active: true,
-  players: [],
-  logo_path: null,
-  created: CREATED,
-  elo_score: '1200',
-  swiss_score: '0',
-  wins: 0,
-  draws: 0,
-  losses: 0,
-}));
-
-function inputs(stageItemId: number, teamIds: number[]) {
-  return teamIds.map((teamId, index) => ({
-    id: stageItemId * 10 + index + 1,
-    slot: index + 1,
-    tournament_id: 7,
-    stage_item_id: stageItemId,
-    team_id: teamId,
-    team: teams[teamId - 1],
-    winner_from_stage_item_id: null,
-    winner_position: null,
-    points: '0',
-    wins: 0,
-    draws: 0,
-    losses: 0,
-  }));
+function logouts(writes: Write[]) {
+  return writes.filter((write) => write.path === '/api/logout');
 }
 
-/** A knockout of four teams: two semi-finals and a final that waits for their winners. */
-function bracket(stageItemId = 3) {
-  const slots = inputs(stageItemId, [1, 2, 3, 4]);
-  const match = (id: number, roundId: number, input1: unknown, input2: unknown) => ({
-    id,
-    round_id: roundId,
-    created: CREATED,
-    start_time: '2030-06-01T10:00:00Z',
-    duration_minutes: 30,
-    margin_minutes: 5,
-    custom_duration_minutes: null,
-    custom_margin_minutes: null,
-    stage_item_input1: input1,
-    stage_item_input2: input2,
-    stage_item_input1_id: (input1 as { id?: number } | null)?.id ?? null,
-    stage_item_input2_id: (input2 as { id?: number } | null)?.id ?? null,
-    stage_item_input1_winner_from_match_id: null,
-    stage_item_input2_winner_from_match_id: null,
-    stage_item_input1_score: 0,
-    stage_item_input2_score: 0,
-    stage_item_input1_conflict: false,
-    stage_item_input2_conflict: false,
-    scoreless_result: false,
-    played: false,
-  });
-  return {
-    id: stageItemId,
-    stage_id: 1,
-    name: 'Playoffs',
-    type: 'SINGLE_ELIMINATION',
-    type_name: 'Single elimination',
-    team_count: 4,
-    ranking_id: 1,
-    created: CREATED,
-    inputs: slots,
-    rounds: [
-      {
-        id: 5,
-        stage_item_id: stageItemId,
-        name: 'Round 01',
-        is_draft: false,
-        created: CREATED,
-        matches: [match(1, 5, slots[0], slots[1]), match(2, 5, slots[2], slots[3])],
-      },
-      {
-        id: 6,
-        stage_item_id: stageItemId,
-        name: 'Round 02',
-        is_draft: false,
-        created: CREATED,
-        matches: [
-          {
-            ...match(3, 6, null, null),
-            stage_item_input1_winner_from_match_id: 1,
-            stage_item_input2_winner_from_match_id: 2,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-function stage(id: number, isActive: boolean, stageItems: unknown[] = []) {
-  return {
-    id,
-    name: `Stage ${id}`,
-    created: CREATED,
-    is_active: isActive,
-    tournament_id: 7,
-    custom_duration_minutes: null,
-    stage_items: stageItems,
-  };
-}
-
-const ranking = {
-  id: 1,
-  tournament_id: 7,
-  created: CREATED,
-  position: 0,
-  win_points: '1',
-  draw_points: '0.5',
-  loss_points: '0',
-  add_score_points: false,
-};
-
-async function signIn(context: BrowserContext, session = 'session') {
-  await context.addInitScript(() => {
-    localStorage.setItem('bracket:session', JSON.stringify({ name: 'Owner', user_id: 1 }));
-  });
-  await context.addCookies([
-    { name: 'bracket_session', value: session, url: ORIGIN, httpOnly: true },
-  ]);
-}
-
-type Api = {
-  tournament?: ReturnType<typeof tournament>;
-  stages?: unknown[];
-  nextStageRankings?: Record<string, unknown>;
-  tournaments?: unknown[];
-};
-
-/** The API of one tournament, for the workspace and the Details pages. Changes are recorded. */
-async function tournamentApi(page: Page, api: Api = {}) {
-  const writes: string[] = [];
-  const data = {
-    tournament: api.tournament ?? tournament(),
-    stages: api.stages ?? [],
-  };
-  await page.route('**/api/**', async (route: Route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (request.method() !== 'GET') {
-      writes.push(`${request.method()} ${path}`);
-      return route.fulfill({ json: { success: true } });
-    }
-    const responses: Record<string, unknown> = {
-      '/api/users/me': user,
-      '/api/clubs': [],
-      '/api/tournaments': api.tournaments ?? [{ ...data.tournament, can_manage: true }],
-      '/api/tournaments/7': data.tournament,
-      '/api/tournaments/7/access': { can_manage: false },
-      '/api/tournaments/7/details': {
-        players: [],
-        rankings: [ranking],
-        stages: data.stages,
-        standings: {},
-        teams,
-        tournament: data.tournament,
-      },
-      '/api/tournaments/7/stages': data.stages,
-      '/api/tournaments/7/players': { count: 0, players: [] },
-      '/api/tournaments/7/teams': { count: teams.length, teams },
-      '/api/tournaments/7/rankings': [ranking],
-      '/api/tournaments/7/standings': {},
-      '/api/tournaments/7/available_inputs': {},
-      '/api/tournaments/7/next_stage_rankings': api.nextStageRankings ?? {},
-    };
-    return Object.hasOwn(responses, path)
-      ? route.fulfill({ json: { data: responses[path] } })
-      : route.fulfill({ status: 404, json: { detail: `Unexpected request: ${path}` } });
-  });
-  return writes;
+async function logIn(page: Page, password: string) {
+  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Log in' }).click();
 }
 
 test('a session that ended on another device leaves the tournaments visible', async ({
@@ -263,9 +89,61 @@ test('a session that ended on another device leaves the tournaments visible', as
   await Promise.all(contexts.map((context) => context.close()));
 });
 
+test('a wrong password typed while signed in keeps the session', async ({ page }) => {
+  await signIn(page.context());
+  const { writes } = await tournamentApi(page, {}, (write) =>
+    write.path === '/api/token'
+      ? { json: { detail: 'Incorrect email or password' }, status: 401 }
+      : undefined,
+  );
+  await page.goto('/login');
+  await logIn(page, 'not the password');
+
+  await expect(page.getByText('Incorrect email or password')).toBeVisible();
+  expect(logouts(writes)).toEqual([]);
+  expect(await storedSession(page)).toMatchObject({ user_id: 1 });
+});
+
+test('a refusal for an earlier session does not end the session after it', async ({ page }) => {
+  await signIn(page.context(), 'ended');
+  const { writes } = await tournamentApi(page, {}, (write) =>
+    write.path === '/api/token'
+      ? {
+          json: {
+            access_token: 'new',
+            name: 'Owner',
+            token_type: 'bearer',
+            user_id: 1,
+          } satisfies OpenApi.Token,
+        }
+      : undefined,
+  );
+  // The ended session's question of who is signed in is answered after the next login.
+  const lateAnswer = deferred();
+  let ended = true;
+  await page.route('**/api/users/me', async (route) => {
+    if (!ended) return route.fallback();
+    ended = false;
+    await lateAnswer.promise;
+    return route.fulfill({ json: { detail: 'Could not validate credentials' }, status: 401 });
+  });
+  await page.goto('/login');
+  await logIn(page, 'correct-horse-battery-staple');
+  await expect(page.getByText('Logged in successfully.')).toBeVisible();
+
+  const refused = page.waitForResponse((response) => response.status() === 401);
+  lateAnswer.release();
+  await refused;
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)));
+
+  expect(logouts(writes)).toEqual([]);
+  expect(await storedSession(page)).toMatchObject({ user_id: 1 });
+  await expect(page.getByText('Your session expired. Please log in again.')).toBeHidden();
+});
+
 test('a new password is typed twice, and a mismatch is never sent', async ({ page }) => {
   await signIn(page.context());
-  const writes = await tournamentApi(page);
+  const { writes } = await tournamentApi(page);
   await page.goto('/user');
   await page.getByLabel('Current password').fill('the old password');
   await page.getByLabel('New password', { exact: true }).fill('correct-horse-battery-staple');
@@ -298,7 +176,7 @@ test('the Details link is shown in full, copied, and drawn as a QR code', async 
 
 test('archiving asks first, and says when players lose the tournament', async ({ page }) => {
   await signIn(page.context());
-  const writes = await tournamentApi(page, {
+  const { writes } = await tournamentApi(page, {
     tournament: tournament({ dashboard_endpoint: null, dashboard_public: false }),
   });
   await page.goto('/tournaments/7/settings');
@@ -313,7 +191,11 @@ test('archiving asks first, and says when players lose the tournament', async ({
 
   await archive.click();
   await page.getByRole('dialog').getByRole('button', { name: 'Archive tournament' }).click();
-  await expect.poll(() => writes).toEqual(['POST /api/tournaments/7/change-status']);
+  await expect
+    .poll(() => writes)
+    .toEqual([
+      { body: { status: 'ARCHIVED' }, method: 'POST', path: '/api/tournaments/7/change-status' },
+    ]);
 });
 
 test('visitors who open a workspace page land on its Details page', async ({ page }) => {
@@ -332,13 +214,12 @@ test('stage activation offers only the directions there are', async ({ page }) =
   const next = page.getByRole('button', { name: 'Activate next stage' });
   const previous = page.getByRole('button', { name: 'Activate previous stage' });
 
-  await tournamentApi(page, { stages: [stage(1, false), stage(2, false)] });
+  const { state } = await tournamentApi(page, { stages: [stage(1, false), stage(2, false)] });
   await page.goto('/tournaments/7/stages');
   await expect(next).toBeEnabled();
   await expect(previous).toBeDisabled();
 
-  await page.unrouteAll();
-  await tournamentApi(page, { stages: [stage(1, false), stage(2, true)] });
+  state.stages = [stage(1, false), stage(2, true)];
   await page.reload();
   await expect(next).toBeDisabled();
   await expect(previous).toBeEnabled();
@@ -346,23 +227,28 @@ test('stage activation offers only the directions there are', async ({ page }) =
 
 test('activating the next stage names the places only seeding decided', async ({ page }) => {
   await signIn(page.context());
-  const group = { ...bracket(3), name: 'Group', type: 'ROUND_ROBIN', type_name: 'Round robin' };
-  const writes = await tournamentApi(page, {
+  const group = {
+    ...bracket(3),
+    name: 'Group',
+    type: 'ROUND_ROBIN',
+    type_name: 'Round robin',
+  } as const;
+  const { writes } = await tournamentApi(page, {
     nextStageRankings: {
       '4': [
         {
           stage_item_input: {
+            draws: 0,
             id: 41,
+            losses: 0,
+            points: '0',
             slot: 1,
-            tournament_id: 7,
             stage_item_id: 4,
             team_id: null,
+            tournament_id: 7,
             winner_from_stage_item_id: 3,
             winner_position: 1,
-            points: '0',
             wins: 0,
-            draws: 0,
-            losses: 0,
           },
           team: teams[1],
           tied_team: teams[2],
@@ -379,7 +265,15 @@ test('activating the next stage names the places only seeding decided', async ({
     'Bravo and Charlie are level on every criterion: only seeding puts Bravo ahead.',
   );
   await dialog.getByRole('button', { name: 'Activate next stage' }).click();
-  await expect.poll(() => writes).toEqual(['POST /api/tournaments/7/stages/activate']);
+  await expect
+    .poll(() => writes)
+    .toEqual([
+      {
+        body: { direction: 'next', discard_results: false },
+        method: 'POST',
+        path: '/api/tournaments/7/stages/activate',
+      },
+    ]);
 });
 
 test('a knockout lists its slots by the first-round match they form', async ({ page }) => {

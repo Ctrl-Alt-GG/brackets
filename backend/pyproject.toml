@@ -11,6 +11,7 @@ dependencies = [
     "email-validator==2.3.0",
     "fastapi==0.162.5",
     "heliclockter==3.0.1",
+    "limits==5.8.0",
     "networkx==3.7",
     "pillow==13.0.0",
     "pwdlib[argon2,bcrypt]==0.3.1",
@@ -20,7 +21,6 @@ dependencies = [
     "python-multipart==0.0.33",
     "redis==8.1.0",
     "secure==2.0.1",
-    "slowapi==0.1.10",
     "sqlalchemy[asyncio]==2.1.8",
     "starlette==1.10.0",
     "uvicorn==0.54.0",
@@ -42,8 +42,6 @@ filterwarnings = [
     'ignore:.*pytest-asyncio detected an unclosed event loop.*:DeprecationWarning',
     'ignore:.*The event_loop fixture provided by pytest-asyncio has been redefined.*:DeprecationWarning',
     'ignore:.*Please use `import python_multipart` instead.*:PendingDeprecationWarning',
-    # slowapi still calls `asyncio.iscoroutinefunction`, deprecated in Python 3.14.
-    "ignore:'asyncio.iscoroutinefunction' is deprecated.*:DeprecationWarning",
 ]
 
 [dependency-groups]

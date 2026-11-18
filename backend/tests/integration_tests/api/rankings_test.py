@@ -12,7 +12,7 @@ from bracket.sql.rankings import (
     get_all_rankings_in_tournament,
     sql_delete_ranking,
 )
-from bracket.utils.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1, DUMMY_TOURNAMENT
+from tests.dummy_records import DUMMY_RANKING1, DUMMY_TEAM1, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_ranking, inserted_team, inserted_tournament

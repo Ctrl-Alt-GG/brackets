@@ -1,5 +1,5 @@
-# A template: the nginx image's entrypoint fills in ${API_ORIGIN}, which
-# /docker-entrypoint.d/05-bracket-runtime-config.envsh works out from API_BASE_URL.
+# A template: the nginx image's entrypoint fills in ${API_ORIGIN}, the API_BASE_URL that
+# /docker-entrypoint.d/05-bracket-runtime-config.envsh checked.
 
 # Vite fingerprints the file names in /assets/, so those files never change. Everything else, such
 # as index.html, is revalidated on every load, so a new release reaches every browser at once.

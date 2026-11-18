@@ -1,46 +1,30 @@
-from __future__ import annotations
-
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from bracket.models.db.shared import BaseModelORM
+from bracket.models.db.shared import ApiModel, BaseModelORM
 from bracket.models.db.team import Team
 from bracket.utils.id_types import StageItemId, StageItemInputId, TeamId, TournamentId
 
 
 class StageItemInputBase(BaseModelORM):
+    """A slot of a stage item. Its variants say what fills it."""
+
     id: StageItemInputId
     slot: int
     tournament_id: TournamentId
-    stage_item_id: StageItemId | None = None
-
-
-class StageItemInputGeneric(BaseModel):
+    stage_item_id: StageItemId
+    # Results stored with the slot when one of its matches changes. Swiss pairing reads the
+    # rating from `points`; standings replay the matches instead.
     points: Decimal = Decimal("0.0")
     wins: int = 0
     draws: int = 0
     losses: int = 0
 
-    @property
-    def elo(self) -> Decimal:
-        """
-        For now, ELO is saved as points.
-        """
-        return self.points
 
+class StageItemInputTentative(StageItemInputBase):
+    """Takes the team at a place of an earlier stage item once that stage is decided."""
 
-def hash_stage_item_input(
-    self: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty,
-) -> int:
-    return (
-        self.team_id,
-        self.winner_from_stage_item_id,
-        self.winner_position,
-    ).__hash__()
-
-
-class StageItemInputTentative(StageItemInputBase, StageItemInputGeneric):
     team_id: None = None
     winner_from_stage_item_id: StageItemId
     winner_position: int = Field(ge=1)
@@ -48,41 +32,39 @@ class StageItemInputTentative(StageItemInputBase, StageItemInputGeneric):
     def get_lookup_key(self) -> tuple[StageItemId, int]:
         return self.winner_from_stage_item_id, self.winner_position
 
-    __hash__ = hash_stage_item_input
 
+class StageItemInputFinal(StageItemInputBase):
+    """Has a team, assigned by an organizer or advanced from an earlier stage item."""
 
-class StageItemInputFinal(StageItemInputBase, StageItemInputGeneric):
     team_id: TeamId
     winner_from_stage_item_id: StageItemId | None = None
     winner_position: int | None = None
     team: Team
 
-    __hash__ = hash_stage_item_input
 
+class StageItemInputEmpty(StageItemInputBase):
+    """Open: nothing fills it yet."""
 
-class StageItemInputEmpty(StageItemInputBase, StageItemInputGeneric):
     team_id: None = None
     winner_from_stage_item_id: None = None
     winner_position: None = None
-
-    __hash__ = hash_stage_item_input
 
 
 StageItemInput = StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty
 
 
-class StageItemInputCreateBodyTentative(BaseModel):
+class StageItemInputCreateBodyTentative(ApiModel):
     slot: int
     winner_from_stage_item_id: StageItemId
     winner_position: int = Field(ge=1)
 
 
-class StageItemInputCreateBodyFinal(BaseModel):
+class StageItemInputCreateBodyFinal(ApiModel):
     slot: int
     team_id: TeamId
 
 
-class StageItemInputCreateBodyEmpty(BaseModel):
+class StageItemInputCreateBodyEmpty(ApiModel):
     slot: int
 
 
@@ -115,19 +97,29 @@ StageItemInputUpdateBody = (
 )
 
 
-class StageItemInputInsertable(BaseModel):
+class StageItemInputInsertable(ApiModel):
     slot: int
     team_id: TeamId | None = None
     tournament_id: TournamentId
     stage_item_id: StageItemId
 
 
-class StageItemInputOptionFinal(BaseModel):
+class StageItemInputOptionFinal(ApiModel):
     team_id: TeamId
     already_taken: bool
 
 
-class StageItemInputOptionTentative(BaseModel):
+class StageItemInputOptionTentative(ApiModel):
     winner_from_stage_item_id: StageItemId
     winner_position: int
     already_taken: bool
+
+
+class StageItemInputUpdate(ApiModel):
+    """A team that takes a slot when the slot's stage is activated."""
+
+    stage_item_input: StageItemInputTentative
+    team: Team
+    # A team that is level with `team` on every criterion, but goes elsewhere or doesn't go
+    # through: only their seeding decided which of the two takes this slot.
+    tied_team: Team | None = None

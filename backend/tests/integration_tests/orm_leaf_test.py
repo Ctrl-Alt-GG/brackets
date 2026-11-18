@@ -11,10 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.database import engine
-from bracket.models.db.stage_item import StageType
-from bracket.models.db.tournament import TournamentStatus
+from bracket.logic.ranking.players import get_players_with_statistics
+from bracket.logic.teams import get_teams_with_totals
+from bracket.models.db.tournament import Tournament
+from bracket.models.enums import StageType, TournamentStatus
 from bracket.sql.players import get_all_players_in_tournament, get_player_count
-from bracket.sql.teams import get_team_count, get_teams_with_members, sql_set_team_members
+from bracket.sql.teams import (
+    get_team_count,
+    get_team_player_ids,
+    get_teams_with_members,
+    sql_replace_team_members,
+)
 from bracket.sql.tournaments import (
     sql_get_tournament,
     sql_get_tournament_by_endpoint_name,
@@ -22,7 +29,7 @@ from bracket.sql.tournaments import (
     sql_get_visible_tournaments,
 )
 from bracket.utils.id_types import ClubId, PlayerId, TeamId, TournamentId
-from bracket.utils.pagination import PaginationPlayers, PaginationTeams
+from bracket.utils.pagination import RESULT_SORT_FIELDS, ParticipantPagination
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -37,6 +44,7 @@ SORT_COLUMNS: tuple[SortBy, ...] = (
     "active",
     "created",
 )
+STORED_SORT_COLUMNS: tuple[SortBy, ...] = ("name", "active", "created")
 DAY = datetime_utc.fromisoformat("2026-01-01T00:00:00Z")
 
 
@@ -189,6 +197,8 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     stage_item_input1_conflict=False,
                     stage_item_input2_conflict=False,
                     start_time=DAY + timedelta(hours=1),
+                    duration_minutes=5,
+                    margin_minutes=5,
                 ),
                 orm.Match(
                     tournament_id=tournament_id,
@@ -197,6 +207,8 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     stage_item_input2_score=0,
                     stage_item_input1_conflict=False,
                     stage_item_input2_conflict=False,
+                    duration_minutes=10,
+                    margin_minutes=0,
                 ),
                 orm.Match(
                     tournament_id=tournament_id,
@@ -209,6 +221,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
                     stage_item_input2_conflict=False,
                     start_time=DAY + timedelta(days=30),
                     duration_minutes=10,
+                    margin_minutes=0,
                 ),
             ]
         )
@@ -219,7 +232,7 @@ async def leaf_data() -> AsyncIterator[LeafData]:
             await session.rollback()
 
 
-@pytest.mark.parametrize("sort_by", SORT_COLUMNS)
+@pytest.mark.parametrize("sort_by", STORED_SORT_COLUMNS)
 @pytest.mark.parametrize("direction", ["asc", "desc"])
 async def test_player_order_and_pagination(
     leaf_data: LeafData, sort_by: SortBy, direction: Literal["asc", "desc"]
@@ -230,7 +243,27 @@ async def test_player_order_and_pagination(
     actual = await get_all_players_in_tournament(
         leaf_data.session,
         leaf_data.tournament_id,
-        pagination=PaginationPlayers(limit=2, offset=1, sort_by=sort_by, sort_direction=direction),
+        pagination=ParticipantPagination(
+            limit=2, offset=1, sort_by=sort_by, sort_direction=direction
+        ),
+    )
+    assert [player.id for player in actual] == [player.id for player in expected[1:3]]
+
+
+@pytest.mark.parametrize("sort_by", sorted(RESULT_SORT_FIELDS))
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+async def test_player_results_are_sorted_before_the_page_is_cut(
+    leaf_data: LeafData, sort_by: SortBy, direction: Literal["asc", "desc"]
+) -> None:
+    everyone = await get_players_with_statistics(leaf_data.session, leaf_data.tournament_id)
+    expected = sorted(everyone, key=lambda player: player.id)
+    expected.sort(key=lambda player: getattr(player, sort_by), reverse=direction == "desc")
+    actual = await get_players_with_statistics(
+        leaf_data.session,
+        leaf_data.tournament_id,
+        pagination=ParticipantPagination(
+            limit=2, offset=1, sort_by=sort_by, sort_direction=direction
+        ),
     )
     assert [player.id for player in actual] == [player.id for player in expected[1:3]]
 
@@ -242,7 +275,7 @@ async def test_player_membership_filter_and_counts(leaf_data: LeafData) -> None:
         leaf_data.session,
         leaf_data.tournament_id,
         not_in_team=True,
-        pagination=PaginationPlayers(limit=1, offset=0, sort_by="name", sort_direction="desc"),
+        pagination=ParticipantPagination(limit=1, offset=0, sort_by="name", sort_direction="desc"),
     )
     assert [player.name for player in free_players] == ["Free"]
     assert await get_player_count(leaf_data.session, leaf_data.tournament_id) == 4
@@ -251,7 +284,7 @@ async def test_player_membership_filter_and_counts(leaf_data: LeafData) -> None:
         await get_all_players_in_tournament(
             leaf_data.session,
             leaf_data.tournament_id,
-            pagination=PaginationPlayers(limit=2, offset=10),
+            pagination=ParticipantPagination(limit=2, offset=10),
         )
         == []
     )
@@ -295,10 +328,12 @@ async def test_team_order_totals_and_pagination(
         ),
         reverse=direction == "desc",
     )
-    actual = await get_teams_with_members(
+    actual = await get_teams_with_totals(
         leaf_data.session,
         leaf_data.tournament_id,
-        pagination=PaginationTeams(limit=2, offset=1, sort_by=sort_by, sort_direction=direction),
+        pagination=ParticipantPagination(
+            limit=2, offset=1, sort_by=sort_by, sort_direction=direction
+        ),
     )
     assert [team.id for team in actual] == [team.id for team in expected[1:3]]
     for team in actual:
@@ -309,7 +344,10 @@ async def test_team_order_totals_and_pagination(
 
 async def test_team_members_filters_and_refresh(leaf_data: LeafData) -> None:
     teams = await get_teams_with_members(leaf_data.session, leaf_data.tournament_id)
-    assert [team.name for team in teams] == ["Alpha", "Zulu", "Beta"]
+    assert [team.name for team in teams] == ["Alpha", "Beta", "Zulu"]
+    # With their results, the best first.
+    ranked = await get_teams_with_totals(leaf_data.session, leaf_data.tournament_id)
+    assert [team.name for team in ranked] == ["Alpha", "Zulu", "Beta"]
     assert {team.name: [player.name for player in team.players] for team in teams} == {
         "Alpha": ["Amy", "Zed"],
         "Zulu": [],
@@ -325,12 +363,8 @@ async def test_team_members_filters_and_refresh(leaf_data: LeafData) -> None:
         == 2
     )
     alpha_id = TeamId(leaf_data.teams[0].id)
-    await sql_set_team_members(
-        leaf_data.session,
-        leaf_data.tournament_id,
-        alpha_id,
-        {PlayerId(leaf_data.players[3].id)},
-        {PlayerId(leaf_data.players[0].id), PlayerId(leaf_data.players[1].id)},
+    await sql_replace_team_members(
+        leaf_data.session, leaf_data.tournament_id, alpha_id, {PlayerId(leaf_data.players[3].id)}
     )
     [updated] = await get_teams_with_members(
         leaf_data.session, leaf_data.tournament_id, team_id=alpha_id
@@ -344,6 +378,21 @@ async def test_team_members_filters_and_refresh(leaf_data: LeafData) -> None:
             only_active_teams=True,
         )
         == []
+    )
+
+
+async def test_roster_replacement_is_limited_to_its_tournament(leaf_data: LeafData) -> None:
+    """A team's members stay when another tournament's id is given with the team's id."""
+    alpha_id = TeamId(leaf_data.teams[0].id)
+    members = await get_team_player_ids(leaf_data.session, leaf_data.tournament_id, alpha_id)
+    assert members
+
+    await sql_replace_team_members(
+        leaf_data.session, TournamentId(leaf_data.tournaments["foreign"].id), alpha_id, set()
+    )
+
+    assert (
+        await get_team_player_ids(leaf_data.session, leaf_data.tournament_id, alpha_id) == members
     )
 
 
@@ -387,11 +436,20 @@ async def test_tournament_progress_all_loaders(leaf_data: LeafData) -> None:
         )
     ] == ["archived_private", "archived_public"]
     assert await sql_get_tournaments(session, []) == []
-    public = await sql_get_visible_tournaments(session, [], filter_="ALL")
+
+    # Other tests' tournaments can be visible too: these only look at the fixture's.
+    fixture_ids = {tournament.id for tournament in leaf_data.tournaments.values()}
+
+    def fixture(tournaments: list[Tournament]) -> list[Tournament]:
+        return [tournament for tournament in tournaments if tournament.id in fixture_ids]
+
+    public = fixture(await sql_get_visible_tournaments(session, [], filter_="ALL"))
     assert [tournament.name for tournament in public] == ["empty", "main", "archived_public"]
     assert next(tournament for tournament in public if tournament.name == "main") == main
-    assert await sql_get_visible_tournaments(session, [leaf_data.club_id], filter_="ALL") == owned
-    assert [tournament.name for tournament in await sql_get_visible_tournaments(session, [])] == [
-        "empty",
-        "main",
-    ]
+    assert (
+        fixture(await sql_get_visible_tournaments(session, [leaf_data.club_id], filter_="ALL"))
+        == owned
+    )
+    assert [
+        tournament.name for tournament in fixture(await sql_get_visible_tournaments(session, []))
+    ] == ["empty", "main"]

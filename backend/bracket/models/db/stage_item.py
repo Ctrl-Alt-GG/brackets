@@ -1,24 +1,13 @@
-from enum import auto
-from typing import Any
+from typing import Self
 
 from heliclockter import datetime_utc
 from pydantic import Field, model_validator
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInputCreateBody
+from bracket.models.enums import StageType
 from bracket.utils.id_types import RankingId, StageId, StageItemId
 from bracket.utils.pydantic import Name
-from bracket.utils.types import EnumAutoStr
-
-
-class StageType(EnumAutoStr):
-    ROUND_ROBIN = auto()
-    SINGLE_ELIMINATION = auto()
-    SWISS = auto()
-
-    @property
-    def supports_dynamic_number_of_rounds(self) -> bool:
-        return self in [StageType.SWISS]
 
 
 class StageItemInsertable(BaseModelORM):
@@ -27,7 +16,8 @@ class StageItemInsertable(BaseModelORM):
     created: datetime_utc
     type: StageType
     team_count: int = Field(ge=2, le=64)
-    ranking_id: RankingId | None = None
+    # The tournament's ranking whose rules decide the stage item's standings.
+    ranking_id: RankingId
 
 
 class StageItem(StageItemInsertable):
@@ -47,10 +37,11 @@ class StageItemCreateBody(BaseModelORM):
     name: Name | None = None
     type: StageType
     team_count: int = Field(ge=2, le=64)
+    # Without one, the stage item uses the tournament's first ranking.
     ranking_id: RankingId | None = None
 
     @model_validator(mode="after")
-    def team_count_fits_type(self) -> "StageItemCreateBody":
+    def team_count_fits_type(self) -> Self:
         if (
             self.type is StageType.SINGLE_ELIMINATION
             and self.team_count not in SINGLE_ELIMINATION_TEAM_COUNTS
@@ -60,23 +51,14 @@ class StageItemCreateBody(BaseModelORM):
         return self
 
     def get_name_or_default_name(self) -> str:
-        return (
-            self.name if self.name is not None else str(self.type.value).replace("_", " ").title()
-        )
+        return self.name if self.name is not None else self.type.display_label.title()
 
 
 class StageItemWithInputsCreate(StageItemCreateBody):
     inputs: list[StageItemInputCreateBody]
 
-    def get_name_or_default_name(self) -> str:
-        return (
-            self.name if self.name is not None else str(self.type.value).replace("_", " ").title()
-        )
-
-    @model_validator(mode="before")
-    def handle_inputs_length(cls, values: Any) -> Any:
-        if ("inputs" in values and "team_count" in values) and (
-            len(values["inputs"]) != values["team_count"]
-        ):
+    @model_validator(mode="after")
+    def inputs_fill_every_slot(self) -> Self:
+        if len(self.inputs) != self.team_count:
             raise ValueError("team_count doesn't match length of inputs")
-        return values
+        return self

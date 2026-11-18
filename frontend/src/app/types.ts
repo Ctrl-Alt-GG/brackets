@@ -24,7 +24,12 @@ declare global {
 }
 
 /** Who is signed in. The session itself is an HttpOnly cookie, which the page can't read. */
-export type Session = Pick<OpenApi.Token, 'name' | 'user_id'> | null;
+export type Session =
+  | (Pick<OpenApi.Token, 'name' | 'user_id'> & {
+      /** When this browser signed in, which tells its requests apart from an earlier session's. */
+      started?: number;
+    })
+  | null;
 
 export type TournamentSection =
   // The workspace, where organizers run the tournament.
@@ -45,22 +50,13 @@ export type TournamentSection =
   | 'dashboard-present-schedule'
   | 'dashboard-present-standings';
 
-export type TournamentBundle = {
+/** Everything a tournament page shows. The Details pages have no slot choices or previews. */
+export type TournamentBundle = OpenApi.TournamentDetails & {
   canManage: boolean;
-  tournament: OpenApi.Tournament;
-  stages: OpenApi.StageWithStageItems[];
-  players: OpenApi.Player[];
-  teams: OpenApi.FullTeamWithPlayers[];
-  rankings: OpenApi.Ranking[];
-  /** The ranked inputs of every stage item by stage item id, best first. */
-  standings: Record<string, OpenApi.StageItemInputStanding[]>;
-  availableInputs: Record<
-    string,
-    Array<OpenApi.StageItemInputOptionFinal | OpenApi.StageItemInputOptionTentative>
-  >;
-  nextStageRankings: Record<string, OpenApi.StageItemInputUpdate[]>;
-  /** Why the stage editor's slot options couldn't be loaded, when they couldn't. */
-  managementError: string | null;
+  /** The teams and places that a stage's slots can take, by stage id. */
+  availableInputs: OpenApi.TournamentWorkspace['available_inputs'];
+  /** Who would take each slot of the next stage if it started now, by stage item id. */
+  nextStageRankings: OpenApi.TournamentWorkspace['next_stage_rankings'];
 };
 
 export type FlattenedMatch = {

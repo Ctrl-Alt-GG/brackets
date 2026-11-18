@@ -5,7 +5,7 @@ import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
 import { BracketViewer } from '../components/bracket-viewer';
 import { teamPath, useTournamentContext } from '../tournament-context';
-import { hasBracketView, hasTeam, isBracket, stageItemName, stageTypeName } from '../utils';
+import { hasBracketView, hasTeam, isBracket, stageItemName, stageTypeName } from '../matches';
 import { Surface, SurfaceHeading } from '../ui';
 
 export function BracketSection({

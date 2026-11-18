@@ -1,26 +1,28 @@
 import math
 from collections import defaultdict
 from decimal import Decimal
+from operator import attrgetter
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from bracket.logic.ranking.statistics import START_ELO, D, K, PlayerStatistics
+from bracket.logic.ranking.elo import K, expected_result
 from bracket.models.db.match import MatchWithDetailsDefinitive, is_played
 from bracket.models.db.player import Player
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.models.db.team import FullTeamWithPlayers
-from bracket.models.db.util import StageWithStageItems
+from bracket.models.results import START_ELO, ResultTotals
 from bracket.sql.players import get_all_players_in_tournament
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.teams import get_teams_with_members
 from bracket.utils.id_types import PlayerId, TournamentId
-from bracket.utils.pagination import PaginationPlayers
+from bracket.utils.pagination import ParticipantPagination
 
 
 def determine_player_statistics(
     stages: list[StageWithStageItems], teams: list[FullTeamWithPlayers]
-) -> dict[PlayerId, PlayerStatistics]:
+) -> dict[PlayerId, ResultTotals]:
     """
     Replay every played match of the tournament in schedule order and total each player's results.
 
@@ -31,7 +33,7 @@ def determine_player_statistics(
     """
     player_ids_per_team = {team.id: team.player_ids for team in teams}
     ratings: defaultdict[PlayerId, float] = defaultdict(lambda: float(START_ELO))
-    statistics: defaultdict[PlayerId, PlayerStatistics] = defaultdict(PlayerStatistics)
+    statistics: defaultdict[PlayerId, ResultTotals] = defaultdict(ResultTotals)
 
     matches = sorted(
         (
@@ -68,8 +70,7 @@ def determine_player_statistics(
 
         for index, player_ids in enumerate(team_player_ids):
             score, opponent_score = scores[index], scores[1 - index]
-            rating_diff = team_ratings[1 - index] - team_ratings[index]
-            expected_result = 1.0 / (1.0 + math.pow(10.0, rating_diff / D))
+            expected = expected_result(team_ratings[index], team_ratings[1 - index])
             result = (
                 Decimal(1)
                 if score > opponent_score
@@ -79,7 +80,7 @@ def determine_player_statistics(
             )
 
             for player_id in player_ids:
-                ratings[player_id] += K * (float(result) - expected_result)
+                ratings[player_id] += K * (float(result) - expected)
                 player_statistics = statistics[player_id]
                 player_statistics.swiss_score += result
                 if score > opponent_score:
@@ -101,7 +102,7 @@ async def get_player_statistics(
     *,
     stages: list[StageWithStageItems] | None = None,
     teams: list[FullTeamWithPlayers] | None = None,
-) -> dict[PlayerId, PlayerStatistics]:
+) -> dict[PlayerId, ResultTotals]:
     """`stages` (without draft rounds) and `teams` can be passed by a caller that has them."""
     if stages is None:
         stages = await get_full_tournament_details(session, tournament_id, no_draft_rounds=True)
@@ -112,12 +113,12 @@ async def get_player_statistics(
     return await run_in_threadpool(determine_player_statistics, stages, teams)
 
 
-def with_statistics(player: Player, statistics: dict[PlayerId, PlayerStatistics]) -> Player:
+def with_statistics(player: Player, statistics: dict[PlayerId, ResultTotals]) -> Player:
     """
     The player with their results. The result columns of the players table are never updated,
     so they must not be shown.
     """
-    return player.model_copy(update=statistics.get(player.id, PlayerStatistics()).model_dump())
+    return player.model_copy(update=statistics.get(player.id, ResultTotals()).model_dump())
 
 
 async def get_players_with_statistics(
@@ -125,16 +126,28 @@ async def get_players_with_statistics(
     tournament_id: TournamentId,
     *,
     not_in_team: bool = False,
-    pagination: PaginationPlayers | None = None,
+    pagination: ParticipantPagination | None = None,
     stages: list[StageWithStageItems] | None = None,
     teams: list[FullTeamWithPlayers] | None = None,
 ) -> list[Player]:
     """
     The players with their results. Those follow from the match results, so they are worked out
-    on every request instead of being read from the players table.
+    on every request instead of being read from the players table, and sorting by them happens
+    here, before the page is cut.
     """
     statistics = await get_player_statistics(session, tournament_id, stages=stages, teams=teams)
-    players = await get_all_players_in_tournament(
-        session, tournament_id, not_in_team=not_in_team, pagination=pagination
-    )
-    return [with_statistics(player, statistics) for player in players]
+    if pagination is None or not pagination.sorts_by_results:
+        players = await get_all_players_in_tournament(
+            session, tournament_id, not_in_team=not_in_team, pagination=pagination
+        )
+        return [with_statistics(player, statistics) for player in players]
+
+    players = [
+        with_statistics(player, statistics)
+        for player in await get_all_players_in_tournament(
+            session, tournament_id, not_in_team=not_in_team
+        )
+    ]
+    players.sort(key=attrgetter("id"))
+    players.sort(key=attrgetter(pagination.sort_by), reverse=pagination.sort_direction == "desc")
+    return players[pagination.offset : pagination.offset + pagination.limit]

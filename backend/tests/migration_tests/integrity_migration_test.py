@@ -100,3 +100,22 @@ async def test_upgrade_removes_float_artifacts_without_rounding_meaningful_preci
         )
         await connection.run_sync(lambda conn: command.upgrade(get_alembic_config(conn), "head"))
         assert await connection.scalar(select(orm.Ranking.win_points)) == Decimal("0.300000")
+
+
+async def test_upgrade_gives_matches_without_timings_the_planned_ones(
+    migration_engine: AsyncEngine,
+) -> None:
+    await restore_baseline(migration_engine)
+    async with migration_engine.begin() as connection:
+        await connection.exec_driver_sql(
+            "UPDATE stages SET custom_duration_minutes = 25 WHERE id = 1"
+        )
+        await connection.exec_driver_sql(
+            "UPDATE matches SET duration_minutes = NULL, margin_minutes = NULL WHERE id = 1"
+        )
+        await connection.run_sync(lambda conn: command.upgrade(get_alembic_config(conn), "head"))
+        timings = await connection.execute(
+            select(orm.Match.duration_minutes, orm.Match.margin_minutes)
+        )
+        # The stage's custom duration, and the tournament's default margin.
+        assert timings.one() == (25, 5)

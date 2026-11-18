@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.ranking.elimination import get_inputs_to_update_in_subsequent_elimination_rounds
+from bracket.logic.tournament_graph import TournamentGraph
 from bracket.models.db.match import MatchBody, MatchWithDetails, MatchWithDetailsDefinitive
-from bracket.models.db.util import StageWithStageItems
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME
+from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.utils.id_types import RoundId, StageId, TournamentId
+from tests.dummy_records import DUMMY_MOCK_TIME
 from tests.unit_tests.mocks import (
     get_2_definitive_and_2_tentative_matches_mock,
     get_2_definitive_matches_mock,
@@ -85,13 +86,13 @@ def conflict_tree() -> StageWithStageItems:
 async def test_conflict_updates_keep_the_loaded_tree_current() -> None:
     tree = conflict_tree()
     session = AsyncMock(spec=AsyncSession)
-    await handle_conflicts(session, [tree])
+    await handle_conflicts(session, TournamentGraph([tree]))
     matches = tree.stage_items[0].rounds[0].matches
     assert [(m.stage_item_input1_conflict, m.stage_item_input2_conflict) for m in matches] == [
         (True, False),
         (True, False),
     ]
-    await handle_conflicts(session, [tree])
+    await handle_conflicts(session, TournamentGraph([tree]))
     session.execute.assert_awaited_once()
 
 
@@ -100,7 +101,7 @@ async def test_failed_conflict_updates_do_not_change_the_loaded_tree() -> None:
     session = AsyncMock(spec=AsyncSession)
     session.execute.side_effect = RuntimeError("write failed")
     with pytest.raises(RuntimeError, match="write failed"):
-        await handle_conflicts(session, [tree])
+        await handle_conflicts(session, TournamentGraph([tree]))
     assert all(
         not match.stage_item_input1_conflict and not match.stage_item_input2_conflict
         for match in tree.stage_items[0].rounds[0].matches

@@ -1,13 +1,6 @@
-from enum import auto
-
 from bracket.models.db.shared import BaseModelORM
+from bracket.models.enums import UserXClubRelation
 from bracket.utils.id_types import ClubId, UserId, UserXClubId
-from bracket.utils.types import EnumAutoStr
-
-
-class UserXClubRelation(EnumAutoStr):
-    OWNER = auto()
-    COLLABORATOR = auto()
 
 
 class UserXClubInsertable(BaseModelORM):

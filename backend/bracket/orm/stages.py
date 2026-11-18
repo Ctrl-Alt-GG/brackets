@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from bracket.models.db.stage_item import StageType
+from bracket.models.enums import StageType
 from bracket.orm.base import Base
 from bracket.orm.types import StageTypeEnum
 
@@ -49,10 +49,6 @@ class StageItem(Base):
     )
     rounds: Mapped[list[Round]] = relationship(order_by="Round.id", lazy="raise", viewonly=True)
     ranking: Mapped[Ranking] = relationship(lazy="raise", viewonly=True)
-
-    @property
-    def type_name(self) -> str:
-        return self.type.value.lower().capitalize().replace("_", " ")
 
     __table_args__ = (
         UniqueConstraint("id", "tournament_id", name="uq_stage_items_id_tournament_id"),

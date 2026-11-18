@@ -1,17 +1,17 @@
 from fastapi import HTTPException
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket import orm
 from bracket.models.db.stage_item import StageItem, StageItemCreateBody, StageItemWithInputsCreate
 from bracket.models.db.stage_item_inputs import StageItemInputCreateBodyEmpty
-from bracket.models.db.util import StageItemWithRounds
+from bracket.models.db.stage_tree import StageItemWithRounds
 from bracket.sql.matches import sql_delete_matches_for_stage_item_id
 from bracket.sql.rankings import get_default_rankings_in_tournament
 from bracket.sql.stage_item_inputs import sql_create_stage_item_inputs, sql_delete_stage_item_inputs
 from bracket.sql.stages import get_full_tournament_details
-from bracket.utils.id_types import StageItemId, TournamentId
+from bracket.utils.id_types import RankingId, StageItemId, TournamentId
 
 
 async def _create_stage_item(
@@ -68,6 +68,17 @@ async def sql_update_stage_item_name(
     if entity is not None:
         entity.name = name
         await session.flush()
+
+
+async def get_stage_item_ids_by_ranking_id(
+    session: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
+) -> list[StageItemId]:
+    ids = await session.scalars(
+        select(orm.StageItem.id).where(
+            orm.StageItem.ranking_id == ranking_id, orm.StageItem.tournament_id == tournament_id
+        )
+    )
+    return [StageItemId(id_) for id_ in ids]
 
 
 async def get_stage_item(

@@ -5,12 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import (
     StageItemInputInsertable,
 )
+from bracket.models.enums import StageType
 from bracket.sql.matches import match_without_details
-from bracket.utils.dummy_records import (
+from bracket.utils.types import assert_some
+from tests.dummy_records import (
     DUMMY_MATCH1,
     DUMMY_RANKING1,
     DUMMY_ROUND1,
@@ -21,7 +22,6 @@ from bracket.utils.dummy_records import (
     DUMMY_TEAM3,
     DUMMY_TOURNAMENT,
 )
-from bracket.utils.types import assert_some
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import (

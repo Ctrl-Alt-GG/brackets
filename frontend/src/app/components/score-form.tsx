@@ -7,7 +7,7 @@ import { useSavedForm } from '../saved-form';
 import * as OpenApi from '../../openapi';
 import { updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
 import { zMatchBody } from '../../openapi/zod.gen';
-import { hasTeam } from '../utils';
+import { hasTeam } from '../matches';
 
 type Match = OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive;
 

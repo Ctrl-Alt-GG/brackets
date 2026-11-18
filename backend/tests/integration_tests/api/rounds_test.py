@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
 from bracket.models.db.round import Round
-from bracket.models.db.stage_item import StageType
 from bracket.models.db.stage_item_inputs import StageItemInputInsertable
+from bracket.models.enums import StageType
 from bracket.sql.stage_items import get_stage_item
-from bracket.utils.dummy_records import (
+from tests.dummy_records import (
     DUMMY_ROUND1,
     DUMMY_STAGE1,
     DUMMY_STAGE_ITEM1,

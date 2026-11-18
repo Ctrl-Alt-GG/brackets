@@ -1,7 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { Navigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
@@ -19,34 +18,38 @@ import {
 import { zClubCreateBody, zClubMemberCreateBody, zClubUpdateBody } from '../../openapi/zod.gen';
 import { confirm } from '../confirm';
 import { useSession } from '../hooks';
+import { useCreateForm } from '../create-form';
 import { useSavedForm } from '../saved-form';
 import { ErrorState, Field, LoadingState, PageShell, Surface, SurfaceHeading } from '../ui';
-import { formatDateTime, getErrorMessage, loginPath } from '../utils';
+import { getErrorMessage } from '../errors';
+import { formatDateTime } from '../format';
+import { loginPath } from '../urls';
 
 function NewClubForm() {
-  const form = useForm({ defaultValues: { name: '' }, resolver: zodResolver(zClubCreateBody) });
+  const form = useCreateForm({
+    defaultValues: { name: '' },
+    resolver: zodResolver(zClubCreateBody),
+  });
   const create = useMutation({
     ...createNewClubApiClubsPostMutation(),
     meta: { successMessage: 'Event created.' },
   });
 
   return (
-    <form
-      onSubmit={form.handleSubmit((body) =>
-        create.mutate({ body }, { onSuccess: () => form.reset() }),
-      )}
-    >
-      <Field error={form.formState.errors.name?.message} label="Event name">
-        <input
-          className="input w-full"
-          placeholder="Ctrl-Alt-GG"
-          required
-          {...form.register('name')}
-        />
-      </Field>
-      <button className="btn btn-primary mt-4" disabled={create.isPending} type="submit">
-        {create.isPending ? 'Creating…' : 'Create event'}
-      </button>
+    <form onSubmit={form.submitWith((body) => create.mutateAsync({ body }))}>
+      <fieldset className="contents" disabled={form.locked}>
+        <Field error={form.formState.errors.name?.message} label="Event name">
+          <input
+            className="input w-full"
+            placeholder="Ctrl-Alt-GG"
+            required
+            {...form.register('name')}
+          />
+        </Field>
+        <button className="btn btn-primary mt-4" type="submit">
+          {create.isPending ? 'Creating…' : 'Create event'}
+        </button>
+      </fieldset>
     </form>
   );
 }
@@ -115,7 +118,7 @@ function ClubMembers({
   members: OpenApi.ClubMember[];
   userId: number;
 }) {
-  const form = useForm({
+  const form = useCreateForm({
     defaultValues: { email: '' },
     resolver: zodResolver(zClubMemberCreateBody),
   });
@@ -222,28 +225,28 @@ function ClubMembers({
       {isOwner ? (
         <form
           className="flex flex-col gap-3 md:flex-row md:items-end"
-          onSubmit={form.handleSubmit((body) =>
-            add.mutate({ body, path }, { onSuccess: () => form.reset() }),
-          )}
+          onSubmit={form.submitWith((body) => add.mutateAsync({ body, path }))}
         >
-          <Field
-            className="flex-1"
-            error={form.formState.errors.email?.message}
-            hint="They need an account on this site first."
-            label="Add an organizer by email"
-          >
-            <input
-              autoComplete="off"
-              className="input w-full"
-              placeholder="organizer@example.org"
-              required
-              type="email"
-              {...form.register('email')}
-            />
-          </Field>
-          <button className="btn" disabled={add.isPending} type="submit">
-            {add.isPending ? 'Adding…' : 'Add organizer'}
-          </button>
+          <fieldset className="contents" disabled={form.locked}>
+            <Field
+              className="flex-1"
+              error={form.formState.errors.email?.message}
+              hint="They need an account on this site first."
+              label="Add an organizer by email"
+            >
+              <input
+                autoComplete="off"
+                className="input w-full"
+                placeholder="organizer@example.org"
+                required
+                type="email"
+                {...form.register('email')}
+              />
+            </Field>
+            <button className="btn" type="submit">
+              {add.isPending ? 'Adding…' : 'Add organizer'}
+            </button>
+          </fieldset>
         </form>
       ) : null}
     </div>

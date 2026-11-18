@@ -1,15 +1,18 @@
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased, joinedload
 
 from bracket import orm
 from bracket.models.db.match import Match, MatchBody, MatchCreateBody, MatchInsertable, MatchTiming
+from bracket.models.results import TeamMatchResult
 from bracket.utils.id_types import (
     MatchId,
     RoundId,
     StageItemId,
     StageItemInputId,
+    TeamId,
     TournamentId,
 )
 
@@ -21,8 +24,78 @@ def match_without_details(entity: orm.Match) -> Match:
     )
 
 
+async def get_match_with_slots(
+    session: AsyncSession, tournament_id: TournamentId, match_id: MatchId
+) -> Match | None:
+    entity = await session.scalar(
+        select(orm.Match)
+        .where(orm.Match.id == match_id, orm.Match.tournament_id == tournament_id)
+        .options(
+            joinedload(orm.Match.stage_item_input1).joinedload(orm.StageItemInput.team),
+            joinedload(orm.Match.stage_item_input2).joinedload(orm.StageItemInput.team),
+        )
+        .execution_options(populate_existing=True)
+    )
+    return Match.model_validate(entity) if entity is not None else None
+
+
+async def get_played_team_results(
+    session: AsyncSession, tournament_id: TournamentId
+) -> list[TeamMatchResult]:
+    """
+    The published matches with a result between two teams, in the order they were scheduled.
+    Both slots belong to the match's stage item, so a team counts there only.
+    """
+    input1, input2 = aliased(orm.StageItemInput), aliased(orm.StageItemInput)
+    rows = await session.execute(
+        select(
+            input1.team_id,
+            input2.team_id,
+            orm.Match.stage_item_input1_score,
+            orm.Match.stage_item_input2_score,
+        )
+        .select_from(orm.Match)
+        .join(orm.Round, orm.Round.id == orm.Match.round_id)
+        .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
+        .join(
+            input1,
+            (input1.id == orm.Match.stage_item_input1_id)
+            & (input1.stage_item_id == orm.StageItem.id),
+        )
+        .join(
+            input2,
+            (input2.id == orm.Match.stage_item_input2_id)
+            & (input2.stage_item_id == orm.StageItem.id),
+        )
+        .where(
+            orm.Match.tournament_id == tournament_id,
+            orm.Round.is_draft.is_(False),
+            input1.team_id.is_not(None),
+            input2.team_id.is_not(None),
+            input1.team_id != input2.team_id,
+            or_(
+                orm.Match.stage_item_input1_score != 0,
+                orm.Match.stage_item_input2_score != 0,
+                orm.Match.scoreless_result,
+            ),
+        )
+        .order_by(orm.Match.start_time.asc().nulls_last(), orm.Round.id, orm.Match.id)
+    )
+    return [
+        TeamMatchResult(TeamId(team1), TeamId(team2), score1, score2)
+        for team1, team2, score1, score2 in rows
+        # The query only selects slots with teams.
+        if team1 is not None and team2 is not None
+    ]
+
+
 async def sql_delete_match(session: AsyncSession, match_id: MatchId) -> None:
     await session.execute(delete(orm.Match).where(orm.Match.id == match_id))
+
+
+async def sql_delete_matches(session: AsyncSession, match_ids: Sequence[MatchId]) -> None:
+    if match_ids:
+        await session.execute(delete(orm.Match).where(orm.Match.id.in_(match_ids)))
 
 
 async def sql_delete_matches_for_stage_item_id(
@@ -127,6 +200,24 @@ async def sql_update_match_timings(session: AsyncSession, timings: Sequence[Matc
     )
 
 
+async def sql_update_match_conflicts(
+    session: AsyncSession, conflicts: Sequence[tuple[MatchId, bool, bool]]
+) -> None:
+    if not conflicts:
+        return
+    await session.execute(
+        update(orm.Match),
+        [
+            {
+                "id": match_id,
+                "stage_item_input1_conflict": conflict1,
+                "stage_item_input2_conflict": conflict2,
+            }
+            for match_id, conflict1, conflict2 in conflicts
+        ],
+    )
+
+
 async def sql_get_match(session: AsyncSession, match_id: MatchId) -> Match:
     entity = await session.get(orm.Match, match_id, populate_existing=True)
     if entity is None:
@@ -137,14 +228,13 @@ async def sql_get_match(session: AsyncSession, match_id: MatchId) -> Match:
 async def clear_results_for_matches_in_stage_item(
     session: AsyncSession, tournament_id: TournamentId, stage_item_id: StageItemId
 ) -> None:
-    round_ids = (
-        select(orm.Round.id)
-        .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
-        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
-        .where(orm.StageItem.id == stage_item_id, orm.Stage.tournament_id == tournament_id)
-    )
     await session.execute(
         update(orm.Match)
-        .where(orm.Match.round_id.in_(round_ids))
+        .where(
+            orm.Match.tournament_id == tournament_id,
+            orm.Match.round_id.in_(
+                select(orm.Round.id).where(orm.Round.stage_item_id == stage_item_id)
+            ),
+        )
         .values(stage_item_input1_score=0, stage_item_input2_score=0, scoreless_result=False)
     )

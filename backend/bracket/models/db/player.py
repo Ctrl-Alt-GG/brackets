@@ -13,6 +13,9 @@ class PlayerInsertable(BaseModelORM):
     name: str
     created: datetime_utc
     tournament_id: TournamentId
+    # The player's results over the tournament. Repositories read the unmaintained columns of the
+    # players table here; answers that show results replace them with the replayed statistics
+    # (`bracket.logic.ranking.players`).
     elo_score: Decimal = Decimal("0.0")
     swiss_score: Decimal = Decimal("0.0")
     wins: int = 0
@@ -22,9 +25,6 @@ class PlayerInsertable(BaseModelORM):
 
 class Player(PlayerInsertable):
     id: PlayerId
-
-    def __hash__(self) -> int:
-        return self.id
 
 
 class PlayerBody(BaseModelORM):
@@ -53,13 +53,3 @@ class PlayerMultiBody(BaseModelORM):
     @property
     def player_names(self) -> list[str]:
         return parse_player_names(self.names)
-
-
-class PlayerToInsert(PlayerBody):
-    created: datetime_utc
-    tournament_id: TournamentId
-    elo_score: Decimal = Decimal("1200.0")
-    swiss_score: Decimal
-    wins: int = 0
-    draws: int = 0
-    losses: int = 0

@@ -1,58 +1,52 @@
-from __future__ import annotations
+"""How much an account may create."""
 
-from collections.abc import Sized
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from enum import Enum
 
 from fastapi import HTTPException
-from pydantic import BaseModel
 from starlette import status
 
-if TYPE_CHECKING:
-    from bracket.models.db.user import UserBase
+from bracket.models.db.user import UserBase
+from bracket.models.enums import UserAccountType
 
 
-class Subscription(BaseModel):
-    max_teams: int
-    max_players: int
-    max_clubs: int
-    max_tournaments: int
-    max_stages: int
-    max_stage_items: int
-    max_rounds: int
-    max_rankings: int
+class Limit(Enum):
+    """What an account can create a limited number of, in the organizer's words."""
+
+    TEAMS = "teams in a tournament"
+    PLAYERS = "players in a tournament"
+    # Clubs are called events in the frontend.
+    CLUBS = "events"
+    TOURNAMENTS = "tournaments in an event"
+    STAGES = "stages in a tournament"
+    STAGE_ITEMS = "stage items in a tournament"
+    # Every round of the tournament counts: those a format creates with its stage item as well as
+    # the Swiss rounds an organizer adds one at a time.
+    ROUNDS = "rounds in a tournament"
+    RANKINGS = "rankings in a tournament"
 
 
-regular_subscription = Subscription(
-    max_teams=128,
-    max_players=256,
-    max_clubs=32,
-    max_tournaments=64,
-    max_stages=16,
-    max_stage_items=64,
-    max_rounds=64,
-    max_rankings=16,
-)
-
-subscription_lookup = {"REGULAR": regular_subscription}
-
-# What each limit counts, in the organizer's words. `clubs` are presented as "events" in the UI.
-limit_labels = {
-    "max_teams": "teams in a tournament",
-    "max_players": "players in a tournament",
-    "max_clubs": "events",
-    "max_tournaments": "tournaments in an event",
-    "max_stages": "stages in a tournament",
-    "max_stage_items": "stage items in a tournament",
-    "max_rounds": "rounds in a tournament",
-    "max_rankings": "rankings in a tournament",
+LIMITS: Mapping[UserAccountType, Mapping[Limit, int]] = {
+    UserAccountType.REGULAR: {
+        Limit.TEAMS: 128,
+        Limit.PLAYERS: 256,
+        Limit.CLUBS: 32,
+        Limit.TOURNAMENTS: 64,
+        Limit.STAGES: 16,
+        Limit.STAGE_ITEMS: 64,
+        Limit.ROUNDS: 64,
+        Limit.RANKINGS: 16,
+    }
 }
 
 
-def check_requirement(array: Sized, user: UserBase, attribute: str, additions: int = 1) -> None:
-    subscription = subscription_lookup[user.account_type.value]
-    constraint: int = getattr(subscription, attribute)
-    if len(array) + additions > constraint:
+def check_requirement(
+    limit: Limit, existing_count: int, user: UserBase, additions: int = 1
+) -> None:
+    """Refuse to create `additions` more when the account already has `existing_count`."""
+    maximum = LIMITS[user.account_type][limit]
+    if additions > 0 and existing_count + additions > maximum:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"That would be more than the {constraint} {limit_labels[attribute]} that are allowed.",
+            f"That would be more than the {maximum} {limit.value} that are allowed.",
         )

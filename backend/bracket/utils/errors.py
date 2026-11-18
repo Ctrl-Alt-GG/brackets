@@ -58,6 +58,23 @@ foreign_key_violation_error_lookup = {
 }
 
 
+def unauthorized(detail: str = "Could not validate credentials") -> HTTPException:
+    """For missing or invalid credentials. The frontend signs out when it gets this."""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def forbidden(detail: str) -> HTTPException:
+    """
+    For a valid session that may not do this. The frontend signs out on 401, which would end a
+    session that is fine.
+    """
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
 def _postgres_error(exc: IntegrityError) -> BaseException | None:
     """The asyncpg error that SQLAlchemy wraps, which names the violated constraint."""
     return exc.orig.__cause__ if exc.orig is not None else None

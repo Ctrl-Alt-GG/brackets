@@ -7,17 +7,11 @@ import * as OpenApi from '../../openapi';
 import { MatchCard } from '../components/match-card';
 import { teamPath, useTournamentContext } from '../tournament-context';
 import type { FlattenedMatch, TournamentBundle } from '../types';
-import {
-  involvesTeam,
-  isBracket,
-  isScored,
-  nextMatch,
-  pointsPhrase,
-  sortTeamsByName,
-  stageItemName,
-  stageItemStandings,
-  teamLogoUrl,
-} from '../utils';
+import { pointsPhrase } from '../format';
+import { involvesTeam, isBracket, isScored, stageItemName, stageItemStandings } from '../matches';
+import { nextMatch } from '../tournament-rules';
+import { teamLogoUrl } from '../urls';
+import { sortTeamsByName } from '../utils';
 import { EmptyState, SectionLabel, Surface, SurfaceHeading } from '../ui';
 import { stageItemPath } from './tournament-overview';
 

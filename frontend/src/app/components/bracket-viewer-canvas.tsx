@@ -1,20 +1,29 @@
 import type { TFunction } from 'i18next';
-import { useEffect, useEffectEvent, useId, useMemo, useRef, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import 'brackets-viewer/dist/brackets-viewer.min.js';
 import 'brackets-viewer/dist/brackets-viewer.min.css';
 import './bracket-viewer-canvas.css';
 
-import { roundLabel, type BracketViewerData } from '../bracket-adapter';
+import { roundLabel, type BracketViewerData, type RoundNameInfo } from '../bracket-adapter';
+import { drawBracket } from './bracket-drawing';
 
 const PARTICIPANT_SELECTOR = '.participant[data-participant-id]';
 
 /**
  * The labels brackets-viewer writes itself: above every match, and for a slot of the first round
  * that is still open. It translates them with an i18next of its own, which follows the browser's
- * language rather than the page's, and falls back to its English. Its English, and its French,
- * the only other language it has, get the page's labels, so they show whatever it detects.
+ * language rather than the page's, so `drawBracket` gives the page's labels to every language it
+ * has.
  */
 function viewerLabels(t: TFunction) {
   // The viewer fills in its own placeholders, such as {{matchNumber}}.
@@ -56,6 +65,9 @@ export function BracketViewerCanvas({
   // bracket and loses where the visitor had scrolled to, so it only happens when this bracket's
   // own content changes.
   const serialized = useMemo(() => JSON.stringify(data), [data]);
+  // The bracket that couldn't be drawn. Newer data, or trying again, draws again.
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+  const failed = failedFor === serialized;
 
   // Only teams get the pointer and underline, so an undecided slot never looks clickable. They
   // are links in all but markup, so they can be reached and opened from the keyboard too.
@@ -80,50 +92,70 @@ export function BracketViewerCanvas({
   };
 
   useEffect(() => {
-    const viewer = window.bracketsViewer;
     const container = containerRef.current;
-    if (!viewer || !container) return;
+    if (!container || failed) return;
 
-    const labels = viewerLabels(t);
-    void Promise.all([viewer.addLocale('en', labels), viewer.addLocale('fr', labels)])
-      .then(() =>
-        viewer.render(JSON.parse(serialized) as BracketViewerData, {
-          clear: true,
-          customRoundName: (info) => roundLabel(info, t),
-          // Only team names can be clicked, so nothing else reacts to the pointer.
-          highlightParticipantOnHover: false,
-          selector: `#${containerId}`,
-          // The library would rank by 3 points a win, but the Standings page has the real
-          // ranking, such as the rating in Swiss.
-          showRankingTable: false,
-        }),
-      )
-      .then(() => markTeams(container));
+    let wanted = true;
+    const config = {
+      clear: true,
+      customRoundName: (info: RoundNameInfo) => roundLabel(info, t),
+      // Only team names can be clicked, so nothing else reacts to the pointer.
+      highlightParticipantOnHover: false,
+      selector: `#${containerId}`,
+      // The library would rank by 3 points a win, but the Standings page has the real ranking,
+      // such as the rating in Swiss.
+      showRankingTable: false,
+    };
+    const draw = async () => {
+      try {
+        const bracket = JSON.parse(serialized) as BracketViewerData;
+        if ((await drawBracket(bracket, viewerLabels(t), config, () => wanted)) && wanted) {
+          markTeams(container);
+        }
+      } catch (error) {
+        if (!wanted) return;
+        setFailedFor(serialized);
+        // Logged like any other error that escapes the page.
+        reportError(error);
+      }
+    };
+    void draw();
 
     return () => {
+      wanted = false;
       container.innerHTML = '';
     };
     // `t` changes with the language, which the labels follow.
-  }, [containerId, serialized, t]);
+  }, [containerId, failed, serialized, t]);
 
   return (
-    <div
-      className="cag-bracket overflow-x-auto pb-2"
-      // A CSS string, for the label of an undecided slot.
-      style={{ '--undecided-label': JSON.stringify(t('common.undecided')) } as CSSProperties}
-    >
-      {/* The library draws the bracket in here. The team names in it are the links; this only
-          listens for them. */}
+    <>
+      {failed ? (
+        <div className="alert alert-soft alert-warning flex-wrap" role="alert">
+          <span>{t('bracket.drawFailed')}</span>
+          <button className="btn btn-sm" onClick={() => setFailedFor(null)} type="button">
+            {t('common.retry')}
+          </button>
+        </div>
+      ) : null}
       <div
-        className="brackets-viewer"
-        id={containerId}
-        onClick={(event) => openTeam(event.target)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && openTeam(event.target)) event.preventDefault();
-        }}
-        ref={containerRef}
-        role="presentation"
-      />
-    </div>
+        className="cag-bracket overflow-x-auto pb-2"
+        // A CSS string, for the label of an undecided slot.
+        style={{ '--undecided-label': JSON.stringify(t('common.undecided')) } as CSSProperties}
+      >
+        {/* The library draws the bracket in here. The team names in it are the links; this only
+          listens for them. */}
+        <div
+          className="brackets-viewer"
+          id={containerId}
+          onClick={(event) => openTeam(event.target)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && openTeam(event.target)) event.preventDefault();
+          }}
+          ref={containerRef}
+          role="presentation"
+        />
+      </div>
+    </>
   );
 }

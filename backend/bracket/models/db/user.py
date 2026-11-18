@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from heliclockter import datetime_utc
-from pydantic import BaseModel, EmailStr, StringConstraints, field_validator, model_validator
+from pydantic import EmailStr, StringConstraints, field_validator, model_validator
 
-from bracket.models.db.account import UserAccountType
-from bracket.models.db.shared import BaseModelORM
+from bracket.models.db.shared import ApiModel, BaseModelORM
+from bracket.models.enums import UserAccountType
 from bracket.utils.id_types import UserId
 from bracket.utils.pydantic import Name
 from bracket.utils.security import (
@@ -15,9 +15,6 @@ from bracket.utils.security import (
     normalize_email,
     validate_password_strength,
 )
-
-if TYPE_CHECKING:
-    from bracket.logic.subscriptions import Subscription
 
 
 class UserBase(BaseModelORM):
@@ -30,12 +27,6 @@ class UserBase(BaseModelORM):
     @classmethod
     def normalize_user_email(cls, value: str) -> str:
         return normalize_email(value)
-
-    @property
-    def subscription(self) -> Subscription:
-        from bracket.logic.subscriptions import subscription_lookup
-
-        return subscription_lookup[self.account_type.value]
 
 
 class UserInsertable(UserBase):
@@ -51,7 +42,7 @@ class UserPublic(UserBase):
     id: UserId
 
 
-class UserToUpdate(BaseModel):
+class UserToUpdate(ApiModel):
     email: EmailStr
     name: Name
     # Only needed to change the email, which is what the account signs in with.
@@ -63,7 +54,7 @@ class UserToUpdate(BaseModel):
         return normalize_email(value)
 
 
-class UserPasswordToUpdate(BaseModel):
+class UserPasswordToUpdate(ApiModel):
     current_password: str
     # The strength is checked by the route, which knows the user's details a password mustn't use.
     password: Annotated[
@@ -90,3 +81,13 @@ class UserToRegister(BaseModelORM):
 class UserInDB(UserBase):
     id: UserId
     password_hash: str
+
+
+class Token(ApiModel):
+    """A signed-in session."""
+
+    # Empty for the frontend, whose session is the cookie that scripts can't read.
+    access_token: str
+    token_type: str
+    user_id: UserId
+    name: str

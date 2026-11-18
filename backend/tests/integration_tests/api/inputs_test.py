@@ -3,7 +3,7 @@ from http import HTTPMethod
 import pytest
 
 from bracket.models.db.stage_item_inputs import StageItemInputInsertable
-from bracket.utils.dummy_records import (
+from tests.dummy_records import (
     DUMMY_RANKING1,
     DUMMY_STAGE1,
     DUMMY_STAGE2,

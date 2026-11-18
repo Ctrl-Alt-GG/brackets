@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "openapi-ts": "openapi-ts && oxfmt .",
-    "typecheck": "tsc",
+    "typecheck": "tsc && tsc -p tsconfig.tests.json",
     "lint": "oxlint .",
     "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "test:unit": "vitest run",
     "test:browser": "playwright test",
-    "test": "tsc && oxlint . && oxfmt --check . && vitest run"
+    "test:smoke": "playwright test --config playwright.smoke.config.ts",
+    "test:image": "playwright test --config playwright.image.config.ts",
+    "test": "tsc && tsc -p tsconfig.tests.json && oxlint . && oxfmt --check . && vitest run"
   },
   "dependencies": {
     "@fontsource-variable/outfit": "^5.3.0",

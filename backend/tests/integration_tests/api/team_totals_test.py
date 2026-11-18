@@ -1,18 +1,31 @@
 from decimal import Decimal
 from http import HTTPMethod
+from typing import Any
 
 import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket.logic.ranking.team_totals import add_team_totals
+from bracket.logic.teams import get_team_with_totals
+from bracket.logic.tournament_graph import TournamentGraph
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
+from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.teams import get_team_by_id
 from bracket.utils.id_types import RoundId, StageId, StageItemId, TeamId, TournamentId
 from bracket.utils.types import JsonDict
 from tests.integration_tests.api.flows import TournamentFlow, api_tournament
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE
 from tests.integration_tests.models import AuthContext
+
+
+async def stages_with_totals(
+    session: AsyncSession, tournament_id: TournamentId, **filters: Any
+) -> list[StageWithStageItems]:
+    """The stages as answers show them: with every team's replayed results."""
+    graph = TournamentGraph(await get_full_tournament_details(session, tournament_id, **filters))
+    await add_team_totals(session, tournament_id, graph)
+    return graph.stages
 
 
 async def team_totals(flow: TournamentFlow) -> dict[str, JsonDict]:
@@ -165,10 +178,7 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
         ordinary = await team_totals(flow)
         assert_totals(ordinary["Alpha"], wins=3, elo=1244)
         assert_totals(ordinary["Bravo"], losses=3, elo=1156)
-        single = await get_team_by_id(
-            session, TeamId(teams["Alpha"]), TournamentId(flow.id), with_totals=True
-        )
-        assert single is not None
+        single = await get_team_with_totals(session, TournamentId(flow.id), TeamId(teams["Alpha"]))
         assert_totals(single.model_dump(mode="json"), wins=3, elo=1244)
 
         query_count = 0
@@ -189,11 +199,10 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
             )
             assert query_count == 5
             query_count = 0
-            both = await get_full_tournament_details(
+            both = await stages_with_totals(
                 session,
                 TournamentId(flow.id),
                 stage_item_ids={StageItemId(group_a), StageItemId(group_b)},
-                with_team_totals=True,
             )
         finally:
             event.remove(connection, "before_cursor_execute", count_queries)
@@ -203,18 +212,13 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
         round_id = (await flow.stage_item(group_a))["rounds"][0]["id"]
         filtered_results = [
             both,
-            await get_full_tournament_details(
-                session, TournamentId(flow.id), stage_id=StageId(stage), with_team_totals=True
-            ),
-            await get_full_tournament_details(
-                session, TournamentId(flow.id), round_id=RoundId(round_id), with_team_totals=True
-            ),
-            await get_full_tournament_details(
+            await stages_with_totals(session, TournamentId(flow.id), stage_id=StageId(stage)),
+            await stages_with_totals(session, TournamentId(flow.id), round_id=RoundId(round_id)),
+            await stages_with_totals(
                 session,
                 TournamentId(flow.id),
                 stage_item_ids={StageItemId(group_a)},
                 no_draft_rounds=True,
-                with_team_totals=True,
             ),
         ]
         for stages in filtered_results:

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket import orm
 from bracket.database import engine
 from bracket.models.db.player import Player
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import assert_row_count_and_clear, inserted_player, inserted_team

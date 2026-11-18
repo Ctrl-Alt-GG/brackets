@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.models.db.club import ClubInsertable
-from bracket.models.db.user_x_club import UserXClubInsertable, UserXClubRelation
+from bracket.models.db.user_x_club import UserXClubInsertable
+from bracket.models.enums import UserXClubRelation
 from bracket.sql.clubs import get_clubs_for_user_id, sql_delete_club
-from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME
+from tests.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME
 from tests.integration_tests.api.shared import send_auth_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_club, inserted_user_x_club

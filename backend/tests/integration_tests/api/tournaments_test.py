@@ -8,16 +8,17 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
-from bracket.logic.tournaments import sql_delete_tournament_completely
-from bracket.models.db.tournament import Tournament, TournamentStatus
+from bracket.logic.tournaments import delete_tournament_completely
+from bracket.models.db.tournament import Tournament
+from bracket.models.enums import TournamentStatus
 from bracket.sql.tournaments import (
     sql_delete_tournament,
     sql_get_tournament_by_endpoint_name,
     with_progress,
 )
-from bracket.utils.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 from bracket.utils.types import assert_some
-from bracket.utils.uploads import build_upload_path
+from bracket.utils.uploads import UploadFolder, build_upload_path
+from tests.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -105,7 +106,7 @@ async def test_create_tournament(
 
     # Cleanup
     tournament = assert_some(await sql_get_tournament_by_endpoint_name(session, dashboard_endpoint))
-    await sql_delete_tournament_completely(session, tournament.id)
+    await delete_tournament_completely(session, tournament.id)
 
     # The answer is the new tournament, so that the frontend can open it.
     assert response["data"]["id"] == tournament.id
@@ -301,7 +302,7 @@ async def test_tournament_upload_and_remove_logo(
     )
 
     assert response.get("data", {}).get("logo_path"), f"Response: {response}"
-    logo_path = build_upload_path("tournament-logos", response["data"]["logo_path"])
+    logo_path = build_upload_path(UploadFolder.TOURNAMENT_LOGOS, response["data"]["logo_path"])
     assert await aiofiles.os.path.exists(logo_path)
 
     response = await send_tournament_request(

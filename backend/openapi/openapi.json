@@ -79,12 +79,8 @@
           }
         },
         "required": [
-          "grant_type",
           "username",
-          "password",
-          "scope",
-          "client_id",
-          "client_secret"
+          "password"
         ],
         "title": "Body_login_for_access_token_api_token_post",
         "type": "object"
@@ -104,9 +100,6 @@
             "title": "File"
           }
         },
-        "required": [
-          "file"
-        ],
         "title": "Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post",
         "type": "object"
       },
@@ -125,9 +118,6 @@
             "title": "File"
           }
         },
-        "required": [
-          "file"
-        ],
         "title": "Body_upload_logo_api_tournaments__tournament_id__logo_post",
         "type": "object"
       },
@@ -292,6 +282,7 @@
         "type": "object"
       },
       "FullTeamWithPlayers": {
+        "description": "A team with its roster.",
         "properties": {
           "active": {
             "title": "Active",
@@ -624,13 +615,6 @@
             "type": "integer"
           }
         },
-        "required": [
-          "stage_item_input1_score",
-          "stage_item_input2_score",
-          "scoreless_result",
-          "custom_duration_minutes",
-          "custom_margin_minutes"
-        ],
         "title": "MatchBody",
         "type": "object"
       },
@@ -686,17 +670,13 @@
           }
         },
         "required": [
-          "round_id",
-          "stage_item_input1_id",
-          "stage_item_input2_id",
-          "stage_item_input1_winner_from_match_id",
-          "stage_item_input2_winner_from_match_id"
+          "round_id"
         ],
         "title": "MatchCreateBodyFrontend",
         "type": "object"
       },
       "MatchWithDetails": {
-        "description": "MatchWithDetails has zero or one defined stage item inputs, but not both.",
+        "description": "A match with its slots loaded, of which at most one is known yet: a knockout match that waits\nfor the winner of an earlier match.",
         "properties": {
           "created": {
             "format": "date-time",
@@ -885,6 +865,7 @@
         "type": "object"
       },
       "MatchWithDetailsDefinitive": {
+        "description": "A match with both of its slots known. Those can still be slots that wait for a team to\nadvance from an earlier stage.",
         "properties": {
           "created": {
             "format": "date-time",
@@ -959,15 +940,8 @@
             "type": "boolean"
           },
           "stage_item_input1_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Item Input1 Id"
+            "title": "Stage Item Input1 Id",
+            "type": "integer"
           },
           "stage_item_input1_score": {
             "title": "Stage Item Input1 Score",
@@ -1003,15 +977,8 @@
             "type": "boolean"
           },
           "stage_item_input2_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Item Input2 Id"
+            "title": "Stage Item Input2 Id",
+            "type": "integer"
           },
           "stage_item_input2_score": {
             "title": "Stage Item Input2 Score",
@@ -1383,12 +1350,6 @@
             "title": "Win Points"
           }
         },
-        "required": [
-          "win_points",
-          "draw_points",
-          "loss_points",
-          "add_score_points"
-        ],
         "title": "RankingCreateBody",
         "type": "object"
       },
@@ -1429,7 +1390,6 @@
           }
         },
         "required": [
-          "name",
           "stage_item_id"
         ],
         "title": "RoundCreateBody",
@@ -1572,10 +1532,6 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "direction",
-          "discard_results"
-        ],
         "title": "StageActivateBody",
         "type": "object"
       },
@@ -1621,15 +1577,14 @@
         },
         "required": [
           "stage_id",
-          "name",
           "type",
-          "team_count",
-          "ranking_id"
+          "team_count"
         ],
         "title": "StageItemCreateBody",
         "type": "object"
       },
       "StageItemInputEmpty": {
+        "description": "Open: nothing fills it yet.",
         "properties": {
           "draws": {
             "default": 0,
@@ -1655,15 +1610,8 @@
             "type": "integer"
           },
           "stage_item_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Item Id"
+            "title": "Stage Item Id",
+            "type": "integer"
           },
           "team_id": {
             "title": "Team Id",
@@ -1688,14 +1636,14 @@
           }
         },
         "required": [
-          "points",
-          "wins",
-          "draws",
-          "losses",
           "id",
           "slot",
           "tournament_id",
           "stage_item_id",
+          "points",
+          "wins",
+          "draws",
+          "losses",
           "team_id",
           "winner_from_stage_item_id",
           "winner_position"
@@ -1704,6 +1652,7 @@
         "type": "object"
       },
       "StageItemInputFinal": {
+        "description": "Has a team, assigned by an organizer or advanced from an earlier stage item.",
         "properties": {
           "draws": {
             "default": 0,
@@ -1729,15 +1678,8 @@
             "type": "integer"
           },
           "stage_item_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Item Id"
+            "title": "Stage Item Id",
+            "type": "integer"
           },
           "team": {
             "$ref": "#/components/schemas/Team"
@@ -1779,14 +1721,14 @@
           }
         },
         "required": [
-          "points",
-          "wins",
-          "draws",
-          "losses",
           "id",
           "slot",
           "tournament_id",
           "stage_item_id",
+          "points",
+          "wins",
+          "draws",
+          "losses",
           "team_id",
           "winner_from_stage_item_id",
           "winner_position",
@@ -1912,6 +1854,7 @@
         "type": "object"
       },
       "StageItemInputTentative": {
+        "description": "Takes the team at a place of an earlier stage item once that stage is decided.",
         "properties": {
           "draws": {
             "default": 0,
@@ -1937,15 +1880,8 @@
             "type": "integer"
           },
           "stage_item_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Item Id"
+            "title": "Stage Item Id",
+            "type": "integer"
           },
           "team_id": {
             "title": "Team Id",
@@ -1971,14 +1907,14 @@
           }
         },
         "required": [
-          "points",
-          "wins",
-          "draws",
-          "losses",
           "id",
           "slot",
           "tournament_id",
           "stage_item_id",
+          "points",
+          "wins",
+          "draws",
+          "losses",
           "team_id",
           "winner_from_stage_item_id",
           "winner_position"
@@ -1987,6 +1923,7 @@
         "type": "object"
       },
       "StageItemInputUpdate": {
+        "description": "A team that takes a slot when the slot's stage is activated.",
         "properties": {
           "stage_item_input": {
             "$ref": "#/components/schemas/StageItemInputTentative"
@@ -2028,11 +1965,6 @@
             "type": "null"
           }
         },
-        "required": [
-          "team_id",
-          "winner_from_stage_item_id",
-          "winner_position"
-        ],
         "title": "StageItemInputUpdateBodyEmpty",
         "type": "object"
       },
@@ -2116,15 +2048,8 @@
             "type": "string"
           },
           "ranking_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ranking Id"
+            "title": "Ranking Id",
+            "type": "integer"
           },
           "rounds": {
             "items": {
@@ -2147,6 +2072,7 @@
             "$ref": "#/components/schemas/StageType"
           },
           "type_name": {
+            "readOnly": true,
             "title": "Type Name",
             "type": "string"
           }
@@ -2217,8 +2143,7 @@
           }
         },
         "required": [
-          "name",
-          "custom_duration_minutes"
+          "name"
         ],
         "title": "StageUpdateBody",
         "type": "object"
@@ -2465,6 +2390,7 @@
         "type": "object"
       },
       "Token": {
+        "description": "A signed-in session.",
         "properties": {
           "access_token": {
             "title": "Access Token",
@@ -2699,7 +2625,6 @@
           "start_time",
           "name",
           "dashboard_public",
-          "dashboard_endpoint",
           "players_can_be_in_multiple_teams",
           "duration_minutes",
           "margin_minutes",
@@ -2857,7 +2782,6 @@
           "start_time",
           "name",
           "dashboard_public",
-          "dashboard_endpoint",
           "players_can_be_in_multiple_teams",
           "duration_minutes",
           "margin_minutes"
@@ -2985,6 +2909,103 @@
           "can_manage"
         ],
         "title": "TournamentWithAccess",
+        "type": "object"
+      },
+      "TournamentWorkspace": {
+        "description": "What organizers work with, from one database snapshot, so that the stages, the choices for\ntheir slots, the standings and who would advance all agree.",
+        "properties": {
+          "available_inputs": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StageItemInputOptionTentative"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StageItemInputOptionFinal"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Available Inputs",
+            "type": "object"
+          },
+          "next_stage_rankings": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StageItemInputUpdate"
+              },
+              "type": "array"
+            },
+            "title": "Next Stage Rankings",
+            "type": "object"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/Player"
+            },
+            "title": "Players",
+            "type": "array"
+          },
+          "rankings": {
+            "items": {
+              "$ref": "#/components/schemas/Ranking"
+            },
+            "title": "Rankings",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageWithStageItems"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "standings": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StageItemInputStanding"
+              },
+              "type": "array"
+            },
+            "title": "Standings",
+            "type": "object"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/FullTeamWithPlayers"
+            },
+            "title": "Teams",
+            "type": "array"
+          },
+          "tournament": {
+            "$ref": "#/components/schemas/Tournament"
+          }
+        },
+        "required": [
+          "tournament",
+          "stages",
+          "players",
+          "teams",
+          "rankings",
+          "standings",
+          "available_inputs",
+          "next_stage_rankings"
+        ],
+        "title": "TournamentWorkspace",
+        "type": "object"
+      },
+      "TournamentWorkspaceResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TournamentWorkspace"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentWorkspaceResponse",
         "type": "object"
       },
       "TournamentsResponse": {
@@ -3129,8 +3150,7 @@
         },
         "required": [
           "email",
-          "name",
-          "current_password"
+          "name"
         ],
         "title": "UserToUpdate",
         "type": "object"
@@ -4641,16 +4661,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "not_in_team",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Not In Team",
-              "type": "boolean"
-            }
-          },
-          {
             "description": "Max number of results in a single page.",
             "in": "query",
             "name": "limit",
@@ -4709,6 +4719,16 @@
               ],
               "title": "Sort By",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "not_in_team",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Not In Team",
+              "type": "boolean"
             }
           }
         ],
@@ -5726,19 +5746,19 @@
           },
           {
             "in": "path",
-            "name": "stage_item_id",
+            "name": "stage_item_input_id",
             "required": true,
             "schema": {
-              "title": "Stage Item Id",
+              "title": "Stage Item Input Id",
               "type": "integer"
             }
           },
           {
             "in": "path",
-            "name": "stage_item_input_id",
+            "name": "stage_item_id",
             "required": true,
             "schema": {
-              "title": "Stage Item Input Id",
+              "title": "Stage Item Id",
               "type": "integer"
             }
           }
@@ -6620,6 +6640,57 @@
         "summary": "Create Multiple Teams",
         "tags": [
           "Teams"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/workspace": {
+      "get": {
+        "description": "Everything the organizers' pages of a tournament show, in one answer from one snapshot: the\nstages with their draft rounds, players, teams, rankings, standings, what the stages' slots\ncan take and who would advance into the next stage.",
+        "operationId": "get_tournament_workspace_api_tournaments__tournament_id__workspace_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TournamentWorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Tournament Workspace",
+        "tags": [
+          "Tournaments"
         ]
       }
     },

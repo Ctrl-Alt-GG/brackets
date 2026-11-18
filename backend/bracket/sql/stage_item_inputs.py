@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from pydantic import TypeAdapter
 from sqlalchemy import delete, select, update
@@ -16,7 +16,8 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputUpdateBodyFinal,
     StageItemInputUpdateBodyTentative,
 )
-from bracket.utils.id_types import RankingId, StageItemId, StageItemInputId, TeamId, TournamentId
+from bracket.models.results import TeamStatistics
+from bracket.utils.id_types import StageItemId, StageItemInputId, TeamId, TournamentId
 
 
 async def get_stage_item_input_by_id(
@@ -36,15 +37,29 @@ async def get_stage_item_input_by_id(
     return TypeAdapter(StageItemInput).validate_python(entity, from_attributes=True)
 
 
-async def get_stage_item_ids_by_ranking_id(
-    session: AsyncSession, tournament_id: TournamentId, ranking_id: RankingId
-) -> list[StageItemId]:
-    ids = await session.scalars(
-        select(orm.StageItem.id)
-        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
-        .where(orm.StageItem.ranking_id == ranking_id, orm.Stage.tournament_id == tournament_id)
+async def update_stage_item_input_statistics(
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    statistics: Mapping[StageItemInputId, TeamStatistics],
+) -> None:
+    """Store the results of these slots, in one round trip to the database."""
+    if not statistics:
+        return
+    await session.execute(
+        update(orm.StageItemInput)
+        .where(orm.StageItemInput.tournament_id == tournament_id)
+        .execution_options(synchronize_session=False),
+        [
+            {
+                "id": stage_item_input_id,
+                "wins": input_statistics.wins,
+                "draws": input_statistics.draws,
+                "losses": input_statistics.losses,
+                "points": input_statistics.points,
+            }
+            for stage_item_input_id, input_statistics in statistics.items()
+        ],
     )
-    return [StageItemId(id_) for id_ in ids]
 
 
 async def sql_set_team_id_for_stage_item_input(

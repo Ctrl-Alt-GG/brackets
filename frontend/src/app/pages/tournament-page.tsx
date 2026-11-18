@@ -1,30 +1,24 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { TFunction } from 'i18next';
 import { I18nextProvider, useTranslation } from 'react-i18next';
-import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router';
+import { Link, Navigate, useLocation, useParams } from 'react-router';
 
-import * as OpenApi from '../../openapi';
 import { fetchTournamentBundle, TOURNAMENT_BUNDLE_QUERY_KEY } from '../api';
-import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { useMyTeam, useSession } from '../hooks';
 import { englishI18n } from '../locales';
 import { TournamentContext } from '../tournament-context';
 import type { TournamentBundle, TournamentSection } from '../types';
+import { getErrorMessage } from '../errors';
 import {
   compareMatchesByTime,
-  cx,
   flattenMatches,
-  getErrorMessage,
   hasBracketView,
   isBracket,
   isScored,
-  loginPath,
-  publicTournamentPath,
-  tournamentDateLabel,
-  tournamentLogoUrl,
-} from '../utils';
+} from '../matches';
+import { loginPath, publicTournamentPath } from '../urls';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '../ui';
+import { detailsTabs, TournamentHeader, workspaceTabs } from '../sections/tournament-header';
 import { OverviewSection } from '../sections/tournament-overview';
 import { BracketSection } from '../sections/tournament-bracket';
 import { BigScreenSchedule, ScheduleSection } from '../sections/tournament-schedule';
@@ -39,17 +33,17 @@ const TeamsSection = lazy(() =>
   import('../sections/tournament-roster').then((module) => ({ default: module.TeamsSection })),
 );
 const RankingsSection = lazy(() =>
-  import('../sections/tournament-management').then((module) => ({
+  import('../sections/tournament-rankings').then((module) => ({
     default: module.RankingsSection,
   })),
 );
 const SettingsSection = lazy(() =>
-  import('../sections/tournament-management').then((module) => ({
+  import('../sections/tournament-settings').then((module) => ({
     default: module.SettingsSection,
   })),
 );
 const StagesSection = lazy(() =>
-  import('../sections/tournament-management').then((module) => ({
+  import('../sections/tournament-stages').then((module) => ({
     default: module.StagesSection,
   })),
 );
@@ -91,116 +85,6 @@ const WORKSPACE_TITLES: Partial<Record<TournamentSection, string>> = {
   stages: 'Stages',
   teams: 'Teams',
 };
-
-type Tab = { end?: boolean; label: string; to: string };
-
-function detailsTabs(
-  publicPath: string,
-  stages: OpenApi.StageWithStageItems[],
-  t: TFunction,
-): Tab[] {
-  const stageItems = stages.flatMap((stage) => stage.stage_items);
-  return [
-    { end: true, label: t('tournament.overview'), to: publicPath },
-    { label: t('tournament.schedule'), to: `${publicPath}/schedule` },
-    ...(stageItems.some((stageItem) => !isBracket(stageItem))
-      ? [{ label: t('tournament.standings'), to: `${publicPath}/standings` }]
-      : []),
-    ...(stageItems.some(hasBracketView)
-      ? [{ label: t('tournament.bracket'), to: `${publicPath}/bracket` }]
-      : []),
-    { label: t('tournament.teams'), to: `${publicPath}/teams` },
-  ];
-}
-
-function workspaceTabs(tournamentId: number): Tab[] {
-  const base = `/tournaments/${tournamentId}`;
-  return [
-    { end: true, label: 'Overview', to: base },
-    { label: 'Players', to: `${base}/players` },
-    { label: 'Teams', to: `${base}/teams` },
-    { label: 'Stages', to: `${base}/stages` },
-    { label: 'Schedule', to: `${base}/schedule` },
-    { label: 'Rankings', to: `${base}/rankings` },
-    { label: 'Settings', to: `${base}/settings` },
-  ];
-}
-
-function TournamentHeader({
-  actions,
-  matchCount,
-  matchesPlayed,
-  tabs,
-  teamCount,
-  tournament,
-}: {
-  actions: ReactNode;
-  matchCount: number;
-  matchesPlayed: number;
-  tabs: Tab[];
-  teamCount: number;
-  tournament: OpenApi.Tournament;
-}) {
-  const { t } = useTranslation();
-  const logoUrl = tournamentLogoUrl(tournament);
-
-  return (
-    <header className="card border border-base-300 bg-base-200/60 backdrop-blur">
-      <div className="card-body gap-5 pb-0">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-3">
-            <h1 className="flex items-center gap-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">
-              {/* Decorative: the name is right next to it. */}
-              {logoUrl ? (
-                <img
-                  alt=""
-                  className="size-12 shrink-0 rounded-field object-contain"
-                  src={logoUrl}
-                />
-              ) : null}
-              {tournament.name}
-            </h1>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-base-content/70">
-              <TournamentStatusBadge tournament={tournament} />
-              <span>{tournamentDateLabel(tournament, t)}</span>
-              {/* The line wraps on phones, where a separator would dangle at a line end. */}
-              <span aria-hidden="true" className="hidden sm:inline">
-                ·
-              </span>
-              <span>{t('common.teamCount', { count: teamCount })}</span>
-              {matchCount > 0 ? (
-                <>
-                  <span aria-hidden="true" className="hidden sm:inline">
-                    ·
-                  </span>
-                  <span>
-                    {t('common.matchesPlayed', { played: matchesPlayed, total: matchCount })}
-                  </span>
-                </>
-              ) : null}
-            </p>
-          </div>
-          {actions}
-        </div>
-        <nav
-          aria-label={t('tournament.pages')}
-          className="tabs tabs-border flex-nowrap overflow-x-auto [scrollbar-width:none]"
-        >
-          {tabs.map((tab) => (
-            <NavLink
-              className={({ isActive }) => cx('tab shrink-0', isActive && 'tab-active')}
-              end={tab.end}
-              key={tab.to}
-              to={tab.to}
-            >
-              {tab.label}
-            </NavLink>
-          ))}
-        </nav>
-      </div>
-    </header>
-  );
-}
 
 /** The page itself, once the tournament has loaded. */
 function TournamentView({
@@ -460,13 +344,15 @@ function TournamentPageContent({ section }: { section: TournamentSection }) {
   const sendVisitorToDetails = !dashboardMode && !isAuthenticated && detailsSuffix != null;
 
   // Refetching keeps showing the current data, so open panels and forms survive every save.
+  // Leaving the page, or a newer load of it, cancels the requests of the one before.
   const workspace = useQuery({
     enabled: Boolean(tournamentKey) && !isLockedOut && !sendVisitorToDetails,
-    queryFn: () => fetchTournamentBundle(tournamentKey, dashboardMode, isAuthenticated),
+    queryFn: ({ signal }) =>
+      fetchTournamentBundle(tournamentKey, dashboardMode, isAuthenticated, signal),
     queryKey: [...TOURNAMENT_BUNDLE_QUERY_KEY, tournamentKey, dashboardMode, session?.user_id],
     // The Details pages follow a live event, and the big screens run unattended. Organizers
-    // work side by side during an event, so the workspace also picks up what the others changed:
-    // less often, and never under a form that is being filled in (refetching keeps what is open).
+    // work side by side during an event, so the workspace also picks up what the others changed,
+    // less often. A form that is being filled in keeps what was typed into it (`useSavedForm`).
     refetchInterval: dashboardMode ? 30_000 : 60_000,
   });
 

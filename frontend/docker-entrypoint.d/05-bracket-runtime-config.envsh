@@ -2,16 +2,32 @@
 # Sourced by the nginx image's entrypoint before it fills in /etc/nginx/templates, so the variables
 # exported here are available there.
 
-# The page reads the API's address from this file, so one image works with any backend. Quotes and
-# backslashes are escaped so that the value stays a string. The image's files are read-only, so
-# the file goes to /tmp, from where nginx serves it as /runtime-config.js.
-api_base_url_js=$(printf '%s' "${API_BASE_URL}" | sed 's/[\\"]/\\&/g')
-cat >/tmp/runtime-config.js <<EOF
-window.__BRACKET_RUNTIME_CONFIG__ = {
-  apiBaseUrl: "${api_base_url_js}"
-};
-EOF
+# API_BASE_URL is the API's origin: a scheme, a host and an optional port, without a path, such
+# as https://api.example.org. Empty means the page's own origin. The page and its
+# Content-Security-Policy both use the value checked here, so they always agree.
+bracket_reject_api_base_url() {
+  echo "API_BASE_URL must be an origin such as https://api.example.org, without a path: '${API_BASE_URL}'" >&2
+  exit 1
+}
 
-# The scheme, host and port of the API, which the Content-Security-Policy lets the page connect to.
-API_ORIGIN=$(printf '%s' "${API_BASE_URL}" | sed -E 's|^([A-Za-z][A-Za-z0-9+.-]*://[^/?#]+).*|\1|')
+API_ORIGIN=${API_BASE_URL:-}
+if [ -n "${API_ORIGIN}" ]; then
+  case ${API_ORIGIN} in
+    http://?* | https://?*) ;;
+    *) bracket_reject_api_base_url ;;
+  esac
+  # After the scheme, only what host names, IP addresses and ports consist of: no path, query,
+  # quote or space, which would also break the script below.
+  case ${API_ORIGIN#*://} in
+    *[!]A-Za-z0-9.:[-]*) bracket_reject_api_base_url ;;
+  esac
+fi
 export API_ORIGIN
+
+# The page reads the API's origin from this file, so one image works with any backend. The image's
+# files are read-only, so the file goes to /tmp, from where nginx serves it as /runtime-config.js.
+cat >/tmp/runtime-config.js <<CONFIG
+window.__BRACKET_RUNTIME_CONFIG__ = {
+  apiBaseUrl: "${API_ORIGIN}"
+};
+CONFIG

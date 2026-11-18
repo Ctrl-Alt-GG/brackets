@@ -28,15 +28,15 @@ export type BodyLoginForAccessTokenApiTokenPost = {
   /**
    * Client Id
    */
-  client_id: string | null;
+  client_id?: string | null;
   /**
    * Client Secret
    */
-  client_secret: string | null;
+  client_secret?: string | null;
   /**
    * Grant Type
    */
-  grant_type: string | null;
+  grant_type?: string | null;
   /**
    * Password
    */
@@ -44,7 +44,7 @@ export type BodyLoginForAccessTokenApiTokenPost = {
   /**
    * Scope
    */
-  scope: string;
+  scope?: string;
   /**
    * Username
    */
@@ -58,7 +58,7 @@ export type BodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = {
   /**
    * File
    */
-  file: Blob | File | null;
+  file?: Blob | File | null;
 };
 
 /**
@@ -68,7 +68,7 @@ export type BodyUploadLogoApiTournamentsTournamentIdLogoPost = {
   /**
    * File
    */
-  file: Blob | File | null;
+  file?: Blob | File | null;
 };
 
 /**
@@ -179,6 +179,8 @@ export type ClubsResponse = {
 
 /**
  * FullTeamWithPlayers
+ *
+ * A team with its roster.
  */
 export type FullTeamWithPlayers = {
   /**
@@ -336,23 +338,23 @@ export type MatchBody = {
   /**
    * Custom Duration Minutes
    */
-  custom_duration_minutes: number | null;
+  custom_duration_minutes?: number | null;
   /**
    * Custom Margin Minutes
    */
-  custom_margin_minutes: number | null;
+  custom_margin_minutes?: number | null;
   /**
    * Scoreless Result
    */
-  scoreless_result: boolean;
+  scoreless_result?: boolean;
   /**
    * Stage Item Input1 Score
    */
-  stage_item_input1_score: number;
+  stage_item_input1_score?: number;
   /**
    * Stage Item Input2 Score
    */
-  stage_item_input2_score: number;
+  stage_item_input2_score?: number;
 };
 
 /**
@@ -366,25 +368,26 @@ export type MatchCreateBodyFrontend = {
   /**
    * Stage Item Input1 Id
    */
-  stage_item_input1_id: number | null;
+  stage_item_input1_id?: number | null;
   /**
    * Stage Item Input1 Winner From Match Id
    */
-  stage_item_input1_winner_from_match_id: number | null;
+  stage_item_input1_winner_from_match_id?: number | null;
   /**
    * Stage Item Input2 Id
    */
-  stage_item_input2_id: number | null;
+  stage_item_input2_id?: number | null;
   /**
    * Stage Item Input2 Winner From Match Id
    */
-  stage_item_input2_winner_from_match_id: number | null;
+  stage_item_input2_winner_from_match_id?: number | null;
 };
 
 /**
  * MatchWithDetails
  *
- * MatchWithDetails has zero or one defined stage item inputs, but not both.
+ * A match with its slots loaded, of which at most one is known yet: a knockout match that waits
+ * for the winner of an earlier match.
  */
 export type MatchWithDetails = {
   /**
@@ -473,6 +476,9 @@ export type MatchWithDetails = {
 
 /**
  * MatchWithDetailsDefinitive
+ *
+ * A match with both of its slots known. Those can still be slots that wait for a team to
+ * advance from an earlier stage.
  */
 export type MatchWithDetailsDefinitive = {
   /**
@@ -524,7 +530,7 @@ export type MatchWithDetailsDefinitive = {
   /**
    * Stage Item Input1 Id
    */
-  stage_item_input1_id: number | null;
+  stage_item_input1_id: number;
   /**
    * Stage Item Input1 Score
    */
@@ -544,7 +550,7 @@ export type MatchWithDetailsDefinitive = {
   /**
    * Stage Item Input2 Id
    */
-  stage_item_input2_id: number | null;
+  stage_item_input2_id: number;
   /**
    * Stage Item Input2 Score
    */
@@ -739,19 +745,19 @@ export type RankingCreateBody = {
   /**
    * Add Score Points
    */
-  add_score_points: boolean;
+  add_score_points?: boolean;
   /**
    * Draw Points
    */
-  draw_points: number | string;
+  draw_points?: number | string;
   /**
    * Loss Points
    */
-  loss_points: number | string;
+  loss_points?: number | string;
   /**
    * Win Points
    */
-  win_points: number | string;
+  win_points?: number | string;
 };
 
 /**
@@ -771,7 +777,7 @@ export type RoundCreateBody = {
   /**
    * Name
    */
-  name: string | null;
+  name?: string | null;
   /**
    * Stage Item Id
    */
@@ -860,11 +866,11 @@ export type StageActivateBody = {
   /**
    * Direction
    */
-  direction: 'next' | 'previous';
+  direction?: 'next' | 'previous';
   /**
    * Discard Results
    */
-  discard_results: boolean;
+  discard_results?: boolean;
 };
 
 /**
@@ -874,11 +880,11 @@ export type StageItemCreateBody = {
   /**
    * Name
    */
-  name: string | null;
+  name?: string | null;
   /**
    * Ranking Id
    */
-  ranking_id: number | null;
+  ranking_id?: number | null;
   /**
    * Stage Id
    */
@@ -892,6 +898,8 @@ export type StageItemCreateBody = {
 
 /**
  * StageItemInputEmpty
+ *
+ * Open: nothing fills it yet.
  */
 export type StageItemInputEmpty = {
   /**
@@ -917,7 +925,7 @@ export type StageItemInputEmpty = {
   /**
    * Stage Item Id
    */
-  stage_item_id: number | null;
+  stage_item_id: number;
   /**
    * Team Id
    */
@@ -942,6 +950,8 @@ export type StageItemInputEmpty = {
 
 /**
  * StageItemInputFinal
+ *
+ * Has a team, assigned by an organizer or advanced from an earlier stage item.
  */
 export type StageItemInputFinal = {
   /**
@@ -967,7 +977,7 @@ export type StageItemInputFinal = {
   /**
    * Stage Item Id
    */
-  stage_item_id: number | null;
+  stage_item_id: number;
   team: Team;
   /**
    * Team Id
@@ -1071,6 +1081,8 @@ export type StageItemInputStanding = {
 
 /**
  * StageItemInputTentative
+ *
+ * Takes the team at a place of an earlier stage item once that stage is decided.
  */
 export type StageItemInputTentative = {
   /**
@@ -1096,7 +1108,7 @@ export type StageItemInputTentative = {
   /**
    * Stage Item Id
    */
-  stage_item_id: number | null;
+  stage_item_id: number;
   /**
    * Team Id
    */
@@ -1121,6 +1133,8 @@ export type StageItemInputTentative = {
 
 /**
  * StageItemInputUpdate
+ *
+ * A team that takes a slot when the slot's stage is activated.
  */
 export type StageItemInputUpdate = {
   stage_item_input: StageItemInputTentative;
@@ -1135,15 +1149,15 @@ export type StageItemInputUpdateBodyEmpty = {
   /**
    * Team Id
    */
-  team_id: null;
+  team_id?: null;
   /**
    * Winner From Stage Item Id
    */
-  winner_from_stage_item_id: null;
+  winner_from_stage_item_id?: null;
   /**
    * Winner Position
    */
-  winner_position: null;
+  winner_position?: null;
 };
 
 /**
@@ -1203,7 +1217,7 @@ export type StageItemWithRounds = {
   /**
    * Ranking Id
    */
-  ranking_id: number | null;
+  ranking_id: number;
   /**
    * Rounds
    */
@@ -1220,7 +1234,7 @@ export type StageItemWithRounds = {
   /**
    * Type Name
    */
-  type_name: string;
+  readonly type_name: string;
 };
 
 /**
@@ -1247,7 +1261,7 @@ export type StageUpdateBody = {
   /**
    * Custom Duration Minutes
    */
-  custom_duration_minutes: number | null;
+  custom_duration_minutes?: number | null;
   /**
    * Name
    */
@@ -1411,6 +1425,8 @@ export type TeamsWithPlayersResponse = {
 
 /**
  * Token
+ *
+ * A signed-in session.
  */
 export type Token = {
   /**
@@ -1533,7 +1549,7 @@ export type TournamentBody = {
   /**
    * Dashboard Endpoint
    */
-  dashboard_endpoint: string | null;
+  dashboard_endpoint?: string | null;
   /**
    * Dashboard Public
    */
@@ -1624,7 +1640,7 @@ export type TournamentUpdateBody = {
   /**
    * Dashboard Endpoint
    */
-  dashboard_endpoint: string | null;
+  dashboard_endpoint?: string | null;
   /**
    * Dashboard Public
    */
@@ -1723,6 +1739,57 @@ export type TournamentWithAccess = {
 };
 
 /**
+ * TournamentWorkspace
+ *
+ * What organizers work with, from one database snapshot, so that the stages, the choices for
+ * their slots, the standings and who would advance all agree.
+ */
+export type TournamentWorkspace = {
+  /**
+   * Available Inputs
+   */
+  available_inputs: {
+    [key: string]: Array<StageItemInputOptionTentative | StageItemInputOptionFinal>;
+  };
+  /**
+   * Next Stage Rankings
+   */
+  next_stage_rankings: {
+    [key: string]: Array<StageItemInputUpdate>;
+  };
+  /**
+   * Players
+   */
+  players: Array<Player>;
+  /**
+   * Rankings
+   */
+  rankings: Array<Ranking>;
+  /**
+   * Stages
+   */
+  stages: Array<StageWithStageItems>;
+  /**
+   * Standings
+   */
+  standings: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
+  /**
+   * Teams
+   */
+  teams: Array<FullTeamWithPlayers>;
+  tournament: Tournament;
+};
+
+/**
+ * TournamentWorkspaceResponse
+ */
+export type TournamentWorkspaceResponse = {
+  data: TournamentWorkspace;
+};
+
+/**
  * TournamentsResponse
  */
 export type TournamentsResponse = {
@@ -1806,7 +1873,7 @@ export type UserToUpdate = {
   /**
    * Current Password
    */
-  current_password: string | null;
+  current_password?: string | null;
   /**
    * Email
    */
@@ -1935,7 +2002,8 @@ export type MatchWritable = {
 /**
  * MatchWithDetails
  *
- * MatchWithDetails has zero or one defined stage item inputs, but not both.
+ * A match with its slots loaded, of which at most one is known yet: a knockout match that waits
+ * for the winner of an earlier match.
  */
 export type MatchWithDetailsWritable = {
   /**
@@ -2018,6 +2086,9 @@ export type MatchWithDetailsWritable = {
 
 /**
  * MatchWithDetailsDefinitive
+ *
+ * A match with both of its slots known. Those can still be slots that wait for a team to
+ * advance from an earlier stage.
  */
 export type MatchWithDetailsDefinitiveWritable = {
   /**
@@ -2063,7 +2134,7 @@ export type MatchWithDetailsDefinitiveWritable = {
   /**
    * Stage Item Input1 Id
    */
-  stage_item_input1_id: number | null;
+  stage_item_input1_id: number;
   /**
    * Stage Item Input1 Score
    */
@@ -2083,7 +2154,7 @@ export type MatchWithDetailsDefinitiveWritable = {
   /**
    * Stage Item Input2 Id
    */
-  stage_item_input2_id: number | null;
+  stage_item_input2_id: number;
   /**
    * Stage Item Input2 Score
    */
@@ -2158,7 +2229,7 @@ export type StageItemWithRoundsWritable = {
   /**
    * Ranking Id
    */
-  ranking_id: number | null;
+  ranking_id: number;
   /**
    * Rounds
    */
@@ -2172,10 +2243,6 @@ export type StageItemWithRoundsWritable = {
    */
   team_count: number;
   type: StageType;
-  /**
-   * Type Name
-   */
-  type_name: string;
 };
 
 /**
@@ -2258,6 +2325,57 @@ export type TournamentDetailsWritable = {
  */
 export type TournamentDetailsResponseWritable = {
   data: TournamentDetailsWritable;
+};
+
+/**
+ * TournamentWorkspace
+ *
+ * What organizers work with, from one database snapshot, so that the stages, the choices for
+ * their slots, the standings and who would advance all agree.
+ */
+export type TournamentWorkspaceWritable = {
+  /**
+   * Available Inputs
+   */
+  available_inputs: {
+    [key: string]: Array<StageItemInputOptionTentative | StageItemInputOptionFinal>;
+  };
+  /**
+   * Next Stage Rankings
+   */
+  next_stage_rankings: {
+    [key: string]: Array<StageItemInputUpdate>;
+  };
+  /**
+   * Players
+   */
+  players: Array<Player>;
+  /**
+   * Rankings
+   */
+  rankings: Array<Ranking>;
+  /**
+   * Stages
+   */
+  stages: Array<StageWithStageItemsWritable>;
+  /**
+   * Standings
+   */
+  standings: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
+  /**
+   * Teams
+   */
+  teams: Array<FullTeamWithPlayers>;
+  tournament: Tournament;
+};
+
+/**
+ * TournamentWorkspaceResponse
+ */
+export type TournamentWorkspaceResponseWritable = {
+  data: TournamentWorkspaceWritable;
 };
 
 export type GetAuthFeaturesApiAuthFeaturesGetData = {
@@ -3105,10 +3223,6 @@ export type GetPlayersApiTournamentsTournamentIdPlayersGetData = {
   };
   query?: {
     /**
-     * Not In Team
-     */
-    not_in_team?: boolean;
-    /**
      * Limit
      *
      * Max number of results in a single page.
@@ -3136,6 +3250,10 @@ export type GetPlayersApiTournamentsTournamentIdPlayersGetData = {
       | 'losses'
       | 'active'
       | 'created';
+    /**
+     * Not In Team
+     */
+    not_in_team?: boolean;
   };
   url: '/api/tournaments/{tournament_id}/players';
 };
@@ -3723,13 +3841,13 @@ export type UpdateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdI
        */
       tournament_id: number;
       /**
-       * Stage Item Id
-       */
-      stage_item_id: number;
-      /**
        * Stage Item Input Id
        */
       stage_item_input_id: number;
+      /**
+       * Stage Item Id
+       */
+      stage_item_id: number;
     };
     query?: never;
     url: '/api/tournaments/{tournament_id}/stage_items/{stage_item_id}/inputs/{stage_item_input_id}';
@@ -4227,6 +4345,38 @@ export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses
 
 export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
   CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses[keyof CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses];
+
+export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/workspace';
+};
+
+export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetError =
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors[keyof GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors];
+
+export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: TournamentWorkspaceResponse;
+};
+
+export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponse =
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses[keyof GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses];
 
 export type GetUserApiUsersMeGetData = {
   body?: never;

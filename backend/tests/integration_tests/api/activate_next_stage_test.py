@@ -10,11 +10,11 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyFinal,
     StageItemInputCreateBodyTentative,
 )
-from bracket.models.db.util import StageWithStageItems
+from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.sql.matches import sql_update_match
 from bracket.sql.stage_items import sql_create_stage_item_with_inputs, sql_delete_stage_item
 from bracket.sql.stages import get_full_tournament_details
-from bracket.utils.dummy_records import (
+from tests.dummy_records import (
     DUMMY_STAGE1,
     DUMMY_STAGE2,
     DUMMY_STAGE_ITEM1,

@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket import orm
 from bracket.database import engine
 from bracket.models.db.team import Team
-from bracket.utils.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT
-from bracket.utils.uploads import build_upload_path
+from bracket.utils.uploads import UploadFolder, build_upload_path
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -192,7 +192,7 @@ async def test_team_upload_and_remove_logo(
         )
 
         assert response["data"]["logo_path"], f"Response: {response}"
-        logo_path = build_upload_path("team-logos", response["data"]["logo_path"])
+        logo_path = build_upload_path(UploadFolder.TEAM_LOGOS, response["data"]["logo_path"])
         assert await aiofiles.os.path.exists(logo_path)
 
         response = await send_tournament_request(
@@ -226,3 +226,20 @@ async def test_cross_tournament_team_access_denied(
                 json={"name": "Hacked", "active": True, "player_ids": []},
             )
             assert response.get("detail") == f"Could not find team with id {other_team.id}"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.parametrize(
+    ("query", "parameter"),
+    [
+        ("limit=0", "limit"),
+        ("limit=501", "limit"),
+        ("offset=-1", "offset"),
+        ("sort_by=email", "sort_by"),
+    ],
+)
+async def test_invalid_pages_are_refused(
+    startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext, query: str, parameter: str
+) -> None:
+    response = await send_tournament_request(HTTPMethod.GET, f"teams?{query}", auth_context)
+    assert [error["loc"] for error in response["detail"]] == [["query", parameter]]

@@ -7,29 +7,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket import orm
-from bracket.models.db.round import RoundInsertable, RoundUpdateBody
-from bracket.models.db.util import RoundWithMatches
+from bracket.models.db.round import Round, RoundUpdateBody
+from bracket.models.db.stage_tree import RoundWithMatches
 from bracket.sql.stages import get_full_tournament_details
 from bracket.utils.id_types import RoundId, StageItemId, TournamentId
 
 
 async def sql_create_rounds(
-    session: AsyncSession, tournament_id: TournamentId, rounds: Sequence[RoundInsertable]
+    session: AsyncSession,
+    tournament_id: TournamentId,
+    stage_item_id: StageItemId,
+    names: Sequence[str],
+    *,
+    is_draft: bool,
 ) -> list[RoundId]:
+    """Add rounds with these names to the stage item, in this order."""
     entities = [
         orm.Round(
-            tournament_id=tournament_id,
-            name=round_.name,
-            is_draft=round_.is_draft,
-            stage_item_id=round_.stage_item_id,
+            tournament_id=tournament_id, stage_item_id=stage_item_id, name=name, is_draft=is_draft
         )
-        for round_ in rounds
+        for name in names
     ]
     if not entities:
         return []
     session.add_all(entities)
     await session.flush()
     return [RoundId(entity.id) for entity in entities]
+
+
+async def get_round(
+    session: AsyncSession, tournament_id: TournamentId, round_id: RoundId
+) -> Round | None:
+    entity = await session.scalar(
+        select(orm.Round)
+        .where(orm.Round.id == round_id, orm.Round.tournament_id == tournament_id)
+        .execution_options(populate_existing=True)
+    )
+    return Round.model_validate(entity) if entity is not None else None
 
 
 async def get_round_by_id(
@@ -54,11 +68,8 @@ async def get_next_round_name(
     """Number after the highest existing round, including gaps left by deleted rounds."""
     names = list(
         await session.scalars(
-            select(orm.Round.name)
-            .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
-            .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
-            .where(
-                orm.Stage.tournament_id == tournament_id, orm.Round.stage_item_id == stage_item_id
+            select(orm.Round.name).where(
+                orm.Round.tournament_id == tournament_id, orm.Round.stage_item_id == stage_item_id
             )
         )
     )
@@ -75,9 +86,7 @@ async def sql_update_round(
 ) -> None:
     entity = await session.scalar(
         select(orm.Round)
-        .join(orm.StageItem, orm.StageItem.id == orm.Round.stage_item_id)
-        .join(orm.Stage, orm.Stage.id == orm.StageItem.stage_id)
-        .where(orm.Stage.tournament_id == tournament_id, orm.Round.id == round_id)
+        .where(orm.Round.tournament_id == tournament_id, orm.Round.id == round_id)
         .execution_options(populate_existing=True)
     )
     if entity is not None:

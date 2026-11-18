@@ -132,6 +132,9 @@ import type {
   GetTournamentsApiTournamentsGetData,
   GetTournamentsApiTournamentsGetErrors,
   GetTournamentsApiTournamentsGetResponses,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses,
   GetUserApiUsersMeGetData,
   GetUserApiUsersMeGetResponses,
   LoginForAccessTokenApiTokenPostData,
@@ -2090,6 +2093,40 @@ export const createMultipleTeamsApiTournamentsTournamentIdTeamsMultiPost = <
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Get Tournament Workspace
+ *
+ * Everything the organizers' pages of a tournament show, in one answer from one snapshot: the
+ * stages with their draft rounds, players, teams, rankings, standings, what the stages' slots
+ * can take and who would advance into the next stage.
+ */
+export const getTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData, ThrowOnError>,
+): RequestResult<
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses,
+  GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetResponses,
+    GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      { scheme: 'bearer', type: 'http' },
+      {
+        in: 'cookie',
+        name: 'bracket_session',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/tournaments/{tournament_id}/workspace',
+    ...options,
   });
 
 /**

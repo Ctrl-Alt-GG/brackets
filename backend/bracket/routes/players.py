@@ -1,19 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from starlette import status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.ranking.players import (
-    get_player_statistics,
-    get_players_with_statistics,
-    with_statistics,
-)
-from bracket.logic.ranking.statistics import PlayerStatistics
-from bracket.logic.subscriptions import check_requirement
+from bracket.logic.players import create_players, update_player
+from bracket.logic.ranking.players import get_players_with_statistics
 from bracket.models.db.player import PlayerBody, PlayerMultiBody
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.routes.auth import (
+from bracket.routes.access import (
     user_authenticated_for_tournament,
     user_authenticated_or_rate_limited_visitor,
 )
@@ -23,45 +19,30 @@ from bracket.routes.models import (
     SinglePlayerResponse,
     SuccessResponse,
 )
-from bracket.routes.util import disallow_archived_tournament
-from bracket.sql.players import (
-    get_all_players_in_tournament,
-    get_player_count,
-    insert_player,
-    sql_delete_player,
-    sql_update_player,
-)
+from bracket.routes.resources import disallow_archived_tournament
+from bracket.sql.players import get_player_count, sql_delete_player
 from bracket.utils.id_types import PlayerId, TournamentId
-from bracket.utils.pagination import PaginationPlayers
+from bracket.utils.pagination import ParticipantPagination
 
 router = APIRouter(prefix=config.api_prefix)
+
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
 
 
 @router.get("/tournaments/{tournament_id}/players", response_model=PlayersResponse)
 async def get_players(
     session: DbSession,
     tournament_id: TournamentId,
+    pagination: Annotated[ParticipantPagination, Query()],
+    _: Annotated[UserPublic | None, Depends(user_authenticated_or_rate_limited_visitor)],
     not_in_team: bool = False,
-    pagination: PaginationPlayers = Depends(),
-    _: UserPublic | None = Depends(user_authenticated_or_rate_limited_visitor),
 ) -> PlayersResponse:
-    if pagination.sort_by in PlayerStatistics.model_fields:
-        # The statistics are worked out here, not stored, so sorting by them happens here too.
-        result = await get_players_with_statistics(session, tournament_id, not_in_team=not_in_team)
-        result.sort(key=lambda player: player.id)
-        result.sort(
-            key=lambda player: getattr(player, pagination.sort_by),
-            reverse=pagination.sort_direction == "desc",
-        )
-        result = result[pagination.offset : pagination.offset + pagination.limit]
-    else:
-        result = await get_players_with_statistics(
-            session, tournament_id, not_in_team=not_in_team, pagination=pagination
-        )
-
     return PlayersResponse(
         data=PaginatedPlayers(
-            players=result,
+            players=await get_players_with_statistics(
+                session, tournament_id, not_in_team=not_in_team, pagination=pagination
+            ),
             count=await get_player_count(session, tournament_id, not_in_team=not_in_team),
         )
     )
@@ -73,18 +54,12 @@ async def update_player_by_id(
     tournament_id: TournamentId,
     player_id: PlayerId,
     player_body: PlayerBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    __: OpenTournament,
 ) -> SinglePlayerResponse:
-    player = await sql_update_player(session, tournament_id, player_id, player_body)
-    if player is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not find player with id {player_id}",
-        )
-
-    statistics = await get_player_statistics(session, tournament_id)
-    return SinglePlayerResponse(data=with_statistics(player, statistics))
+    return SinglePlayerResponse(
+        data=await update_player(session, tournament_id, player_id, player_body)
+    )
 
 
 @router.delete("/tournaments/{tournament_id}/players/{player_id}", response_model=SuccessResponse)
@@ -92,8 +67,8 @@ async def delete_player(
     session: DbSession,
     tournament_id: TournamentId,
     player_id: PlayerId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    __: OpenTournament,
 ) -> SuccessResponse:
     await sql_delete_player(session, tournament_id, player_id)
     return SuccessResponse()
@@ -104,12 +79,12 @@ async def create_single_player(
     session: DbSession,
     player_body: PlayerBody,
     tournament_id: TournamentId,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    _: OpenTournament,
 ) -> SuccessResponse:
-    existing_players = await get_all_players_in_tournament(session, tournament_id)
-    check_requirement(existing_players, user, "max_players")
-    await insert_player(session, player_body, tournament_id)
+    await create_players(
+        session, tournament_id, [player_body.name], active=player_body.active, user=user
+    )
     return SuccessResponse()
 
 
@@ -118,16 +93,10 @@ async def create_multiple_players(
     session: DbSession,
     player_body: PlayerMultiBody,
     tournament_id: TournamentId,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    _: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    _: OpenTournament,
 ) -> SuccessResponse:
-    player_names = player_body.player_names
-    existing_players = await get_all_players_in_tournament(session, tournament_id)
-    check_requirement(existing_players, user, "max_players", additions=len(player_names))
-
-    for player_name in player_names:
-        await insert_player(
-            session, PlayerBody(name=player_name, active=player_body.active), tournament_id
-        )
-
+    await create_players(
+        session, tournament_id, player_body.player_names, active=player_body.active, user=user
+    )
     return SuccessResponse()

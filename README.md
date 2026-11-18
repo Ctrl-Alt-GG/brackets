@@ -146,11 +146,21 @@ docs (`/docs`, `/redoc`) are only served in development.
 
 Database entities live in `backend/bracket/orm/`. Repository functions in `bracket/sql/`
 use an `AsyncSession` and return the Pydantic models in `bracket/models/db/` that define
-the API contract. GET, HEAD and OPTIONS requests use read-only `REPEATABLE READ`
-transactions, so loaded graphs, standings and totals share a database snapshot. Commands
-use `READ COMMITTED` and commit before the response is sent. Tournament edits lock the
-tournament before changing results or competitors; membership edits lock the event before
-checking access. Relationships require explicit eager loading.
+the API contract; enums and result values shared by both are in `bracket/models/`.
+Commands, and the answers that combine stored data with results replayed from the
+matches, are functions in `bracket/logic/`, which routes in `bracket/routes/` call once
+they have checked who asks. A command that changes the loaded stage tree does so through
+`TournamentGraph`, which keeps the copies of a slot in its stage item and in its matches
+in agreement. Relationships require explicit eager loading.
+
+GET, HEAD and OPTIONS requests use read-only `REPEATABLE READ` transactions, so loaded
+graphs, standings and totals share a database snapshot. Commands use `READ COMMITTED` and
+commit before the response is sent. Locks are taken event first, then tournament, then
+account: a tournament command takes a shared lock on its event before checking access and
+then locks the tournament, so someone who loses access to the event loses it once the
+commands already let in have finished. Membership edits lock the event exclusively, and
+rules that cover all events of an account (their names and number) lock the account. A
+logo stored for a command is removed again unless the command commits.
 
 The cached Details loader owns its snapshot transaction. Its authorization check releases
 its connection before waiting for that loader, so requests waiting on the cache do not
@@ -160,23 +170,23 @@ Ranking rules and stage-slot points use PostgreSQL `NUMERIC` and Python `Decimal
 six decimal places. Rule values range from -1000 to 1000; requests with greater decimal
 precision are rejected.
 
-Tests need a disposable PostgreSQL database. Migration tests also need a database role
-with permission to create databases. They restore the frozen `b2e5c8d1f4a7` schema in
+Tests need a PostgreSQL server and a database role that may create databases. They never
+change the database `PG_DSN` names: the integration tests create one of their own (one per
+worker with `pytest -n`), with tables from the metadata stamped at the latest migration, and
+drop it afterwards; their uploads go to a temporary directory. Migration tests likewise
+create a database per test. They restore the frozen `b2e5c8d1f4a7` schema in
 `backend/tests/migration_tests/assets/`, upgrade populated data to head, exercise downgrade
 and re-upgrade, and compare the resulting schema with ORM metadata, including defaults.
 They test empty-database bootstrap separately. CI runs these checks before the unit and
-integration suite, whose fixtures create tables from metadata.
+integration suite.
 
 ```bash
 cd backend
 ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run pytest tests/migration_tests
-ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run alembic stamp head
 ENVIRONMENT=DEVELOPMENT JWT_SECRET=... PG_DSN=... uv run pytest tests/unit_tests tests/integration_tests
 ```
 
-Stamping the integration-test database keeps startup from replaying migrations over
-fixture-created tables. Existing installations at `b2e5c8d1f4a7` upgrade through Alembic
-normally. An empty installation uses startup bootstrap because the oldest historical
+Existing installations at `b2e5c8d1f4a7` upgrade through Alembic normally. An empty installation uses startup bootstrap because the oldest historical
 migrations assume application tables already exist. After changing entities, add the
 corresponding migration and run the migration suite; `alembic check` against a migrated
 database checks for remaining schema differences.
@@ -191,7 +201,21 @@ pnpm dev     # on localhost; `pnpm dev --host` makes it reachable from other dev
 pnpm test    # type check, lint (oxlint), formatting (oxfmt) and unit tests (vitest)
 pnpm exec playwright install chromium
 pnpm test:browser  # organizer workflows, concurrency, refresh failures and logout recovery
+pnpm test:smoke    # against the real API, see below
+pnpm test:image    # against the production image, see below
 ```
+
+The browser regressions answer the page's API requests themselves. Two smaller
+suites check the boundaries those answers stand in for:
+
+- `test:smoke` starts the API (with `uv`) and the dev server, and runs login,
+  ranking editing, score entry and logout against them. It needs `PG_DSN`,
+  naming a database of its own that the API sets up when it is empty, and
+  `JWT_SECRET`.
+- `test:image` checks the production image: the runtime configuration, the
+  Content-Security-Policy, deep links, caching and a bracket. Start the image
+  with `API_BASE_URL` set to its own address, and point `BRACKET_IMAGE_URL` at
+  it (by default `http://127.0.0.1:8080`).
 
 The dev server forwards `/api` to the backend on port 8400, so the page and the
 API share an origin, as they do in production.
@@ -200,12 +224,12 @@ After changing the API, run `uv run python cli.py generate-openapi` in `backend/
 and `pnpm openapi-ts` in `frontend/`. The export uses `/api` by default even when
 the local backend's `API_PREFIX` is empty, keeping generated client names stable.
 
-The SPA resolves its API base URL from `window.__BRACKET_RUNTIME_CONFIG__`
-(injected by the container entrypoint from `API_BASE_URL`), then
-`VITE_API_BASE_URL`, and otherwise uses its own origin. Leave `API_BASE_URL`
-empty when the reverse proxy serves both from one origin. Otherwise set it to
-the backend **origin only** — the client appends `/api/...` itself, so a
-trailing `/api` or `/` is stripped before use.
+The frontend container reads the API's address from `API_BASE_URL` when it
+starts. Leave it empty when the reverse proxy serves both from one origin.
+Otherwise set it to the backend's **origin only**, such as
+`https://api.example.org`: the client adds `/api/...` itself. The container
+refuses to start with anything else, such as a value with a path or a trailing
+`/`. The page and its Content-Security-Policy both use the checked value.
 
 ### Sessions
 

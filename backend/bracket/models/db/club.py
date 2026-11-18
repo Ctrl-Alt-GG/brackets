@@ -2,7 +2,7 @@ from heliclockter import datetime_utc
 from pydantic import EmailStr, field_validator
 
 from bracket.models.db.shared import BaseModelORM
-from bracket.models.db.user_x_club import UserXClubRelation
+from bracket.models.enums import UserXClubRelation
 from bracket.utils.id_types import ClubId, UserId
 from bracket.utils.pydantic import Name
 from bracket.utils.security import normalize_email

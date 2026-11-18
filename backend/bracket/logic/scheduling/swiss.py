@@ -6,7 +6,7 @@ import networkx as nx
 
 from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
-from bracket.models.db.util import StageItemWithRounds
+from bracket.models.db.stage_tree import StageItemWithRounds
 from bracket.utils.id_types import StageItemInputId
 
 # Placeholder opponent of the team that sits out. Database ids are positive, so it can't clash.

@@ -1,108 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
-from heliclockter import datetime_utc
-from starlette import status
-from starlette.concurrency import run_in_threadpool
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 from bracket.config import config
 from bracket.database import DbSession
-from bracket.logic.planning.matches import schedule_all_matches
-from bracket.logic.planning.rounds import get_draft_round
-from bracket.logic.ranking.calculation import (
-    recalculate_ranking_for_stage_item,
+from bracket.logic.rounds import (
+    create_swiss_round,
+    delete_swiss_round,
+    regenerate_swiss_round,
+    update_round,
 )
-from bracket.logic.scheduling.swiss import SwissPairing, get_swiss_pairing
-from bracket.logic.subscriptions import check_requirement
-from bracket.models.db.match import MatchCreateBody, is_played
-from bracket.models.db.round import (
-    Round,
-    RoundCreateBody,
-    RoundInsertable,
-    RoundUpdateBody,
-)
+from bracket.models.db.round import Round, RoundCreateBody, RoundUpdateBody
+from bracket.models.db.stage_tree import RoundWithMatches
 from bracket.models.db.tournament import Tournament
 from bracket.models.db.user import UserPublic
-from bracket.models.db.util import RoundWithMatches
-from bracket.routes.auth import user_authenticated_for_tournament
+from bracket.routes.access import user_authenticated_for_tournament
 from bracket.routes.models import SuccessResponse
-from bracket.routes.util import (
+from bracket.routes.resources import (
     disallow_archived_tournament,
     round_dependency,
     round_with_matches_dependency,
 )
-from bracket.sql.matches import sql_create_matches, sql_delete_match
-from bracket.sql.rounds import (
-    get_next_round_name,
-    sql_create_rounds,
-    sql_delete_round,
-    sql_update_round,
-)
-from bracket.sql.stage_items import get_stage_item
-from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.validation import validate_round_create
-from bracket.utils.id_types import RoundId, TournamentId
+from bracket.utils.id_types import TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
 
-
-async def write_swiss_pairings(
-    session: DbSession,
-    round_id: RoundId,
-    pairing: SwissPairing,
-    tournament: Tournament,
-) -> None:
-    await sql_create_matches(
-        session,
-        tournament.id,
-        [
-            MatchCreateBody(
-                round_id=round_id,
-                stage_item_input1_id=input1.id,
-                stage_item_input2_id=input2.id,
-                duration_minutes=tournament.duration_minutes,
-                margin_minutes=tournament.margin_minutes,
-            )
-            for input1, input2 in pairing.pairs
-        ],
-    )
+TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
+LoadedRoundWithMatches = Annotated[RoundWithMatches, Depends(round_with_matches_dependency)]
 
 
 @router.delete("/tournaments/{tournament_id}/rounds/{round_id}", response_model=SuccessResponse)
 async def delete_round(
     session: DbSession,
-    tournament_id: TournamentId,
-    round_id: RoundId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    __: Tournament = Depends(disallow_archived_tournament),
-    round_with_matches: RoundWithMatches = Depends(round_with_matches_dependency),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
+    round_with_matches: LoadedRoundWithMatches,
 ) -> SuccessResponse:
-    stage_item = await get_stage_item(session, tournament_id, round_with_matches.stage_item_id)
-    if not stage_item.type.supports_dynamic_number_of_rounds:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"The rounds of a {stage_item.type_name.lower()} belong to its format and "
-                "can't be deleted"
-            ),
-        )
-
-    for match in round_with_matches.matches:
-        await sql_delete_match(session, match.id)
-
-    await sql_delete_round(session, round_id)
-
-    stage_item = await get_stage_item(session, tournament_id, round_with_matches.stage_item_id)
-    await recalculate_ranking_for_stage_item(session, tournament_id, stage_item)
-    await schedule_all_matches(session, tournament_id)
+    await delete_swiss_round(session, tournament, round_with_matches)
     return SuccessResponse()
 
 
 @router.post("/tournaments/{tournament_id}/rounds", response_model=SuccessResponse)
 async def create_round(
     session: DbSession,
-    tournament_id: TournamentId,
     round_body: RoundCreateBody,
-    user: UserPublic = Depends(user_authenticated_for_tournament),
-    tournament: Tournament = Depends(disallow_archived_tournament),
+    user: TournamentOrganizer,
+    tournament: OpenTournament,
 ) -> SuccessResponse:
     """
     Create the next round of a Swiss stage item as a draft in which every active team is paired.
@@ -110,64 +54,7 @@ async def create_round(
     Only organizers see the draft. Its pairings can be changed by adding and deleting matches, and
     it is published by updating the round with `is_draft` set to false.
     """
-    await validate_round_create(session, tournament_id, round_body)
-
-    stages = await get_full_tournament_details(session, tournament_id)
-    existing_rounds = [
-        round_
-        for stage in stages
-        for stage_item in stage.stage_items
-        for round_ in stage_item.rounds
-    ]
-    check_requirement(existing_rounds, user, "max_rounds")
-
-    stage_item = await get_stage_item(
-        session, tournament_id, stage_item_id=round_body.stage_item_id
-    )
-
-    if not stage_item.type.supports_dynamic_number_of_rounds:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Rounds of {stage_item.type_name.lower()} stage items are created automatically"
-            ),
-        )
-
-    if (draft_round := get_draft_round(stage_item)) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Publish or discard the draft {draft_round.name} first",
-        )
-
-    # The pairing search is the heaviest computation of the app. In a worker thread, other
-    # requests are still answered while it runs.
-    pairing = await run_in_threadpool(get_swiss_pairing, stage_item)
-    if len(pairing.pairs) < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Assign at least two active teams to this stage item first"
-                if len(pairing.unpaired) < 2
-                else "Every team has already played every other team"
-            ),
-        )
-
-    [round_id] = await sql_create_rounds(
-        session,
-        tournament_id,
-        [
-            RoundInsertable(
-                created=datetime_utc.now(),
-                is_draft=True,
-                stage_item_id=stage_item.id,
-                name=round_body.name
-                or await get_next_round_name(session, tournament_id, stage_item.id),
-            )
-        ],
-    )
-    await write_swiss_pairings(session, round_id, pairing, tournament)
-
-    await schedule_all_matches(session, tournament_id)
+    await create_swiss_round(session, tournament, round_body, user)
     return SuccessResponse()
 
 
@@ -176,35 +63,12 @@ async def create_round(
 )
 async def regenerate_round(
     session: DbSession,
-    tournament_id: TournamentId,
-    round_id: RoundId,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    tournament: Tournament = Depends(disallow_archived_tournament),
-    round_: RoundWithMatches = Depends(round_with_matches_dependency),
+    _: TournamentOrganizer,
+    tournament: OpenTournament,
+    round_: LoadedRoundWithMatches,
 ) -> SuccessResponse:
     """Replace a Swiss draft in one transaction, retaining it if any replacement fails."""
-    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
-    if not round_.is_draft or not stage_item.type.supports_dynamic_number_of_rounds:
-        raise HTTPException(400, "Only a draft Swiss round can be regenerated")
-    if any(is_played(match) for match in round_.matches):
-        raise HTTPException(400, "Clear the draft's results before regenerating its pairings")
-
-    previous_rounds = stage_item.model_copy(
-        update={
-            "rounds": [candidate for candidate in stage_item.rounds if candidate.id != round_id]
-        }
-    )
-    pairing = await run_in_threadpool(get_swiss_pairing, previous_rounds)
-    if not pairing.pairs:
-        raise HTTPException(400, "No replacement pairings are available. The draft was kept.")
-
-    for match in round_.matches:
-        await sql_delete_match(session, match.id)
-    await write_swiss_pairings(session, round_id, pairing, tournament)
-    await recalculate_ranking_for_stage_item(
-        session, tournament_id, await get_stage_item(session, tournament_id, stage_item.id)
-    )
-    await schedule_all_matches(session, tournament_id)
+    await regenerate_swiss_round(session, tournament, round_)
     return SuccessResponse()
 
 
@@ -212,34 +76,15 @@ async def regenerate_round(
 async def update_round_by_id(
     session: DbSession,
     tournament_id: TournamentId,
-    round_id: RoundId,
     round_body: RoundUpdateBody,
-    _: UserPublic = Depends(user_authenticated_for_tournament),
-    round_: Round = Depends(round_dependency),
-    ___: Tournament = Depends(disallow_archived_tournament),
+    _: TournamentOrganizer,
+    round_: Annotated[Round, Depends(round_dependency)],
+    ___: OpenTournament,
 ) -> SuccessResponse:
     """
     Rename a round, or publish or withdraw a draft. Only Swiss rounds can be drafts: the rounds of
     the other formats are published with their stage item, and a withdrawn one couldn't be
     published again.
     """
-    publication_changes = round_body.is_draft != round_.is_draft
-    stage_item = await get_stage_item(session, tournament_id, round_.stage_item_id)
-    if publication_changes and not stage_item.type.supports_dynamic_number_of_rounds:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"The rounds of a {stage_item.type_name.lower()} are always published. Only "
-                "Swiss rounds can be drafts."
-            ),
-        )
-
-    await sql_update_round(session, tournament_id, round_id, round_body)
-
-    # Only published rounds count, so publishing a round or taking it back changes the standings.
-    if publication_changes:
-        await recalculate_ranking_for_stage_item(
-            session, tournament_id, await get_stage_item(session, tournament_id, stage_item.id)
-        )
-
+    await update_round(session, tournament_id, round_, round_body)
     return SuccessResponse()

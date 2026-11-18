@@ -4,19 +4,20 @@ from http import HTTPMethod
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bracket.models.db.stage_item import StageItemWithInputsCreate, StageType
+from bracket.models.db.stage_item import StageItemWithInputsCreate
 from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyEmpty,
     StageItemInputCreateBodyFinal,
 )
-from bracket.models.db.util import RoundWithMatches
+from bracket.models.db.stage_tree import RoundWithMatches
+from bracket.models.enums import StageType
 from bracket.sql.stage_items import (
     get_stage_item,
     sql_create_stage_item_with_inputs,
     sql_delete_stage_item,
 )
-from bracket.utils.dummy_records import DUMMY_STAGE1, DUMMY_TEAM1
 from bracket.utils.id_types import StageItemInputId
+from tests.dummy_records import DUMMY_STAGE1, DUMMY_TEAM1
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE, send_tournament_request
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_stage, inserted_team
