@@ -8,7 +8,6 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from bracket import orm
 from bracket.database import engine
-from bracket.models.db.club import Club, ClubInsertable
 from bracket.models.db.match import Match, MatchInsertable
 from bracket.models.db.player import Player, PlayerInsertable
 from bracket.models.db.ranking import Ranking, RankingInsertable
@@ -23,13 +22,13 @@ from bracket.models.db.stage_item_inputs import (
 from bracket.models.db.team import Team, TeamInsertable
 from bracket.models.db.tournament import Tournament, TournamentInsertable
 from bracket.models.db.user import UserBase, UserInDB
-from bracket.models.db.user_x_club import UserXClub, UserXClubInsertable
-from bracket.models.enums import UserXClubRelation
+from bracket.models.enums import TournamentRole
 from bracket.sql.matches import match_without_details
+from bracket.sql.participation import LineupScope, sync_lineups
 from bracket.sql.stage_item_inputs import get_stage_item_input_by_id
 from bracket.sql.tournaments import sql_get_tournament
-from bracket.utils.id_types import StageItemInputId, TeamId, TournamentId
-from tests.dummy_records import DUMMY_CLUB, DUMMY_RANKING1, DUMMY_TOURNAMENT
+from bracket.utils.id_types import StageItemInputId, TeamId, TournamentId, UserId
+from tests.dummy_records import DUMMY_RANKING1, DUMMY_TOURNAMENT
 from tests.integration_tests.mocks import get_mock_token, get_mock_user
 from tests.integration_tests.models import AuthContext
 
@@ -39,6 +38,26 @@ async def assert_row_count_and_clear(entity_type: type[orm.Base], expected_rows:
         row_count = await session.scalar(select(func.count()).select_from(entity_type))
         await session.execute(delete(entity_type))
     assert row_count == expected_rows, (row_count, expected_rows)
+
+
+@asynccontextmanager
+async def created_teams_and_players_removed() -> AsyncIterator[None]:
+    """
+    Teams and players outlive tournaments. Those created inside are deleted afterwards, after
+    leaving the tournaments they joined.
+    """
+    async with AsyncSession(engine) as session:
+        last_team = await session.scalar(select(func.coalesce(func.max(orm.Team.id), 0)))
+        last_player = await session.scalar(select(func.coalesce(func.max(orm.Player.id), 0)))
+    try:
+        yield
+    finally:
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                delete(orm.TournamentTeam).where(orm.TournamentTeam.team_id > last_team)
+            )
+            await session.execute(delete(orm.Team).where(orm.Team.id > last_team))
+            await session.execute(delete(orm.Player).where(orm.Player.id > last_player))
 
 
 @asynccontextmanager
@@ -63,23 +82,76 @@ async def inserted_user(user: UserBase) -> AsyncIterator[UserInDB]:
 
 
 @asynccontextmanager
-async def inserted_club(club: ClubInsertable) -> AsyncIterator[Club]:
-    async with inserted_entity(orm.Club(**club.model_dump())) as entity:
-        yield Club.model_validate(entity)
-
-
-@asynccontextmanager
-async def inserted_tournament(tournament: TournamentInsertable) -> AsyncIterator[Tournament]:
+async def inserted_tournament(
+    tournament: TournamentInsertable, owner_id: UserId | None = None
+) -> AsyncIterator[Tournament]:
+    """A tournament, which the account `owner_id` owns when one is given."""
     async with inserted_entity(orm.Tournament(**tournament.model_dump())) as entity:
-        async with AsyncSession(engine) as session:
+        async with AsyncSession(engine) as session, session.begin():
+            if owner_id is not None:
+                session.add(
+                    orm.TournamentOrganizer(
+                        tournament_id=entity.id, user_id=owner_id, role=TournamentRole.OWNER
+                    )
+                )
+            await session.flush()
             model = await sql_get_tournament(session, TournamentId(entity.id))
         yield model
 
 
 @asynccontextmanager
-async def inserted_team(team: TeamInsertable) -> AsyncIterator[Team]:
+async def inserted_organizer(
+    tournament_id: TournamentId, user_id: UserId, role: TournamentRole
+) -> AsyncIterator[None]:
+    async with AsyncSession(engine) as session, session.begin():
+        session.add(
+            orm.TournamentOrganizer(tournament_id=tournament_id, user_id=user_id, role=role)
+        )
+    try:
+        yield
+    finally:
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                delete(orm.TournamentOrganizer).where(
+                    orm.TournamentOrganizer.tournament_id == tournament_id,
+                    orm.TournamentOrganizer.user_id == user_id,
+                )
+            )
+
+
+@asynccontextmanager
+async def inserted_team(
+    team: TeamInsertable, tournament_id: TournamentId | None = None, *, active: bool = True
+) -> AsyncIterator[Team]:
+    """A team, which takes part in `tournament_id` when one is given."""
     async with inserted_entity(orm.Team(**team.model_dump())) as entity:
-        yield Team.model_validate(entity)
+        model = Team.model_validate(entity)
+        if tournament_id is None:
+            yield model
+        else:
+            async with inserted_participation(tournament_id, model.id, active=active):
+                yield model
+
+
+@asynccontextmanager
+async def inserted_participation(
+    tournament_id: TournamentId, team_id: TeamId, *, active: bool = True
+) -> AsyncIterator[None]:
+    """The team takes part in the tournament, with its active members in the lineup."""
+    async with AsyncSession(engine) as session, session.begin():
+        session.add(orm.TournamentTeam(tournament_id=tournament_id, team_id=team_id, active=active))
+        await session.flush()
+        await sync_lineups(session, LineupScope.of_tournament(tournament_id))
+    try:
+        yield
+    finally:
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                delete(orm.TournamentTeam).where(
+                    orm.TournamentTeam.tournament_id == tournament_id,
+                    orm.TournamentTeam.team_id == team_id,
+                )
+            )
 
 
 @asynccontextmanager
@@ -96,13 +168,19 @@ async def inserted_player(player: PlayerInsertable) -> AsyncIterator[Player]:
 
 @asynccontextmanager
 async def inserted_player_in_team(
-    player: PlayerInsertable, team_id: TeamId
+    player: PlayerInsertable, team_id: TeamId, *, active: bool = True
 ) -> AsyncIterator[Player]:
+    """
+    A player in the team's roster. An active member joins the lineups of the team's open
+    tournaments.
+    """
     async with inserted_player(player) as model:
-        async with inserted_entity(
-            orm.PlayerXTeam(tournament_id=model.tournament_id, player_id=model.id, team_id=team_id)
-        ):
-            yield model
+        async with AsyncSession(engine) as session, session.begin():
+            session.add(orm.TeamMember(team_id=team_id, player_id=model.id, active=active))
+            await session.flush()
+            await sync_lineups(session, LineupScope.of_teams({team_id}))
+        # Deleting the player at the end removes the membership and the lineup rows with it.
+        yield model
 
 
 @asynccontextmanager
@@ -167,42 +245,25 @@ async def inserted_match(match: MatchInsertable) -> AsyncIterator[Match]:
 
 
 @asynccontextmanager
-async def inserted_user_x_club(user_x_club: UserXClubInsertable) -> AsyncIterator[UserXClub]:
-    async with inserted_entity(orm.UserXClub(**user_x_club.model_dump())) as entity:
-        yield UserXClub.model_validate(entity)
-
-
-@asynccontextmanager
 async def inserted_auth_context(
     dashboard_endpoint: str | None = None,
 ) -> AsyncIterator[AuthContext]:
-    """An organizer with an event and a tournament. Details links are unique: give each its own."""
+    """An organizer who owns a tournament. Details links are unique: give each its own."""
     mock_user = get_mock_user()
     async with (
         inserted_user(mock_user) as user_inserted,
-        inserted_club(DUMMY_CLUB) as club_inserted,
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": club_inserted.id, "dashboard_endpoint": dashboard_endpoint}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": dashboard_endpoint})
         ) as tournament_inserted,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": tournament_inserted.id})
         ) as ranking_inserted,
-        inserted_user_x_club(
-            UserXClubInsertable(
-                user_id=user_inserted.id,
-                club_id=club_inserted.id,
-                relation=UserXClubRelation.OWNER,
-            )
-        ) as user_x_club_inserted,
+        inserted_organizer(tournament_inserted.id, user_inserted.id, TournamentRole.OWNER),
     ):
         yield AuthContext(
             headers={"Authorization": f"Bearer {get_mock_token(user_inserted)}"},
             user=user_inserted,
-            club=club_inserted,
             tournament=tournament_inserted,
-            user_x_club=user_x_club_inserted,
             ranking=ranking_inserted,
         )
 

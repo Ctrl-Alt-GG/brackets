@@ -30,9 +30,7 @@ async def test_available_inputs(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted,
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
@@ -54,9 +52,7 @@ async def test_update_stage_item_input(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted,
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
@@ -113,7 +109,7 @@ async def test_update_stage_item_input_invalid_team(
             json={"team_id": -42},
         )
 
-    assert response == {"detail": "Could not find team with id -42"}
+    assert response == {"detail": "No team with id -42 takes part in this tournament"}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -123,9 +119,7 @@ async def test_update_stage_item_input_from_other_tournament(
     """Regression test: an input could take its teams from another tournament's stage item."""
     async with (
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}), auth_context.user.id
         ) as other_tournament,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})

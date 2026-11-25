@@ -24,19 +24,21 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputCreateBodyTentative,
     StageItemInputFinal,
 )
-from bracket.models.enums import StageType, UserAccountType, UserXClubRelation
+from bracket.models.enums import StageType, TournamentRole, UserAccountType
 from bracket.sql.matches import sql_update_match
+from bracket.sql.organizers import sql_add_organizer
+from bracket.sql.participation import LineupScope, sql_add_tournament_teams, sync_lineups
 from bracket.sql.players import insert_players
 from bracket.sql.stage_items import sql_create_stage_item_with_inputs
 from bracket.sql.stages import get_full_tournament_details
-from bracket.sql.teams import sql_add_team_players, sql_create_team
+from bracket.sql.teams import sql_add_team_members, sql_create_team
 from bracket.sql.users import get_user
 from bracket.utils.alembic import alembic_stamp_head
-from bracket.utils.id_types import ClubId, StageId, TeamId, TournamentId, UserId
+from bracket.utils.id_types import StageId, TeamId, TournamentId, UserId
 from bracket.utils.logging import logger
 from bracket.utils.security import hash_password
 
-# The account the example event belongs to, unless ADMIN_EMAIL names another one.
+# The account that owns the example tournament, unless ADMIN_EMAIL names another one.
 DEMO_USER_EMAIL = "admin@example.com"
 DEMO_USER_PASSWORD = "adminadmin"
 DEMO_START_TIME = datetime(2022, 1, 11, 4, 32, 11, tzinfo=UTC)
@@ -60,49 +62,35 @@ async def add_demo_user(session: AsyncSession) -> UserId:
     return UserId(user.id)
 
 
-async def add_event(session: AsyncSession, demo_user_id: UserId, admin_id: UserId | None) -> ClubId:
-    """The example event. A configured administrator owns it, with the demo user helping."""
-    club = orm.Club(name="Some Cool Club")
-    session.add(club)
-    await session.flush()
-
-    admin_owns = admin_id is not None and admin_id != demo_user_id
-    session.add(
-        orm.UserXClub(
-            club_id=club.id,
-            user_id=demo_user_id,
-            relation=UserXClubRelation.COLLABORATOR if admin_owns else UserXClubRelation.OWNER,
-        )
-    )
-    if admin_owns:
-        session.add(
-            orm.UserXClub(club_id=club.id, user_id=admin_id, relation=UserXClubRelation.OWNER)
-        )
-    await session.flush()
-    return ClubId(club.id)
-
-
 async def add_tournament(
-    session: AsyncSession, club_id: ClubId
+    session: AsyncSession, demo_user_id: UserId, admin_id: UserId | None
 ) -> tuple[TournamentId, StageId, StageId]:
-    """The tournament with its ranking, a group stage that is active and a knockout stage."""
+    """
+    The tournament with its ranking, a group stage that is active and a knockout stage. A
+    configured administrator owns it, with the demo user helping.
+    """
     tournament = orm.Tournament(
-        club_id=club_id,
         name="Some Cool Tournament",
         start_time=DEMO_START_TIME,
         dashboard_public=True,
         dashboard_endpoint="endpoint-test",
-        players_can_be_in_multiple_teams=True,
         duration_minutes=10,
         margin_minutes=5,
     )
     session.add(tournament)
     await session.flush()
+    tournament_id = TournamentId(tournament.id)
 
-    groups = orm.Stage(tournament_id=tournament.id, name="Group Stage", is_active=True)
-    knockout = orm.Stage(tournament_id=tournament.id, name="Knockout Stage", is_active=False)
+    if admin_id is not None and admin_id != demo_user_id:
+        await sql_add_organizer(session, tournament_id, admin_id, TournamentRole.OWNER)
+        await sql_add_organizer(session, tournament_id, demo_user_id, TournamentRole.COLLABORATOR)
+    else:
+        await sql_add_organizer(session, tournament_id, demo_user_id, TournamentRole.OWNER)
+
+    groups = orm.Stage(tournament_id=tournament_id, name="Group Stage", is_active=True)
+    knockout = orm.Stage(tournament_id=tournament_id, name="Knockout Stage", is_active=False)
     ranking = orm.Ranking(
-        tournament_id=tournament.id,
+        tournament_id=tournament_id,
         position=0,
         win_points=Decimal("1.0"),
         draw_points=Decimal("0.5"),
@@ -111,25 +99,26 @@ async def add_tournament(
     )
     session.add_all([groups, knockout, ranking])
     await session.flush()
-    return TournamentId(tournament.id), StageId(groups.id), StageId(knockout.id)
+    return tournament_id, StageId(groups.id), StageId(knockout.id)
 
 
 async def add_teams(session: AsyncSession, tournament_id: TournamentId) -> list[TeamId]:
+    """Teams with two players each, which take part in the tournament."""
     team_ids = []
     for team_number in range(1, TEAMS + 1):
-        team_id = await sql_create_team(session, tournament_id, f"Team {team_number}", True)
+        team_id = await sql_create_team(session, f"Team {team_number}")
         first_player = (team_number - 1) * PLAYERS_PER_TEAM + 1
         player_ids = await insert_players(
             session,
-            tournament_id,
             [
                 f"Player {number:02d}"
                 for number in range(first_player, first_player + PLAYERS_PER_TEAM)
             ],
-            active=True,
         )
-        await sql_add_team_players(session, tournament_id, team_id, player_ids)
+        await sql_add_team_members(session, team_id, player_ids)
         team_ids.append(team_id)
+    await sql_add_tournament_teams(session, tournament_id, team_ids)
+    await sync_lineups(session, LineupScope.of_tournament(tournament_id))
     return team_ids
 
 
@@ -183,8 +172,7 @@ async def create_dev_db(session: AsyncSession) -> UserId:
     await connection.run_sync(alembic_stamp_head)
 
     demo_user_id = await add_demo_user(session)
-    club_id = await add_event(session, demo_user_id, admin_id)
-    tournament_id, groups_id, knockout_id = await add_tournament(session, club_id)
+    tournament_id, groups_id, knockout_id = await add_tournament(session, demo_user_id, admin_id)
     team_ids = await add_teams(session, tournament_id)
 
     group_items = [

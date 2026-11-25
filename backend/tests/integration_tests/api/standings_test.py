@@ -40,9 +40,7 @@ async def test_standings_and_player_statistics(
         teams = [
             await stack.enter_async_context(
                 inserted_team(
-                    DUMMY_TEAM1.model_copy(
-                        update={"tournament_id": tournament_id, "name": f"Team {index}"}
-                    )
+                    DUMMY_TEAM1.model_copy(update={"name": f"Team {index}"}), tournament_id
                 )
             )
             for index in range(1, 4)
@@ -50,10 +48,7 @@ async def test_standings_and_player_statistics(
         players = [
             await stack.enter_async_context(
                 inserted_player_in_team(
-                    DUMMY_PLAYER1.model_copy(
-                        update={"tournament_id": tournament_id, "name": f"Player {index}"}
-                    ),
-                    team.id,
+                    DUMMY_PLAYER1.model_copy(update={"name": f"Player {index}"}), team.id
                 )
             )
             for index, team in enumerate(teams, start=1)

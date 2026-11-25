@@ -61,12 +61,8 @@ async def test_create_match(
                 update={"stage_item_id": stage_item_inserted.id, "is_draft": True}
             )
         ) as round_inserted,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team1_inserted,
-        inserted_team(
-            DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team2_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team1_inserted,
+        inserted_team(DUMMY_TEAM2, auth_context.tournament.id) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
                 slot=1,
@@ -124,12 +120,8 @@ async def test_delete_match(
                 update={"stage_item_id": stage_item_inserted.id, "is_draft": True}
             )
         ) as round_inserted,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team1_inserted,
-        inserted_team(
-            DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team2_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team1_inserted,
+        inserted_team(DUMMY_TEAM2, auth_context.tournament.id) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
                 slot=1,
@@ -181,12 +173,8 @@ async def test_update_match(
         inserted_round(
             DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item_inserted.id})
         ) as round_inserted,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team1_inserted,
-        inserted_team(
-            DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team2_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team1_inserted,
+        inserted_team(DUMMY_TEAM2, auth_context.tournament.id) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
                 slot=1,
@@ -259,12 +247,8 @@ async def test_update_endpoint_custom_duration_margin(
         inserted_round(
             DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item_inserted.id})
         ) as round_inserted,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team1_inserted,
-        inserted_team(
-            DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team2_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team1_inserted,
+        inserted_team(DUMMY_TEAM2, auth_context.tournament.id) as team2_inserted,
         inserted_stage_item_input(
             StageItemInputInsertable(
                 slot=1,
@@ -342,9 +326,9 @@ async def test_create_match_for_team_already_playing_in_round(
         inserted_round(
             DUMMY_ROUND1.model_copy(update={"stage_item_id": stage_item.id, "is_draft": True})
         ) as round_,
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": tournament_id})) as team1,
-        inserted_team(DUMMY_TEAM2.model_copy(update={"tournament_id": tournament_id})) as team2,
-        inserted_team(DUMMY_TEAM3.model_copy(update={"tournament_id": tournament_id})) as team3,
+        inserted_team(DUMMY_TEAM1, tournament_id) as team1,
+        inserted_team(DUMMY_TEAM2, tournament_id) as team2,
+        inserted_team(DUMMY_TEAM3, tournament_id) as team3,
         inserted_stage_item_input(
             StageItemInputInsertable(
                 slot=1, team_id=team1.id, tournament_id=tournament_id, stage_item_id=stage_item.id
@@ -391,9 +375,7 @@ async def test_update_match_of_other_tournament(
 ) -> None:
     async with (
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}), auth_context.user.id
         ) as other_tournament,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})

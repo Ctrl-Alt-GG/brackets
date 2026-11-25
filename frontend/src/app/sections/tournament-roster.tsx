@@ -1,415 +1,181 @@
-import { useSavedForm } from '../saved-form';
+/*
+ * A tournament's teams and players. Teams take part from the pool that every tournament shares,
+ * and their active members play for them here: the tournament's lineup.
+ */
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { matchSorter } from 'match-sorter';
-import { useMemo, useState } from 'react';
-import { type UseFormRegisterReturn } from 'react-hook-form';
+import { Link } from 'react-router';
 import { z } from 'zod';
 
 import * as OpenApi from '../../openapi';
 import {
-  createMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostMutation,
-  createMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostMutation,
-  createSinglePlayerApiTournamentsTournamentIdPlayersPostMutation,
-  createTeamApiTournamentsTournamentIdTeamsPostMutation,
-  deletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteMutation,
-  deleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteMutation,
-  updatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutMutation,
-  updateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutMutation,
-  updateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostMutation,
+  addTournamentTeamsApiTournamentsTournamentIdTeamsPostMutation,
+  createTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostMutation,
+  removeTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteMutation,
+  updateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutMutation,
 } from '../../openapi/@tanstack/react-query.gen';
-import { zPlayerBody, zPlayerMultiBody, zTeamBody, zTeamMultiBody } from '../../openapi/zod.gen';
-import { LogoField } from '../components/logo-field';
-import { useCreateForm } from '../create-form';
-import type { TournamentBundle } from '../types';
-import { CheckboxField, Disclosure, Field, Surface, SurfaceHeading } from '../ui';
-import { teamLogoUrl } from '../urls';
-import { cx, groupBy } from '../utils';
+import { zTeamMultiBody } from '../../openapi/zod.gen';
+import {
+  ActiveBadge,
+  FilterBox,
+  TeamForm,
+  useFilter,
+  usePool,
+  type Pool,
+} from '../components/roster-editors';
 import { confirm } from '../confirm';
+import { useCreateForm } from '../create-form';
+import { getErrorMessage } from '../errors';
+import { useOrganizerTranslation } from '../organizer-locales';
+import type { TournamentBundle } from '../types';
+import { Disclosure, ErrorState, Field, LoadingState, Surface, SurfaceHeading } from '../ui';
+import { teamLogoUrl } from '../urls';
+import { cx } from '../utils';
 
-/**
- * Narrows a long list down to what was typed. The rows that don't match are hidden, not removed:
- * an editor that is open keeps what was typed into it, and a ticked box stays ticked.
- */
-function useFilter<T extends { id: number }>(items: T[], keys: string[]) {
-  const [query, setQuery] = useState('');
-  const term = query.trim();
-  const matching = term ? new Set(matchSorter(items, term, { keys }).map((item) => item.id)) : null;
-
-  return {
-    isShown: (item: T) => matching?.has(item.id) ?? true,
-    nothingMatches: matching?.size === 0,
-    query,
-    setQuery,
-    term,
-  };
-}
-
-function FilterBox({
-  className,
-  label,
-  onChange,
-  value,
-}: {
-  className?: string;
-  label: string;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <input
-      aria-label={label}
-      className={cx('input w-full sm:max-w-md', className)}
-      onChange={(event) => onChange(event.target.value)}
-      // Inside a form, Enter would save it.
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.preventDefault();
-      }}
-      placeholder={label}
-      type="search"
-      value={value}
-    />
-  );
-}
-
-function ActiveBadge({ active }: { active: boolean }) {
-  return active ? (
-    <span className="badge badge-soft badge-success badge-sm">Active</span>
-  ) : (
-    <span className="badge badge-soft badge-sm">Inactive</span>
-  );
-}
-
-function NewPlayerForm({ tournamentId }: { tournamentId: number }) {
-  const form = useCreateForm({
-    defaultValues: { active: true, name: '' },
-    resolver: zodResolver(zPlayerBody),
-  });
-  const create = useMutation({
-    ...createSinglePlayerApiTournamentsTournamentIdPlayersPostMutation(),
-    meta: { successMessage: 'Player added.' },
-  });
-
-  return (
-    <form
-      onSubmit={form.submitWith((body) =>
-        create.mutateAsync({ body, path: { tournament_id: tournamentId } }),
-      )}
-    >
-      <fieldset className="contents" disabled={form.locked}>
-        <Field error={form.formState.errors.name?.message} label="Player name">
-          <input
-            className="input w-full"
-            placeholder="Mortal Kombat main"
-            required
-            {...form.register('name')}
-          />
-        </Field>
-        <CheckboxField className="mt-3" label="Player is active" {...form.register('active')} />
-        <button className="btn btn-primary mt-4" type="submit">
-          Add player
-        </button>
-      </fieldset>
-    </form>
-  );
-}
-
-function BulkPlayersForm({ tournamentId }: { tournamentId: number }) {
-  const form = useCreateForm({
-    defaultValues: { active: true, names: '' },
-    resolver: zodResolver(zPlayerMultiBody),
-  });
-  const create = useMutation({
-    ...createMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostMutation(),
-    meta: { successMessage: 'Players added.' },
-  });
-
-  return (
-    <form
-      onSubmit={form.submitWith((body) =>
-        create.mutateAsync({ body, path: { tournament_id: tournamentId } }),
-      )}
-    >
-      <fieldset className="contents" disabled={form.locked}>
-        <Field error={form.formState.errors.names?.message} label="Bulk import names">
-          <textarea
-            className="textarea min-h-28 w-full"
-            placeholder="One player per line"
-            {...form.register('names')}
-          />
-        </Field>
-        <button className="btn btn-soft mt-4" type="submit">
-          Bulk import
-        </button>
-      </fieldset>
-    </form>
-  );
-}
-
-function PlayerEditor({
-  hidden,
-  player,
-  tournamentId,
-}: {
-  hidden: boolean;
-  player: OpenApi.Player;
-  tournamentId: number;
-}) {
-  return (
-    <Disclosure
-      className={cx(
-        'collapse collapse-arrow border border-base-300 bg-base-100/50',
-        hidden && 'hidden',
-      )}
-      summary={
-        <>
-          <span className="flex flex-wrap items-center gap-2 font-semibold">
-            {player.name}
-            <ActiveBadge active={player.active} />
-          </span>
-          <span className="block text-sm text-base-content/70">
-            {player.wins}W / {player.draws}D / {player.losses}L · ELO {player.elo_score}
-          </span>
-        </>
-      }
-    >
-      <PlayerForm player={player} tournamentId={tournamentId} />
-    </Disclosure>
-  );
-}
-
-function PlayerForm({ player, tournamentId }: { player: OpenApi.Player; tournamentId: number }) {
-  const form = useSavedForm({
-    resolver: zodResolver(zPlayerBody),
-    values: { active: player.active, name: player.name },
-  });
-  const update = useMutation({
-    ...form.saveCallbacks,
-    ...updatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutMutation(),
-    meta: { successMessage: 'Player saved.' },
-  });
-  const remove = useMutation({
-    ...deletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteMutation(),
-    meta: { successMessage: 'Player deleted.' },
-  });
-  const path = { player_id: player.id, tournament_id: tournamentId };
-
-  return (
-    <form
-      className="collapse-content"
-      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
-    >
-      <div className="grid items-end gap-x-4 md:grid-cols-2">
-        <Field error={form.formState.errors.name?.message} label="Name">
-          <input className="input w-full" required {...form.register('name')} />
-        </Field>
-        <CheckboxField className="mb-1" label="Active player" {...form.register('active')} />
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button className="btn btn-primary" disabled={update.isPending} type="submit">
-          Save
-        </button>
-        <button
-          className="btn btn-error btn-soft"
-          disabled={remove.isPending}
-          onClick={async () => {
-            if (
-              await confirm({
-                confirmLabel: 'Delete player',
-                destructive: true,
-                message: `Delete ${player.name}?`,
-              })
-            ) {
-              remove.mutate({ path });
-            }
-          }}
-          type="button"
-        >
-          Delete
-        </button>
-      </div>
-    </form>
-  );
-}
-
+/** Who plays in the tournament, for which team, and how they have done so far. */
 export function PlayersSection({ bundle }: { bundle: TournamentBundle }) {
-  const tournamentId = bundle.tournament.id;
+  const { t } = useOrganizerTranslation();
   const filter = useFilter(bundle.players, ['name']);
+  const teamNames = new Map(bundle.teams.map((team) => [team.id, team.name]));
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <Surface>
-        <SurfaceHeading title="Roster intake" />
-        <NewPlayerForm tournamentId={tournamentId} />
-        <div className="border-t border-base-300 pt-4">
-          <BulkPlayersForm tournamentId={tournamentId} />
-        </div>
-      </Surface>
-
-      <Surface>
-        <SurfaceHeading
-          actions={
-            <span className="text-sm text-base-content/70">{bundle.players.length} players</span>
-          }
-          title="Players"
+    <Surface>
+      <SurfaceHeading
+        actions={
+          <span className="text-sm text-base-content/70">
+            {t('roster.playerCount', { count: bundle.players.length })}
+          </span>
+        }
+        title={t('roster.players')}
+      />
+      <p className="text-sm text-base-content/70">
+        {t('lineup.help')}{' '}
+        <Link className="link" to="/roster">
+          {t('lineup.manage')}
+        </Link>
+      </p>
+      {bundle.players.length === 0 ? (
+        <p className="text-sm text-base-content/70">{t('lineup.empty')}</p>
+      ) : (
+        <FilterBox
+          label={t('roster.searchPlayers')}
+          onChange={filter.setQuery}
+          value={filter.query}
         />
-        {bundle.players.length === 0 ? (
-          <p className="text-sm text-base-content/70">No players yet.</p>
-        ) : (
-          <FilterBox label="Search players" onChange={filter.setQuery} value={filter.query} />
-        )}
-        {filter.nothingMatches ? (
-          <p className="text-sm text-base-content/70">No player matches “{filter.term}”.</p>
-        ) : null}
-        <div className="space-y-3">
-          {bundle.players.map((player) => (
-            <PlayerEditor
-              hidden={!filter.isShown(player)}
-              key={player.id}
-              player={player}
-              tournamentId={tournamentId}
-            />
-          ))}
-        </div>
-      </Surface>
-    </div>
+      )}
+      {filter.nothingMatches ? (
+        <p className="text-sm text-base-content/70">
+          {t('roster.noPlayerMatches', { query: filter.term })}
+        </p>
+      ) : null}
+      <ul className="divide-y divide-base-300 rounded-box border border-base-300">
+        {bundle.players.map((player) => (
+          <li
+            className={cx(
+              'flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3',
+              !filter.isShown(player) && 'hidden',
+            )}
+            key={player.id}
+          >
+            <span>
+              <span className="font-medium">{player.name}</span>
+              <span className="text-sm text-base-content/70">
+                {' '}
+                · {teamNames.get(player.team_id)}
+              </span>
+            </span>
+            <span className="text-sm text-base-content/70">
+              {t('roster.playerRecord', {
+                draws: player.draws,
+                elo: player.elo_score,
+                losses: player.losses,
+                wins: player.wins,
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Surface>
   );
 }
 
 // Checkboxes hold their values as strings.
-const teamSchema = zTeamBody.extend({ player_ids: z.array(z.coerce.number().int()) });
+const addTeamsSchema = z.object({ team_ids: z.array(z.coerce.number().int()).min(1) });
 
-/** Long enough that looking for a name by eye takes a while. */
-const SEARCHABLE_PLAYER_COUNT = 12;
-
-/** The teams each player is in, by player id. */
-function groupTeamsByPlayer(teams: OpenApi.FullTeamWithPlayers[]) {
-  return groupBy(
-    teams.flatMap((team) => team.players.map((player) => ({ playerId: player.id, team }))),
-    (membership) => membership.playerId,
+/** Teams from the pool that don't take part yet. */
+function AddTeamsForm({ pool, tournament }: { pool: Pool; tournament: OpenApi.Tournament }) {
+  const { t } = useOrganizerTranslation();
+  const candidates = pool.teams.filter(
+    (team) =>
+      !team.participations.some((participation) => participation.tournament_id === tournament.id),
   );
-}
-
-type TeamsByPlayer = ReturnType<typeof groupTeamsByPlayer>;
-
-/** What the team forms need of the tournament: its players, and whose team they are in. */
-type Roster = {
-  players: OpenApi.Player[];
-  /** Whether the tournament's settings let a player be in more than one team. */
-  sharedPlayers: boolean;
-  teamsByPlayer: TeamsByPlayer;
-  tournamentId: number;
-};
-
-function PlayerChecklist({
-  registration,
-  roster: { players, sharedPlayers, teamsByPlayer },
-  team,
-}: {
-  registration: UseFormRegisterReturn<'player_ids'>;
-  roster: Roster;
-  /** The team being edited. A new team has none. */
-  team?: OpenApi.FullTeamWithPlayers;
-}) {
-  const filter = useFilter(players, ['name']);
-  const members = new Set(team?.players.map((player) => player.id));
-  const rows = players.map((player) => {
-    const elsewhere = (teamsByPlayer.get(player.id) ?? [])
-      .filter((membership) => membership.team.id !== team?.id)
-      .map((membership) => membership.team.name);
-    // Someone who is already in this team can always be taken out of it.
-    const taken = elsewhere.length > 0 && !sharedPlayers && !members.has(player.id);
-    return { elsewhere, player, taken };
+  const filter = useFilter(candidates, ['name', 'members.*.player.name']);
+  const form = useCreateForm<z.input<typeof addTeamsSchema>, unknown, OpenApi.TournamentTeamsBody>({
+    defaultValues: { team_ids: [] },
+    resolver: zodResolver(addTeamsSchema),
   });
-  // The players who can be picked come first: in a full tournament the others are most of the list.
-  const ordered = rows.toSorted((left, right) => Number(left.taken) - Number(right.taken));
-
-  return (
-    <fieldset className="fieldset">
-      <legend className="fieldset-legend">Players</legend>
-      {players.length === 0 ? (
-        <p className="text-sm text-base-content/70">Add players first to put them in teams.</p>
-      ) : (
-        <>
-          {players.length >= SEARCHABLE_PLAYER_COUNT ? (
-            <FilterBox
-              className="sm:max-w-none"
-              label="Search players"
-              onChange={filter.setQuery}
-              value={filter.query}
-            />
-          ) : null}
-          {filter.nothingMatches ? (
-            <p className="text-sm text-base-content/70">No player matches “{filter.term}”.</p>
-          ) : null}
-          <div className="grid max-h-60 gap-2 overflow-y-auto rounded-box border border-base-300 bg-base-100/40 p-3 sm:grid-cols-2">
-            {ordered.map(({ elsewhere, player, taken }) => (
-              <label
-                className={cx(
-                  'flex items-start gap-3 text-sm',
-                  taken ? 'cursor-not-allowed text-base-content/60' : 'cursor-pointer',
-                  !filter.isShown(player) && 'hidden',
-                )}
-                key={player.id}
-              >
-                <input
-                  className="checkbox checkbox-primary checkbox-sm"
-                  disabled={taken}
-                  type="checkbox"
-                  value={player.id}
-                  {...registration}
-                />
-                <span>
-                  {player.name}
-                  {elsewhere.length > 0 ? (
-                    <span className="block text-xs text-base-content/70">
-                      in {elsewhere.join(', ')}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            ))}
-          </div>
-          {sharedPlayers ? null : (
-            <p className="label whitespace-normal">
-              A player can be in one team. The tournament's settings can allow more.
-            </p>
-          )}
-        </>
-      )}
-    </fieldset>
-  );
-}
-
-function NewTeamForm({ roster }: { roster: Roster }) {
-  const form = useCreateForm({
-    defaultValues: { active: true, name: '', player_ids: [] as string[] },
-    resolver: zodResolver(teamSchema),
+  const add = useMutation({
+    ...addTournamentTeamsApiTournamentsTournamentIdTeamsPostMutation(),
+    meta: { successMessage: t('participation.added') },
   });
-  const create = useMutation({
-    ...createTeamApiTournamentsTournamentIdTeamsPostMutation(),
-    meta: { successMessage: 'Team created.' },
-  });
+
+  if (candidates.length === 0) {
+    return (
+      <p className="text-sm text-base-content/70">
+        {pool.teams.length === 0 ? t('participation.noTeamsYet') : t('participation.allTakePart')}{' '}
+        <Link className="link" to="/roster">
+          {t('lineup.manage')}
+        </Link>
+      </p>
+    );
+  }
 
   return (
     <form
       onSubmit={form.submitWith((body) =>
-        create.mutateAsync({ body, path: { tournament_id: roster.tournamentId } }),
+        add.mutateAsync({ body, path: { tournament_id: tournament.id } }),
       )}
     >
       <fieldset className="contents" disabled={form.locked}>
-        <Field error={form.formState.errors.name?.message} label="Team name">
-          <input
-            className="input w-full"
-            placeholder="Arcade Wolves"
-            required
-            {...form.register('name')}
-          />
-        </Field>
-        <CheckboxField className="mt-3" label="Team is active" {...form.register('active')} />
-        <PlayerChecklist registration={form.register('player_ids')} roster={roster} />
+        <FilterBox
+          className="sm:max-w-none"
+          label={t('roster.searchTeams')}
+          onChange={filter.setQuery}
+          value={filter.query}
+        />
+        <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto rounded-box border border-base-300 bg-base-100/40 p-3 sm:grid-cols-2">
+          {candidates.map((team) => (
+            <label
+              className={cx(
+                'flex cursor-pointer items-start gap-3 text-sm',
+                !filter.isShown(team) && 'hidden',
+              )}
+              key={team.id}
+            >
+              <input
+                className="checkbox checkbox-primary checkbox-sm"
+                type="checkbox"
+                value={team.id}
+                {...form.register('team_ids')}
+              />
+              <span>
+                {team.name}
+                <span className="block text-xs text-base-content/70">
+                  {team.members
+                    .filter((member) => member.active)
+                    .map((member) => member.player.name)
+                    .join(', ') || t('roster.noTeamPlayers')}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {form.formState.errors.team_ids ? (
+          <p className="label text-error">{t('participation.pickTeams')}</p>
+        ) : null}
         <button className="btn btn-primary mt-4" type="submit">
-          Create team
+          {add.isPending ? t('common.adding') : t('participation.add')}
         </button>
       </fieldset>
     </form>
@@ -417,13 +183,14 @@ function NewTeamForm({ roster }: { roster: Roster }) {
 }
 
 function BulkTeamsForm({ tournamentId }: { tournamentId: number }) {
+  const { t } = useOrganizerTranslation();
   const form = useCreateForm({
-    defaultValues: { active: true, names: '' },
+    defaultValues: { names: '' },
     resolver: zodResolver(zTeamMultiBody),
   });
   const create = useMutation({
-    ...createMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostMutation(),
-    meta: { successMessage: 'Teams created.' },
+    ...createTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostMutation(),
+    meta: { successMessage: t('roster.teamsCreated') },
   });
 
   return (
@@ -433,33 +200,103 @@ function BulkTeamsForm({ tournamentId }: { tournamentId: number }) {
       )}
     >
       <fieldset className="contents" disabled={form.locked}>
-        <Field error={form.formState.errors.names?.message} label="Team names">
+        <Field
+          error={form.formState.errors.names?.message}
+          hint={t('roster.teamListHint')}
+          label={t('roster.teamNames')}
+        >
           <textarea
             className="textarea min-h-28 w-full"
-            placeholder={
-              'One team per line, with its players after commas:\nRed Rockets, Anna, Ben'
-            }
+            placeholder={t('roster.teamList')}
             {...form.register('names')}
           />
         </Field>
         <button className="btn btn-soft mt-4" type="submit">
-          Create from list
+          {t('roster.createFromList')}
         </button>
       </fieldset>
     </form>
   );
 }
 
-function TeamEditor({
-  hidden,
-  roster,
+/** Whether the team plays the rounds still to come, and taking it out of the tournament. */
+function Participation({
   team,
+  tournamentId,
+}: {
+  team: OpenApi.TournamentTeamWithPlayers;
+  tournamentId: number;
+}) {
+  const { t } = useOrganizerTranslation();
+  const path = { team_id: team.id, tournament_id: tournamentId };
+  const setActive = useMutation({
+    ...updateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutMutation(),
+    meta: { successMessage: t('participation.saved') },
+  });
+  const remove = useMutation({
+    ...removeTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteMutation(),
+    meta: { successMessage: t('participation.removed') },
+  });
+
+  return (
+    <div className="collapse-content space-y-3 border-t border-base-300 pt-4">
+      <p className="text-sm text-base-content/70">
+        {team.active ? t('participation.activeHelp') : t('participation.inactiveHelp')}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          className="btn btn-soft btn-sm"
+          disabled={setActive.isPending}
+          onClick={() => setActive.mutate({ body: { active: !team.active }, path })}
+          type="button"
+        >
+          {team.active ? t('participation.deactivate') : t('participation.activate')}
+        </button>
+        <button
+          className="btn btn-error btn-soft btn-sm"
+          disabled={remove.isPending}
+          onClick={async () => {
+            if (
+              await confirm({
+                confirmLabel: t('participation.remove'),
+                destructive: true,
+                message: t('participation.removeQuestion', { name: team.name }),
+              })
+            ) {
+              remove.mutate({ path });
+            }
+          }}
+          type="button"
+        >
+          {t('participation.remove')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A team of the tournament: the team itself, which every tournament shares, and its participation
+ * here.
+ */
+function TournamentTeamEditor({
+  hidden,
+  pool,
+  poolFailed,
+  team,
+  tournamentId,
 }: {
   hidden: boolean;
-  roster: Roster;
-  team: OpenApi.FullTeamWithPlayers;
+  /** The shared teams and players, once they have loaded. */
+  pool: Pool | undefined;
+  /** Loading the pool failed. The page offers to try again. */
+  poolFailed: boolean;
+  team: OpenApi.TournamentTeamWithPlayers;
+  tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
   const logoUrl = teamLogoUrl(team);
+  const shared = pool?.teams.find((candidate) => candidate.id === team.id);
 
   return (
     <Disclosure
@@ -477,131 +314,89 @@ function TeamEditor({
             <ActiveBadge active={team.active} />
           </span>
           <span className="block text-sm text-base-content/70">
-            {team.players.map((player) => player.name).join(', ') || 'No players yet'}
+            {team.players.map((player) => player.name).join(', ') || t('roster.noTeamPlayers')}
           </span>
         </>
       }
     >
-      <TeamForm roster={roster} team={team} />
+      {shared && pool ? (
+        <TeamForm pool={pool} team={shared} />
+      ) : (
+        <p className="collapse-content text-sm text-base-content/70" role="status">
+          {poolFailed ? t('rosterPage.loadFailed') : t('rosterPage.loading')}
+        </p>
+      )}
+      <Participation team={team} tournamentId={tournamentId} />
     </Disclosure>
   );
 }
 
-function TeamForm({ roster, team }: { roster: Roster; team: OpenApi.FullTeamWithPlayers }) {
-  const form = useSavedForm({
-    resolver: zodResolver(teamSchema),
-    values: {
-      active: team.active,
-      name: team.name,
-      player_ids: team.players.map((player) => String(player.id)),
-    },
-  });
-  const update = useMutation({
-    ...form.saveCallbacks,
-    ...updateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutMutation(),
-    meta: { successMessage: 'Team saved.' },
-  });
-  const uploadLogo = useMutation({
-    ...updateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostMutation(),
-    meta: { successMessage: 'Logo updated.' },
-  });
-  const remove = useMutation({
-    ...deleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteMutation(),
-    meta: { successMessage: 'Team deleted.' },
-  });
-  const path = { team_id: team.id, tournament_id: roster.tournamentId };
-  const logoUrl = teamLogoUrl(team);
-
-  return (
-    <form
-      className="collapse-content"
-      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
-    >
-      <Field error={form.formState.errors.name?.message} label="Team name">
-        <input className="input w-full" required {...form.register('name')} />
-      </Field>
-      <CheckboxField className="mt-3" label="Active team" {...form.register('active')} />
-      <LogoField
-        isPending={uploadLogo.isPending}
-        label="Team logo"
-        logoUrl={logoUrl}
-        onChange={(file) => uploadLogo.mutate({ body: { file }, path })}
-      />
-      <PlayerChecklist registration={form.register('player_ids')} roster={roster} team={team} />
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button className="btn btn-primary" disabled={update.isPending} type="submit">
-          Save team
-        </button>
-        <button
-          className="btn btn-error btn-soft"
-          disabled={remove.isPending}
-          onClick={async () => {
-            if (
-              await confirm({
-                confirmLabel: 'Delete team',
-                destructive: true,
-                message: `Delete ${team.name}?`,
-              })
-            ) {
-              remove.mutate({ path });
-            }
-          }}
-          type="button"
-        >
-          Delete
-        </button>
-      </div>
-    </form>
-  );
-}
-
 export function TeamsSection({ bundle }: { bundle: TournamentBundle }) {
+  const { t } = useOrganizerTranslation();
+  const { error, pool, refetch } = usePool();
   const filter = useFilter(bundle.teams, ['name', 'players.*.name']);
-  const roster = useMemo(
-    () => ({
-      players: bundle.players,
-      sharedPlayers: bundle.tournament.players_can_be_in_multiple_teams,
-      teamsByPlayer: groupTeamsByPlayer(bundle.teams),
-      tournamentId: bundle.tournament.id,
-    }),
-    [bundle.players, bundle.teams, bundle.tournament],
-  );
+  const tournamentId = bundle.tournament.id;
 
   return (
     <div className="space-y-6">
       <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Surface>
-          <SurfaceHeading title="Single team" />
-          <NewTeamForm roster={roster} />
+          <SurfaceHeading title={t('participation.addTitle')} />
+          {pool ? (
+            <AddTeamsForm pool={pool} tournament={bundle.tournament} />
+          ) : error ? (
+            <ErrorState
+              action={
+                <button className="btn btn-sm" onClick={() => void refetch()} type="button">
+                  {t('common.retry')}
+                </button>
+              }
+              error={getErrorMessage(error)}
+              title={t('rosterPage.loadFailed')}
+            />
+          ) : (
+            <LoadingState title={t('rosterPage.loading')} />
+          )}
         </Surface>
         <Surface>
-          <SurfaceHeading title="Batch team creation" />
-          <BulkTeamsForm tournamentId={bundle.tournament.id} />
+          <SurfaceHeading title={t('roster.batchTeams')} />
+          <BulkTeamsForm tournamentId={tournamentId} />
         </Surface>
       </div>
 
       <Surface>
         <SurfaceHeading
           actions={
-            <span className="text-sm text-base-content/70">{bundle.teams.length} teams</span>
+            <span className="text-sm text-base-content/70">
+              {t('roster.teamCount', { count: bundle.teams.length })}
+            </span>
           }
-          title="Teams"
+          title={t('participation.listTitle')}
         />
         {bundle.teams.length === 0 ? (
-          <p className="text-sm text-base-content/70">No teams yet.</p>
+          <p className="text-sm text-base-content/70">{t('participation.none')}</p>
         ) : (
           <FilterBox
-            label="Search by team or player name"
+            label={t('roster.searchTeams')}
             onChange={filter.setQuery}
             value={filter.query}
           />
         )}
         {filter.nothingMatches ? (
-          <p className="text-sm text-base-content/70">No team or player matches “{filter.term}”.</p>
+          <p className="text-sm text-base-content/70">
+            {t('roster.noTeamMatches', { query: filter.term })}
+          </p>
         ) : null}
         <div className="grid items-start gap-3 lg:grid-cols-2">
           {bundle.teams.map((team) => (
-            <TeamEditor hidden={!filter.isShown(team)} key={team.id} roster={roster} team={team} />
+            <TournamentTeamEditor
+              hidden={!filter.isShown(team)}
+              key={team.id}
+              pool={pool}
+              poolFailed={error != null}
+              team={team}
+              tournamentId={tournamentId}
+            />
           ))}
         </div>
       </Surface>

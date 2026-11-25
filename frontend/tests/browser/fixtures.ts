@@ -18,7 +18,6 @@ export const user = {
 
 export function tournament(overrides: Partial<OpenApi.Tournament> = {}) {
   return {
-    club_id: 1,
     created: CREATED,
     dashboard_endpoint: 'summer-cup',
     dashboard_public: true,
@@ -31,7 +30,6 @@ export function tournament(overrides: Partial<OpenApi.Tournament> = {}) {
     matches_total: 0,
     more_rounds_possible: false,
     name: 'Summer Cup',
-    players_can_be_in_multiple_teams: false,
     start_time: '2030-06-01T10:00:00Z',
     status: 'OPEN',
     ...overrides,
@@ -52,12 +50,12 @@ export function team(id: number, name: string) {
     swiss_score: '0',
     tournament_id: 7,
     wins: 0,
-  } satisfies OpenApi.FullTeamWithPlayers;
+  } satisfies OpenApi.TournamentTeamWithPlayers;
 }
 
-export function player(id: number, name: string) {
+/** A player of the tournament's lineup, who plays for the team `teamId`. */
+export function player(id: number, name: string, teamId = 1) {
   return {
-    active: true,
     created: CREATED,
     draws: 0,
     elo_score: '1200',
@@ -65,9 +63,55 @@ export function player(id: number, name: string) {
     losses: 0,
     name,
     swiss_score: '0',
-    tournament_id: 7,
+    team_id: teamId,
     wins: 0,
-  } satisfies OpenApi.Player;
+  } satisfies OpenApi.TournamentPlayer;
+}
+
+/** A player of the pool that every tournament shares. */
+export function sharedPlayer(id: number, name: string) {
+  return { created: CREATED, id, name } satisfies OpenApi.Player;
+}
+
+/**
+ * A team of the pool that every tournament shares. By default it has no members and takes part in
+ * no tournament.
+ */
+export function sharedTeam(
+  id: number,
+  name: string,
+  overrides: Partial<OpenApi.TeamWithMembers> = {},
+) {
+  return {
+    created: CREATED,
+    id,
+    logo_path: null,
+    members: [],
+    name,
+    participations: [],
+    ...overrides,
+  } satisfies OpenApi.TeamWithMembers;
+}
+
+/**
+ * The tournament's teams as the pool of every tournament has them: their players are active
+ * members, and they take part in the tournament.
+ */
+export function sharedTeams(tournamentTeams: OpenApi.TournamentTeamWithPlayers[]) {
+  return tournamentTeams.map((tournamentTeam) =>
+    sharedTeam(tournamentTeam.id, tournamentTeam.name, {
+      logo_path: tournamentTeam.logo_path,
+      members: tournamentTeam.players.map((member) => ({ active: true, player: member })),
+      participations: [
+        {
+          active: tournamentTeam.active,
+          tournament_id: tournamentTeam.tournament_id,
+          tournament_name: 'Summer Cup',
+          tournament_status: 'OPEN',
+        },
+      ],
+    }),
+  );
 }
 
 export const teams = ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((name, index) =>
@@ -112,12 +156,10 @@ export function match(
     round_id: roundId,
     scoreless_result: false,
     stage_item_input1: input1,
-    stage_item_input1_conflict: false,
     stage_item_input1_id: input1?.id ?? null,
     stage_item_input1_score: 0,
     stage_item_input1_winner_from_match_id: null,
     stage_item_input2: input2,
-    stage_item_input2_conflict: false,
     stage_item_input2_id: input2?.id ?? null,
     stage_item_input2_score: 0,
     stage_item_input2_winner_from_match_id: null,
@@ -208,11 +250,16 @@ export function ranking(overrides: Partial<OpenApi.Ranking> = {}) {
 /** What the mocked API answers with. Tests change it to make the server's data change. */
 export type ApiState = {
   canManage: boolean;
+  conflicts: OpenApi.ScheduleConflict[];
   nextStageRankings: OpenApi.TournamentWorkspace['next_stage_rankings'];
-  players: OpenApi.Player[];
+  organizers: OpenApi.Organizer[];
+  players: OpenApi.TournamentPlayer[];
+  /** The teams and players every tournament shares. By default the tournament's own. */
+  pool?: { players: OpenApi.Player[]; teams: OpenApi.TeamWithMembers[] };
   rankings: OpenApi.Ranking[];
   stages: OpenApi.StageWithStageItems[];
-  teams: OpenApi.FullTeamWithPlayers[];
+  standings: OpenApi.TournamentDetails['standings'];
+  teams: OpenApi.TournamentTeamWithPlayers[];
   tournament: OpenApi.Tournament;
   /** The home page's list. By default the tournament, which the organizer manages. */
   tournaments?: OpenApi.TournamentWithAccess[];
@@ -240,10 +287,13 @@ export async function tournamentApi(
 ) {
   const state: ApiState = {
     canManage: true,
+    conflicts: [],
     nextStageRankings: {},
+    organizers: [{ email: user.email, name: user.name, role: 'OWNER', user_id: user.id }],
     players: [],
     rankings: [ranking()],
     stages: [],
+    standings: {},
     teams,
     tournament: tournament(),
     ...overrides,
@@ -266,18 +316,24 @@ export async function tournamentApi(
       players: state.players,
       rankings: state.rankings,
       stages: state.stages,
-      standings: {},
+      standings: state.standings,
       teams: state.teams,
       tournament: state.tournament,
     } satisfies OpenApi.TournamentDetails;
+    const pool = state.pool ?? {
+      players: state.teams.flatMap((tournamentTeam) => tournamentTeam.players),
+      teams: sharedTeams(state.teams),
+    };
     const responses: Record<string, unknown> = {
-      '/api/clubs': [],
+      '/api/players': pool.players,
+      '/api/teams': pool.teams,
       '/api/tournaments': state.tournaments ?? [
         { ...state.tournament, can_manage: state.canManage },
       ],
       '/api/tournaments/7': state.tournament,
       '/api/tournaments/7/access': { can_manage: state.canManage },
       '/api/tournaments/7/details': details,
+      '/api/tournaments/7/organizers': state.organizers,
       '/api/users/me': user,
     };
     if (path === '/api/tournaments/7/workspace') {
@@ -286,6 +342,7 @@ export async function tournamentApi(
             data: {
               ...details,
               available_inputs: {},
+              conflicts: state.conflicts,
               next_stage_rankings: state.nextStageRankings,
             } satisfies OpenApi.TournamentWorkspace,
           })

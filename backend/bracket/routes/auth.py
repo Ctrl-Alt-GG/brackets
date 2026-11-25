@@ -15,6 +15,7 @@ from bracket.logic.authentication import (
 from bracket.models.db.user import Token
 from bracket.routes.access import CredentialsDependency, reject_cross_site_request
 from bracket.utils.errors import unauthorized
+from bracket.utils.i18n import gettext
 from bracket.utils.rate_limit import (
     enforce_account_lockout,
     get_account_lockout_key,
@@ -54,10 +55,10 @@ async def login_for_access_token(
         if retry_after is not None:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Incorrect email or password",
+                detail=gettext("Incorrect email or password"),
                 headers={"Retry-After": str(retry_after)},
             )
-        raise unauthorized("Incorrect email or password")
+        raise unauthorized(gettext("Incorrect email or password"))
 
     await reset_account_failures(lockout_key)
     return issue_token(

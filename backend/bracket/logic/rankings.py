@@ -19,6 +19,7 @@ from bracket.sql.rankings import (
 )
 from bracket.sql.stage_items import get_stage_item_ids_by_ranking_id
 from bracket.sql.stages import get_full_tournament_details
+from bracket.utils.i18n import gettext, ngettext
 from bracket.utils.id_types import RankingId, TournamentId
 
 
@@ -60,8 +61,10 @@ async def delete_ranking(
     if stage_item_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Could not delete ranking since it's used by {len(stage_item_ids)} stage items"
+            detail=ngettext(
+                "Could not delete ranking since it's used by {count} stage item",
+                "Could not delete ranking since it's used by {count} stage items",
+                len(stage_item_ids),
             ),
         )
 
@@ -69,7 +72,7 @@ async def delete_ranking(
     if len(await get_all_rankings_in_tournament(session, tournament_id)) <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A tournament needs at least one ranking",
+            detail=gettext("A tournament needs at least one ranking"),
         )
 
     await sql_delete_ranking(session, tournament_id, ranking_id)

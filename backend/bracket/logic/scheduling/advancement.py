@@ -9,13 +9,14 @@ from starlette import status
 
 from bracket.logic.ranking.calculation import get_team_rankings_lookup_for_tournament
 from bracket.models.db.match import is_played
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.stage_item_inputs import (
     StageItemInputFinal,
     StageItemInputTentative,
     StageItemInputUpdate,
 )
 from bracket.models.db.stage_tree import StageItemWithRounds, StageWithStageItems
-from bracket.models.db.team import Team
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import StageId, StageItemId, StageItemInputId, TeamId, TournamentId
 
 
@@ -48,7 +49,7 @@ def source_name(
         ),
         None,
     )
-    return (source.name or source.type_name) if source is not None else "an earlier stage item"
+    return source.label if source is not None else gettext("an earlier stage item")
 
 
 async def get_updates_to_inputs_in_activated_stage(
@@ -69,7 +70,7 @@ async def get_updates_to_inputs_in_activated_stage(
     """
     team_rankings = await get_team_rankings_lookup_for_tournament(session, tournament_id, stages)
     activated_stage = next(stage for stage in stages if stage.id == stage_id)
-    teams_by_input: dict[StageItemInputId, Team] = {
+    teams_by_input: dict[StageItemInputId, TournamentTeam] = {
         input_.id: input_.team
         for stage in stages
         for stage_item in stage.stage_items
@@ -101,8 +102,14 @@ async def get_updates_to_inputs_in_activated_stage(
             )
             if team is None:
                 unresolved.append(
-                    f"Slot {stage_item_input.slot} of {stage_item.name} takes #{position} of "
-                    f"{source_name(stage_item_input, stages)}, which doesn't have that many teams"
+                    gettext(
+                        "Slot {slot} of {stage_item} takes #{position} of {source}, which doesn't "
+                        "have that many teams",
+                        position=position,
+                        slot=stage_item_input.slot,
+                        source=source_name(stage_item_input, stages),
+                        stage_item=stage_item.label,
+                    )
                 )
                 continue
 
@@ -126,9 +133,9 @@ async def get_updates_to_inputs_in_activated_stage(
     if strict and unresolved:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"{unresolved[0]}. Assign the missing teams in the current stage, or change "
-                "the slot."
+            detail=gettext(
+                "{problem}. Assign the missing teams in the current stage, or change the slot.",
+                problem=unresolved[0],
             ),
         )
 
@@ -151,21 +158,27 @@ def check_teams_take_one_slot_each(
         if (update := planned.get(input_.id)) is not None:
             names[update.team.id] = update.team.name
             slots_per_team[update.team.id].append(
-                f"slot {input_.slot} ({source_name(update.stage_item_input, stages)} "
-                f"#{update.stage_item_input.winner_position})"
+                gettext(
+                    "slot {slot} ({source} #{position})",
+                    position=update.stage_item_input.winner_position,
+                    slot=input_.slot,
+                    source=source_name(update.stage_item_input, stages),
+                )
             )
         elif isinstance(input_, StageItemInputFinal):
             names[input_.team_id] = input_.team.name
-            slots_per_team[input_.team_id].append(f"slot {input_.slot}")
+            slots_per_team[input_.team_id].append(gettext("slot {slot}", slot=input_.slot))
 
     for team_id, slots in slots_per_team.items():
         if len(slots) > 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"{names[team_id]} would take {' and '.join(slots)} of "
-                    f"{stage_item.name or stage_item.type_name}, but a team can have only one "
-                    "slot in it. Change one of those slots, then activate the stage."
+                detail=gettext(
+                    "{team} would take {slots} of {stage_item}, but a team can have only one "
+                    "slot in it. Change one of those slots, then activate the stage.",
+                    slots=gettext(" and ").join(slots),
+                    stage_item=stage_item.label,
+                    team=names[team_id],
                 ),
             )
 

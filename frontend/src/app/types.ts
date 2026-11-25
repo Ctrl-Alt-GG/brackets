@@ -57,6 +57,11 @@ export type TournamentBundle = OpenApi.TournamentDetails & {
   availableInputs: OpenApi.TournamentWorkspace['available_inputs'];
   /** Who would take each slot of the next stage if it started now, by stage item id. */
   nextStageRankings: OpenApi.TournamentWorkspace['next_stage_rankings'];
+  /**
+   * The matches whose teams, or players of them, play elsewhere at the same time, in this
+   * tournament or another one. Only organizers get them.
+   */
+  conflicts: OpenApi.TournamentWorkspace['conflicts'];
 };
 
 export type FlattenedMatch = {

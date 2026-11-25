@@ -1,11 +1,10 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { I18nextProvider, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation, useParams } from 'react-router';
 
 import { fetchTournamentBundle, TOURNAMENT_BUNDLE_QUERY_KEY } from '../api';
 import { useMyTeam, useSession } from '../hooks';
-import { englishI18n } from '../locales';
 import { TournamentContext } from '../tournament-context';
 import type { TournamentBundle, TournamentSection } from '../types';
 import { getErrorMessage } from '../errors';
@@ -18,6 +17,7 @@ import {
 } from '../matches';
 import { loginPath, publicTournamentPath } from '../urls';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '../ui';
+import { BigScreenHeader } from '../components/big-screen';
 import { detailsTabs, TournamentHeader, workspaceTabs } from '../sections/tournament-header';
 import { OverviewSection } from '../sections/tournament-overview';
 import { BracketSection } from '../sections/tournament-bracket';
@@ -57,14 +57,26 @@ const MANAGEMENT_SECTIONS: ReadonlySet<TournamentSection> = new Set([
 ]);
 
 /**
- * The Details page that shows a workspace page's information, for people who can't manage. The
- * standings send a tournament without groups on to its bracket.
+ * The Details page that shows a workspace page's information, for people who can't manage and for
+ * the organizer's switch to the public view. The standings send a tournament without groups on to
+ * its bracket.
  */
 const DETAILS_SUFFIXES: Partial<Record<TournamentSection, string>> = {
   overview: '',
+  rankings: '/standings',
   schedule: '/schedule',
   stages: '/standings',
   teams: '/teams',
+};
+
+/** The workspace page where a Details page's information is managed, for the organizer view. */
+const WORKSPACE_SUFFIXES: Partial<Record<TournamentSection, string>> = {
+  dashboard: '',
+  'dashboard-bracket': '/stages',
+  'dashboard-schedule': '/schedule',
+  'dashboard-standings': '/rankings',
+  'dashboard-team': '/teams',
+  'dashboard-teams': '/teams',
 };
 
 const DETAILS_TITLES = {
@@ -76,27 +88,24 @@ const DETAILS_TITLES = {
   'dashboard-teams': 'tournament.teams',
 } as const satisfies Partial<Record<TournamentSection, string>>;
 
-// The workspace is English only.
-const WORKSPACE_TITLES: Partial<Record<TournamentSection, string>> = {
-  players: 'Players',
-  rankings: 'Rankings',
-  schedule: 'Schedule',
-  settings: 'Settings',
-  stages: 'Stages',
-  teams: 'Teams',
-};
+const WORKSPACE_TITLES = {
+  players: 'workspace.players',
+  rankings: 'workspace.standings',
+  schedule: 'workspace.schedule',
+  settings: 'workspace.settings',
+  stages: 'workspace.stages',
+  teams: 'workspace.teams',
+} as const satisfies Partial<Record<TournamentSection, string>>;
 
 /** The page itself, once the tournament has loaded. */
 function TournamentView({
   bundle,
   section,
-  stageItemId,
   teamId,
   tournamentKey,
 }: {
   bundle: TournamentBundle;
   section: TournamentSection;
-  stageItemId: number | null;
   teamId: number | null;
   tournamentKey: string;
 }) {
@@ -135,13 +144,11 @@ function TournamentView({
   const hasGroups = stageItems.some((stageItem) => !isBracket(stageItem));
   const hasBrackets = stageItems.some(hasBracketView);
   const team = teamMap.get(teamId ?? -1);
-  const detailsTitle = DETAILS_TITLES[section as keyof typeof DETAILS_TITLES];
+  const sectionTitle =
+    DETAILS_TITLES[section as keyof typeof DETAILS_TITLES] ??
+    WORKSPACE_TITLES[section as keyof typeof WORKSPACE_TITLES];
   const pageTitle =
-    section === 'dashboard-team'
-      ? team?.name
-      : detailsTitle
-        ? t(detailsTitle)
-        : WORKSPACE_TITLES[section];
+    section === 'dashboard-team' ? team?.name : sectionTitle ? t(sectionTitle) : undefined;
   // A remembered team can have been deleted since, and a screen at the venue is for everyone.
   const shownTeamId = !isBigScreen && teamMap.has(myTeamId ?? -1) ? myTeamId : null;
   // The same object until something in it changes, so a refresh of the tournament doesn't make
@@ -170,8 +177,11 @@ function TournamentView({
         <ScheduleSection
           bigScreenPath={`${publicPath}/present/schedule`}
           canManage={!dashboardMode}
+          conflicts={bundle.conflicts}
           matches={matches}
+          players={bundle.players}
           stageItemsById={stageItemsById}
+          teams={bundle.teams}
           tournamentId={tournament.id}
         />
       );
@@ -253,12 +263,7 @@ function TournamentView({
       content = <SettingsSection bundle={bundle} />;
       break;
     case 'stages':
-      content = (
-        <StagesSection
-          bundle={bundle}
-          focusStageItem={stageItemId ? (stageItemsById.get(stageItemId) ?? null) : null}
-        />
-      );
+      content = <StagesSection bundle={bundle} />;
       break;
   }
 
@@ -269,32 +274,32 @@ function TournamentView({
       </title>
       {isBigScreen ? (
         <section className="space-y-6">
-          <header className="flex flex-wrap items-center justify-between gap-4">
-            <h1 className="font-display text-4xl font-semibold tracking-tight md:text-5xl">
-              {tournament.name}
-            </h1>
-            <Link
-              className="link link-hover text-sm text-base-content/70"
-              to={section === 'dashboard-present-schedule' ? `${publicPath}/schedule` : publicPath}
-            >
-              {t('tournament.exitBigScreen')}
-            </Link>
-          </header>
+          <BigScreenHeader
+            fallbackExitPath={`${publicPath}/${section === 'dashboard-present-schedule' ? 'schedule' : 'standings'}`}
+            title={tournament.name}
+          />
           {content}
         </section>
       ) : (
         <section className="space-y-6">
           <TournamentHeader
             actions={
+              // Organizers switch between the two views of the page they are on.
               dashboardMode ? (
                 canManage ? (
-                  <Link className="btn btn-ghost btn-sm" to={`/tournaments/${tournament.id}`}>
-                    {t('common.manage')}
+                  <Link
+                    className="btn btn-ghost btn-sm"
+                    to={`/tournaments/${tournament.id}${WORKSPACE_SUFFIXES[section] ?? ''}`}
+                  >
+                    {t('common.organizerView')}
                   </Link>
                 ) : null
               ) : (
-                <Link className="btn btn-ghost btn-sm" to={publicPath}>
-                  {t('common.details')}
+                <Link
+                  className="btn btn-ghost btn-sm"
+                  to={`${publicPath}${DETAILS_SUFFIXES[section] ?? ''}`}
+                >
+                  {t('common.publicView')}
                 </Link>
               )
             }
@@ -303,7 +308,7 @@ function TournamentView({
             tabs={
               dashboardMode
                 ? detailsTabs(publicPath, bundle.stages, t)
-                : workspaceTabs(tournament.id)
+                : workspaceTabs(tournament.id, t)
             }
             teamCount={bundle.teams.length}
             tournament={tournament}
@@ -316,20 +321,6 @@ function TournamentView({
 }
 
 export function TournamentPage({ section }: { section: TournamentSection }) {
-  const page = <TournamentPageContent section={section} />;
-  // The workspace is English only, like everything organizers use.
-  return section.startsWith('dashboard') ? (
-    page
-  ) : (
-    <I18nextProvider i18n={englishI18n}>
-      <div className="contents" lang="en">
-        {page}
-      </div>
-    </I18nextProvider>
-  );
-}
-
-function TournamentPageContent({ section }: { section: TournamentSection }) {
   const { t } = useTranslation();
   const params = useParams();
   const { pathname } = useLocation();
@@ -437,7 +428,6 @@ function TournamentPageContent({ section }: { section: TournamentSection }) {
       <TournamentView
         bundle={workspace.data}
         section={section}
-        stageItemId={params.stageItemId ? Number(params.stageItemId) : null}
         teamId={params.teamId ? Number(params.teamId) : null}
         tournamentKey={tournamentKey}
       />

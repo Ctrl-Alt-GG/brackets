@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket import orm
-from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.ranking.elimination import update_inputs_in_complete_elimination_stage_item
@@ -33,6 +32,7 @@ from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.models.db.user import UserPublic
 from bracket.models.enums import StageType
 from bracket.sql.matches import clear_results_for_matches_in_stage_item
+from bracket.sql.participation import get_tournament_teams
 from bracket.sql.stage_item_inputs import sql_set_team_id_for_stage_item_input
 from bracket.sql.stages import (
     get_full_tournament_details,
@@ -41,9 +41,9 @@ from bracket.sql.stages import (
     sql_delete_stage,
     sql_update_stage,
 )
-from bracket.sql.teams import get_teams_with_members
 from bracket.sql.tournaments import count_tournament_records
 from bracket.utils.errors import UniqueIndex, check_unique_constraint_violation
+from bracket.utils.i18n import gettext, ngettext, stage_label
 from bracket.utils.id_types import StageId, StageItemId, TournamentId
 
 
@@ -61,7 +61,7 @@ async def get_available_inputs(
     session: AsyncSession, tournament_id: TournamentId
 ) -> dict[StageId, list[StageItemInputOptionTentative | StageItemInputOptionFinal]]:
     stages = await get_full_tournament_details(session, tournament_id)
-    teams = await get_teams_with_members(session, tournament_id)
+    teams = await get_tournament_teams(session, tournament_id)
     return determine_available_inputs(teams, stages)
 
 
@@ -102,7 +102,7 @@ async def delete_stage(
     if len(stage.stage_items) > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stage contains stage items, please delete those first",
+            detail=gettext("Stage contains stage items, please delete those first"),
         )
     await sql_delete_stage(session, tournament_id, stage.id)
 
@@ -195,14 +195,18 @@ async def activate_adjacent_stage(
     if direction == "previous" and active_stage is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No stage is active yet, so there is no previous stage to go back to",
+            detail=gettext("No stage is active yet, so there is no previous stage to go back to"),
         )
 
     new_active_stage = get_adjacent_stage(graph.stages, direction)
     if new_active_stage is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"There is no {direction} stage",
+            detail=(
+                gettext("There is no next stage")
+                if direction == "next"
+                else gettext("There is no previous stage")
+            ),
         )
 
     if direction == "next":
@@ -212,13 +216,17 @@ async def activate_adjacent_stage(
         if results > 0 and not discard_results:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Going back discards the {results} "
-                    f"{'result' if results == 1 else 'results'} of {active_stage.name}. "
-                    "Confirm that they can be discarded."
+                detail=ngettext(
+                    "Going back discards the {count} result of {stage}. Confirm that it can be "
+                    "discarded.",
+                    "Going back discards the {count} results of {stage}. Confirm that they can be "
+                    "discarded.",
+                    results,
+                    stage=stage_label(active_stage.name),
                 ),
             )
         await release_teams_from_stage(session, tournament_id, graph, active_stage)
 
     await sql_activate_next_stage(session, new_active_stage.id, tournament_id)
-    await handle_conflicts(session, graph)
+    # The teams that moved in may play elsewhere at the times their matches were planned for.
+    await schedule_all_matches(session, tournament_id, graph=graph)

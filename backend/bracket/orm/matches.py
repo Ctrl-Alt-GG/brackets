@@ -64,8 +64,6 @@ class Match(Base):
     round_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     stage_item_input1_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     stage_item_input2_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    stage_item_input1_conflict: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    stage_item_input2_conflict: Mapped[bool] = mapped_column(Boolean, nullable=False)
     stage_item_input1_winner_from_match_id: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
     )

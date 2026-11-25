@@ -5,7 +5,7 @@ import * as OpenApi from '../../openapi';
 import { useTournamentContext } from '../tournament-context';
 import type { FlattenedMatch } from '../types';
 import { formatMatchTime } from '../format';
-import { inputLabel, inputTeamId, matchWinner, stageItemName } from '../matches';
+import { inputLabel, inputTeamId, matchWinner, roundName, stageItemName } from '../matches';
 import { matchStatus, type MatchStatus } from '../tournament-rules';
 import { cx } from '../utils';
 import { TeamLink } from './team-link';
@@ -78,6 +78,7 @@ function Side({
 export function MatchCard({
   editor,
   entry,
+  notice,
   showTime = true,
   size = 'md',
   stageItemsById,
@@ -85,6 +86,8 @@ export function MatchCard({
   /** Where an organizer enters the result. It takes the place of the two teams and their score. */
   editor?: ReactNode;
   entry: FlattenedMatch;
+  /** A warning for organizers, such as a team that has to be somewhere else at the same time. */
+  notice?: ReactNode;
   showTime?: boolean;
   size?: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
@@ -108,7 +111,7 @@ export function MatchCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-base-content/70">
-          {stageItemName(stageItem, t)} · {round.name}
+          {stageItemName(stageItem, t)} · {roundName(round, t)}
         </p>
         <span className={cx('badge badge-soft badge-sm', STATUS_BADGES[status])}>
           {status === 'live' ? (
@@ -148,6 +151,7 @@ export function MatchCard({
       {showTime ? (
         <p className="mt-3 text-xs text-base-content/70">{formatMatchTime(match.start_time, t)}</p>
       ) : null}
+      {notice}
     </div>
   );
 }

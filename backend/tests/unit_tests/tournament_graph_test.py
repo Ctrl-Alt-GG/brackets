@@ -8,9 +8,9 @@ from bracket.models.db.match import (
     MatchWithDetailsDefinitive,
     with_slots,
 )
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.stage_item_inputs import StageItemInputEmpty, StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.models.db.team import Team
 from bracket.models.enums import StageType
 from bracket.utils.id_types import (
     MatchId,
@@ -19,21 +19,22 @@ from bracket.utils.id_types import (
     StageId,
     StageItemId,
     StageItemInputId,
-    TeamId,
     TournamentId,
 )
-from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, tournament_team
 
 TOURNAMENT = TournamentId(1)
 
 
-def team(id_: int, name: str) -> Team:
-    return Team(
-        **DUMMY_TEAM1.model_dump() | {"name": name, "tournament_id": TOURNAMENT}, id=TeamId(id_)
+def team(id_: int, name: str) -> TournamentTeam:
+    return tournament_team(
+        DUMMY_TEAM1.model_copy(update={"name": name}), id_, tournament_id=TOURNAMENT
     )
 
 
-def slot(id_: int, assigned: Team | None = None) -> StageItemInputFinal | StageItemInputEmpty:
+def slot(
+    id_: int, assigned: TournamentTeam | None = None
+) -> StageItemInputFinal | StageItemInputEmpty:
     fields: dict[str, Any] = {
         "id": StageItemInputId(id_),
         "slot": id_,
@@ -54,8 +55,6 @@ def graph() -> TournamentGraph:
         "round_id": RoundId(1),
         "stage_item_input1_score": 0,
         "stage_item_input2_score": 0,
-        "stage_item_input1_conflict": False,
-        "stage_item_input2_conflict": False,
     }
     played = MatchWithDetailsDefinitive(
         id=MatchId(1),

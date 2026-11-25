@@ -96,10 +96,11 @@ async def test_tournament_contract(
         for name, result in (("activation", activation), ("score", score), ("details", details)):
             request.node.user_properties.append((name, json.dumps(result)))
             # A fixed fixture catches repeated graph loads and queries added per stage item.
-            # Commands lock the tournament's event before checking access, and then the
-            # tournament, which takes a query each.
-            assert result["queries"] <= {"activation": 20, "score": 15, "details": 15}[name]
-        actual = canonical_tournament(actual, club_id=auth_context.club.id)
+            # Commands lock the tournament before checking access. Activating a stage and
+            # scoring a knockout match change who plays, so they plan the schedule again, which
+            # reads the tournament, its lineups and what its players play elsewhere.
+            assert result["queries"] <= {"activation": 22, "score": 18, "details": 15}[name]
+        actual = canonical_tournament(actual)
         assert actual == json.loads(GOLDEN.read_text())
         await assert_stage_filters(TournamentId(flow.id))
 

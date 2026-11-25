@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket import orm
 from bracket.database import engine
 from bracket.models.db.ranking import RankingBody, RankingCreateBody
-from bracket.models.enums import StageType, UserAccountType, UserXClubRelation
+from bracket.models.enums import StageType, TournamentRole, UserAccountType
 from bracket.sql.rankings import sql_create_ranking, sql_update_ranking
 from bracket.sql.tournaments import sql_delete_tournament
 from bracket.utils.id_types import RankingId, TournamentId
@@ -24,8 +24,9 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 @dataclass
 class IntegrityData:
+    """Two tournaments, each with a team of one player that takes part in it."""
+
     session: AsyncSession
-    club: orm.Club
     tournaments: list[orm.Tournament]
     stages: list[orm.Stage]
     rankings: list[orm.Ranking]
@@ -43,8 +44,6 @@ def match_values(tournament_id: int, round_id: int, **values: Any) -> dict[str, 
         "round_id": round_id,
         "stage_item_input1_score": 0,
         "stage_item_input2_score": 0,
-        "stage_item_input1_conflict": False,
-        "stage_item_input2_conflict": False,
         "duration_minutes": 15,
         "margin_minutes": 5,
         **values,
@@ -54,12 +53,8 @@ def match_values(tournament_id: int, round_id: int, **values: Any) -> dict[str, 
 @pytest_asyncio.fixture(loop_scope="session")
 async def integrity_data() -> AsyncIterator[IntegrityData]:
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        club = orm.Club(name="Integrity tests")
-        session.add(club)
-        await session.flush()
         tournaments = [
             orm.Tournament(
-                club_id=club.id,
                 name=f"Tournament {index}",
                 start_time=datetime_utc.now(),
                 dashboard_public=False,
@@ -80,20 +75,23 @@ async def integrity_data() -> AsyncIterator[IntegrityData]:
             )
             for t in tournaments
         ]
-        teams = [orm.Team(tournament_id=t.id, name="Team") for t in tournaments]
-        players = [
-            orm.Player(
-                tournament_id=t.id,
-                name="Player",
-                elo_score=1200,
-                swiss_score=0,
-                wins=0,
-                draws=0,
-                losses=0,
-            )
-            for t in tournaments
-        ]
+        teams = [orm.Team(name="Team") for _ in tournaments]
+        players = [orm.Player(name="Player") for _ in tournaments]
         session.add_all([*stages, *rankings, *teams, *players])
+        await session.flush()
+        session.add_all(
+            orm.TeamMember(team_id=team.id, player_id=player.id)
+            for team, player in zip(teams, players, strict=True)
+        )
+        session.add_all(
+            orm.TournamentTeam(tournament_id=t.id, team_id=team.id)
+            for t, team in zip(tournaments, teams, strict=True)
+        )
+        await session.flush()
+        session.add_all(
+            orm.TournamentPlayer(tournament_id=t.id, team_id=team.id, player_id=player.id)
+            for t, team, player in zip(tournaments, teams, players, strict=True)
+        )
         await session.flush()
         items = [
             orm.StageItem(
@@ -126,7 +124,6 @@ async def integrity_data() -> AsyncIterator[IntegrityData]:
         try:
             yield IntegrityData(
                 session,
-                club,
                 tournaments,
                 stages,
                 rankings,
@@ -153,8 +150,7 @@ async def integrity_data() -> AsyncIterator[IntegrityData]:
         ("match_round", "matches_round_id_fkey"),
         ("match_slot", "matches_stage_item_input1_id_fkey"),
         ("source_match", "matches_stage_item_input1_winner_from_match_id_fkey"),
-        ("membership_player", "players_x_teams_player_id_fkey"),
-        ("membership_team", "players_x_teams_team_id_fkey"),
+        ("lineup_team", "tournament_players_team_fkey"),
     ],
 )
 async def test_database_rejects_cross_tournament_references(
@@ -218,14 +214,10 @@ async def test_database_rejects_cross_tournament_references(
                 stage_item_input1_winner_from_match_id=d.matches[1].id,
             )
         ),
-        "membership_player": lambda: orm.PlayerXTeam(
+        # The team of the other tournament doesn't take part in this one.
+        "lineup_team": lambda: orm.TournamentPlayer(
             tournament_id=tournament_id,
             player_id=d.players[1].id,
-            team_id=d.teams[0].id,
-        ),
-        "membership_team": lambda: orm.PlayerXTeam(
-            tournament_id=tournament_id,
-            player_id=d.players[0].id,
             team_id=d.teams[1].id,
         ),
     }
@@ -235,14 +227,15 @@ async def test_database_rejects_cross_tournament_references(
             await d.session.flush()
 
 
-async def test_duplicate_slots_and_memberships_are_rejected(integrity_data: IntegrityData) -> None:
+async def test_duplicates_are_rejected(integrity_data: IntegrityData) -> None:
     d = integrity_data
     tournament_id = d.tournaments[0].id
-    membership = dict(tournament_id=tournament_id, team_id=d.teams[0].id, player_id=d.players[0].id)
-    d.session.add(orm.PlayerXTeam(**membership))
-    await d.session.flush()
     for entity, constraint in [
-        (orm.PlayerXTeam(**membership), "uq_players_x_teams_membership"),
+        (orm.TeamMember(team_id=d.teams[0].id, player_id=d.players[0].id), "team_members_pkey"),
+        (
+            orm.TournamentTeam(tournament_id=tournament_id, team_id=d.teams[0].id),
+            "tournament_teams_pkey",
+        ),
         (
             orm.StageItemInput(tournament_id=tournament_id, stage_item_id=d.items[0].id, slot=1),
             "uq_stage_item_inputs_slot",
@@ -254,7 +247,30 @@ async def test_duplicate_slots_and_memberships_are_rejected(integrity_data: Inte
                 await d.session.flush()
 
 
-async def test_only_one_owner_per_club(integrity_data: IntegrityData) -> None:
+async def test_a_player_plays_for_one_team_of_a_tournament(integrity_data: IntegrityData) -> None:
+    """Both teams take part, but the player already plays for the first one."""
+    d = integrity_data
+    tournament_id = d.tournaments[0].id
+    d.session.add(orm.TournamentTeam(tournament_id=tournament_id, team_id=d.teams[1].id))
+    await d.session.flush()
+    with pytest.raises(IntegrityError, match="tournament_players_pkey"):
+        async with d.session.begin_nested():
+            d.session.add(
+                orm.TournamentPlayer(
+                    tournament_id=tournament_id, team_id=d.teams[1].id, player_id=d.players[0].id
+                )
+            )
+            await d.session.flush()
+
+
+async def test_a_team_that_takes_part_is_not_deleted(integrity_data: IntegrityData) -> None:
+    d = integrity_data
+    with pytest.raises(IntegrityError, match="tournament_teams_team_id_fkey"):
+        async with d.session.begin_nested():
+            await d.session.execute(delete(orm.Team).where(orm.Team.id == d.teams[0].id))
+
+
+async def test_only_one_owner_per_tournament(integrity_data: IntegrityData) -> None:
     d = integrity_data
     users = [
         orm.User(
@@ -268,14 +284,18 @@ async def test_only_one_owner_per_club(integrity_data: IntegrityData) -> None:
     d.session.add_all(users)
     await d.session.flush()
     d.session.add(
-        orm.UserXClub(club_id=d.club.id, user_id=users[0].id, relation=UserXClubRelation.OWNER)
+        orm.TournamentOrganizer(
+            tournament_id=d.tournaments[0].id, user_id=users[0].id, role=TournamentRole.OWNER
+        )
     )
     await d.session.flush()
-    with pytest.raises(IntegrityError, match="uq_users_x_clubs_owner"):
+    with pytest.raises(IntegrityError, match="uq_tournament_organizers_owner"):
         async with d.session.begin_nested():
             d.session.add(
-                orm.UserXClub(
-                    club_id=d.club.id, user_id=users[1].id, relation=UserXClubRelation.OWNER
+                orm.TournamentOrganizer(
+                    tournament_id=d.tournaments[0].id,
+                    user_id=users[1].id,
+                    role=TournamentRole.OWNER,
                 )
             )
             await d.session.flush()
@@ -365,14 +385,12 @@ async def test_clearing_winner_links_keeps_the_dependent_tournament(
 async def test_tournament_deletion_cascades_through_scoped_foreign_keys(
     integrity_data: IntegrityData,
 ) -> None:
+    """Everything of the tournament goes, but its teams and players stay for others."""
     d = integrity_data
-    d.session.add_all(
-        orm.PlayerXTeam(tournament_id=t.id, team_id=team.id, player_id=player.id)
-        for t, team, player in zip(d.tournaments, d.teams, d.players, strict=True)
-    )
-    await d.session.flush()
-    opponent = orm.Team(tournament_id=d.tournaments[0].id, name="Opponent")
+    opponent = orm.Team(name="Opponent")
     d.session.add(opponent)
+    await d.session.flush()
+    d.session.add(orm.TournamentTeam(tournament_id=d.tournaments[0].id, team_id=opponent.id))
     await d.session.flush()
     opponent_slot = orm.StageItemInput(
         tournament_id=d.tournaments[0].id,
@@ -399,9 +417,8 @@ async def test_tournament_deletion_cascades_through_scoped_foreign_keys(
         orm.Round,
         orm.Match,
         orm.StageItemInput,
-        orm.PlayerXTeam,
-        orm.Team,
-        orm.Player,
+        orm.TournamentTeam,
+        orm.TournamentPlayer,
         orm.Ranking,
     ):
         assert list(
@@ -411,3 +428,17 @@ async def test_tournament_deletion_cascades_through_scoped_foreign_keys(
                 )
             )
         ) == [d.tournaments[1].id]
+    team_ids = [*(team.id for team in d.teams), opponent.id]
+    player_ids = [player.id for player in d.players]
+    assert (
+        len(list(await d.session.scalars(select(orm.Team.id).where(orm.Team.id.in_(team_ids)))))
+        == 3
+    )
+    assert (
+        len(
+            list(
+                await d.session.scalars(select(orm.Player.id).where(orm.Player.id.in_(player_ids)))
+            )
+        )
+        == 2
+    )

@@ -64,7 +64,6 @@ test('a session that ended on another device leaves the tournaments visible', as
           return route.fulfill({ status: 401, json: { detail: 'Could not validate credentials' } });
         }
         if (path === '/api/users/me') return route.fulfill({ json: { data: user } });
-        if (path === '/api/clubs') return route.fulfill({ json: { data: [] } });
         return route.fulfill({ status: 404, json: { detail: path } });
       });
     }),
@@ -172,6 +171,32 @@ test('the Details link is shown in full, copied, and drawn as a QR code', async 
 
   await expect(page.getByText('Link copied.')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(link);
+});
+
+test('a logo is chosen with a button of the page, which opens the file picker', async ({
+  page,
+}) => {
+  await signIn(page.context());
+  await tournamentApi(page);
+  const uploads: string[] = [];
+  await page.route('**/api/tournaments/7/logo', async (route) => {
+    uploads.push(route.request().headers()['content-type'] ?? '');
+    await route.fulfill({
+      json: { data: tournament({ logo_path: 'logo.png' }) } satisfies OpenApi.TournamentResponse,
+    });
+  });
+  await page.goto('/tournaments/7/settings');
+
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByText('Upload a logo').click();
+  await (
+    await chooser
+  ).setFiles({ buffer: Buffer.from('png'), mimeType: 'image/png', name: 'a.png' });
+
+  await expect(page.getByText('Logo updated.')).toBeVisible();
+  expect(uploads).toEqual([expect.stringContaining('multipart/form-data')]);
+  // The file input itself keeps the field's name, for the keyboard and screen readers.
+  await expect(page.getByLabel('Tournament logo')).toHaveAttribute('type', 'file');
 });
 
 test('archiving asks first, and says when players lose the tournament', async ({ page }) => {
@@ -340,9 +365,58 @@ test('organizers see their own tournaments and the other public ones', async ({ 
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByRole('heading', { name: 'Your tournaments' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Other tournaments' })).toBeVisible();
+  const mine = page.locator('article').filter({ hasText: 'Summer Cup' });
+  await expect(mine.getByRole('link', { name: 'Organizer view' })).toBeVisible();
+  await expect(mine.getByRole('link', { name: 'Public view' })).toBeVisible();
   const other = page.locator('article').filter({ hasText: 'Other Cup' });
   await expect(other.getByRole('link', { name: 'Details' })).toBeVisible();
-  await expect(other.getByRole('link', { name: 'Manage' })).toHaveCount(0);
+  await expect(other.getByRole('link', { name: 'Organizer view' })).toHaveCount(0);
+});
+
+test('a helper can leave a tournament, and only its owner deletes it', async ({ page }) => {
+  await signIn(page.context());
+  const { writes } = await tournamentApi(page, {
+    organizers: [
+      { email: 'boss@example.org', name: 'Boss', role: 'OWNER', user_id: 2 },
+      { email: user.email, name: user.name, role: 'COLLABORATOR', user_id: user.id },
+    ],
+  });
+  await page.goto('/tournaments/7/settings');
+
+  await expect(page.getByText('Only the owner of the tournament can delete it.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete tournament' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Make owner' })).toHaveCount(0);
+  await expect(page.getByLabel('Add an organizer by email')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Leave', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Leave Summer Cup? You can no longer manage it.');
+  await dialog.getByRole('button', { name: 'Leave tournament' }).click();
+
+  await expect
+    .poll(() => writes.map((write) => `${write.method} ${write.path}`))
+    .toEqual(['DELETE /api/tournaments/7/organizers/1']);
+  await expect(page.getByText('You left the tournament.')).toBeVisible();
+  await expect(page).toHaveURL('/');
+});
+
+test('the login page is in the language the visitor chose', async ({ page }) => {
+  await tournamentApi(page, { tournaments: [{ ...tournament(), can_manage: false }] });
+  await page.goto('/');
+  await page.getByLabel('Language').selectOption('hu');
+  await page.getByRole('link', { name: 'Szervezői belépés' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Szervezői belépés', level: 1 })).toBeVisible();
+  await expect(page.getByText(/^Játékosként nincs szükséged fiókra/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'nyisd meg a versenyedet' })).toHaveAttribute(
+    'href',
+    '/',
+  );
+  await expect(page.getByLabel('E-mail-cím')).toBeVisible();
+  await expect(page.getByLabel('Jelszó')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Belépés' })).toBeVisible();
+  await expect(
+    page.getByText('Elfelejtetted a jelszavad? Fordulj az oldal adminisztrátorához.'),
+  ).toBeVisible();
 });
 
 test('visitors can read the tournament pages in Hungarian', async ({ page }) => {
@@ -358,4 +432,41 @@ test('visitors can read the tournament pages in Hungarian', async ({ page }) => 
   await page.goto('/tournaments/7/dashboard');
   await expect(page.getByRole('heading', { name: 'Keresd meg a csapatodat' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Áttekintés' })).toBeVisible();
+});
+
+test('organizers can run a tournament in Hungarian', async ({ page }) => {
+  await signIn(page.context());
+  await page.addInitScript(() => localStorage.setItem('bracket:language', 'hu'));
+  const languages = new Set<string | undefined>();
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/')) {
+      languages.add(request.headers()['accept-language']);
+    }
+  });
+  await tournamentApi(page, { stages: [stage(1, true, [bracket()])] });
+
+  await page.goto('/tournaments/7/settings');
+  await expect(page.getByRole('heading', { name: 'A verseny beállításai' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Nyilvános nézet' })).toBeVisible();
+  await expect(page.getByText(/^Kezdés: 2030\. jún\. 1\./)).toBeVisible();
+  // A check of the form, worded in the page's language.
+  await page.getByLabel('Részletek-link').fill('nem jó link');
+  await page.getByRole('button', { name: 'Verseny mentése' }).click();
+  await expect(page.getByText(/^Csak betűket, számokat/)).toBeVisible();
+  await page.getByRole('button', { name: 'Verseny archiválása' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Mégse' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  // The rounds the site named itself are named in Hungarian too.
+  await page.getByRole('link', { name: 'Szakaszok' }).click();
+  await expect(page.getByRole('heading', { name: 'Szakaszok' })).toBeVisible();
+  await expect(page.getByText('4/4 pozíció betöltve')).toBeVisible();
+  await expect(page.getByText('1. forduló', { exact: true }).first()).toBeVisible();
+
+  await page.goto('/roster');
+  await expect(page.getByRole('heading', { name: 'Csapatok és játékosok' })).toBeVisible();
+  await page.goto('/user');
+  await expect(page.getByRole('heading', { name: 'Adatok' })).toBeVisible();
+  // The API answers in the page's language too.
+  expect([...languages]).toEqual(['hu']);
 });

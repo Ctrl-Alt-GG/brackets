@@ -48,6 +48,10 @@ async def schedule_matches(
     _: TournamentOrganizer,
     __: OpenTournament,
 ) -> SuccessResponse:
+    """
+    Plan the schedule again. Every match starts with its round, unless its teams or their players
+    play a match of another tournament then; it waits until they are free.
+    """
     await schedule_all_matches(session, tournament_id)
     return SuccessResponse()
 

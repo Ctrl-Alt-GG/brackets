@@ -14,6 +14,7 @@ from pydantic import (
 
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.db.stage_item_inputs import StageItemInput
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import MatchId, RoundId, StageItemInputId
 
 
@@ -27,8 +28,6 @@ class MatchBaseInsertable(BaseModelORM):
     round_id: RoundId
     stage_item_input1_score: int
     stage_item_input2_score: int
-    stage_item_input1_conflict: bool
-    stage_item_input2_conflict: bool
     # Scores are the result, and an unplayed match reads 0-0. This marks a 0-0 that was played.
     scoreless_result: bool = False
 
@@ -186,7 +185,7 @@ class ScheduleDelayBody(BaseModelORM):
     @classmethod
     def minutes_move_something(cls, value: int) -> int:
         if value == 0:
-            raise ValueError("Enter how many minutes to move the schedule by")
+            raise ValueError(gettext("Enter how many minutes to move the schedule by"))
         return value
 
 

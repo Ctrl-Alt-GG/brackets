@@ -16,18 +16,24 @@ import { EmptyState, SectionLabel, Surface, SurfaceHeading } from '../ui';
 import { stageItemPath } from './tournament-overview';
 
 /** A team's logo, when it has one. Decorative: the name is always next to it. */
-function TeamLogo({ className, team }: { className: string; team: OpenApi.FullTeamWithPlayers }) {
+function TeamLogo({
+  className,
+  team,
+}: {
+  className: string;
+  team: OpenApi.TournamentTeamWithPlayers;
+}) {
   const url = teamLogoUrl(team);
   return url ? (
     <img alt="" className={`${className} shrink-0 rounded-field object-contain`} src={url} />
   ) : null;
 }
 
-function playerNames(team: OpenApi.FullTeamWithPlayers) {
+function playerNames(team: OpenApi.TournamentTeamWithPlayers) {
   return team.players.map((player) => player.name).join(', ');
 }
 
-export function TeamDirectorySection({ teams }: { teams: OpenApi.FullTeamWithPlayers[] }) {
+export function TeamDirectorySection({ teams }: { teams: OpenApi.TournamentTeamWithPlayers[] }) {
   const { t } = useTranslation();
   const { myTeamId, publicPath } = useTournamentContext();
   const [query, setQuery] = useState('');

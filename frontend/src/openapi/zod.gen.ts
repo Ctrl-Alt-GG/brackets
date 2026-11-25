@@ -32,9 +32,9 @@ export const zBodyLoginForAccessTokenApiTokenPost = z.object({
 });
 
 /**
- * Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post
+ * Body_update_team_logo_api_teams__team_id__logo_post
  */
-export const zBodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = z.object({
+export const zBodyUpdateTeamLogoApiTeamsTeamIdLogoPost = z.object({
   file: z.string().nullish(),
 });
 
@@ -43,57 +43,6 @@ export const zBodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = 
  */
 export const zBodyUploadLogoApiTournamentsTournamentIdLogoPost = z.object({
   file: z.string().nullish(),
-});
-
-/**
- * Club
- */
-export const zClub = z.object({
-  created: z.iso.datetime(),
-  id: z.int(),
-  name: z.string(),
-});
-
-/**
- * ClubCreateBody
- */
-export const zClubCreateBody = z.object({
-  name: z.string().min(1).max(100),
-});
-
-/**
- * ClubMemberCreateBody
- */
-export const zClubMemberCreateBody = z.object({
-  email: z.email(),
-});
-
-/**
- * ClubOwnerUpdateBody
- */
-export const zClubOwnerUpdateBody = z.object({
-  user_id: z.int(),
-});
-
-/**
- * ClubResponse
- */
-export const zClubResponse = z.object({
-  data: zClub.nullable(),
-});
-
-/**
- * ClubUpdateBody
- */
-export const zClubUpdateBody = z.object({
-  name: z.string().min(1).max(100),
-});
-
-/**
- * ClubsResponse
- */
-export const zClubsResponse = z.object({
-  data: z.array(zClub),
 });
 
 /**
@@ -119,62 +68,35 @@ export const zMatchCreateBodyFrontend = z.object({
 });
 
 /**
+ * OrganizerCreateBody
+ */
+export const zOrganizerCreateBody = z.object({
+  email: z.email(),
+});
+
+/**
+ * OwnerUpdateBody
+ */
+export const zOwnerUpdateBody = z.object({
+  user_id: z.int(),
+});
+
+/**
  * Player
+ *
+ * Someone who plays. Players are shared by every tournament: one takes part in a tournament as an
+ * active member of one of its teams.
  */
 export const zPlayer = z.object({
-  active: z.boolean(),
   created: z.iso.datetime(),
-  draws: z.int().default(0),
-  elo_score: z.string().default('0.0'),
   id: z.int(),
-  losses: z.int().default(0),
   name: z.string(),
-  swiss_score: z.string().default('0.0'),
-  tournament_id: z.int(),
-  wins: z.int().default(0),
-});
-
-/**
- * FullTeamWithPlayers
- *
- * A team with its roster.
- */
-export const zFullTeamWithPlayers = z.object({
-  active: z.boolean(),
-  created: z.iso.datetime(),
-  draws: z.int().default(0),
-  elo_score: z.string().default('1200'),
-  id: z.int(),
-  logo_path: z.string().nullable(),
-  losses: z.int().default(0),
-  name: z.string(),
-  players: z.array(zPlayer),
-  swiss_score: z.string().default('0.0'),
-  tournament_id: z.int(),
-  wins: z.int().default(0),
-});
-
-/**
- * PaginatedPlayers
- */
-export const zPaginatedPlayers = z.object({
-  count: z.int(),
-  players: z.array(zPlayer),
-});
-
-/**
- * PaginatedTeams
- */
-export const zPaginatedTeams = z.object({
-  count: z.int(),
-  teams: z.array(zFullTeamWithPlayers),
 });
 
 /**
  * PlayerBody
  */
 export const zPlayerBody = z.object({
-  active: z.boolean(),
   name: z.string().min(1).max(30),
 });
 
@@ -182,7 +104,6 @@ export const zPlayerBody = z.object({
  * PlayerMultiBody
  */
 export const zPlayerMultiBody = z.object({
-  active: z.boolean(),
   names: z.string().min(1),
 });
 
@@ -190,7 +111,7 @@ export const zPlayerMultiBody = z.object({
  * PlayersResponse
  */
 export const zPlayersResponse = z.object({
-  data: zPaginatedPlayers,
+  data: z.array(zPlayer),
 });
 
 /**
@@ -258,6 +179,22 @@ export const zRoundCreateBody = z.object({
 export const zRoundUpdateBody = z.object({
   is_draft: z.boolean(),
   name: z.string().min(1).max(100),
+});
+
+/**
+ * ScheduleConflict
+ *
+ * A team of a match that has to be somewhere else at the same time: the team, or some of its
+ * players, play another match then. The other match can be in this tournament or in another one
+ * that shares the team or the players.
+ */
+export const zScheduleConflict = z.object({
+  match_id: z.int(),
+  other_match_id: z.int(),
+  other_tournament_id: z.int(),
+  other_tournament_name: z.string(),
+  player_ids: z.array(z.int()),
+  team_id: z.int(),
 });
 
 /**
@@ -430,9 +367,232 @@ export const zSuccessResponse = z.object({
 });
 
 /**
- * Team
+ * TeamMember
+ *
+ * A player in a team's roster.
  */
-export const zTeam = z.object({
+export const zTeamMember = z.object({
+  active: z.boolean(),
+  player: zPlayer,
+});
+
+/**
+ * TeamMemberBody
+ */
+export const zTeamMemberBody = z.object({
+  active: z.boolean().optional().default(true),
+  player_id: z.int(),
+});
+
+/**
+ * TeamBody
+ */
+export const zTeamBody = z.object({
+  members: z.array(zTeamMemberBody).optional(),
+  name: z.string().min(1).max(30),
+});
+
+/**
+ * TeamMultiBody
+ */
+export const zTeamMultiBody = z.object({
+  names: z.string().min(1),
+});
+
+/**
+ * Token
+ *
+ * A signed-in session.
+ */
+export const zToken = z.object({
+  access_token: z.string(),
+  name: z.string(),
+  token_type: z.string(),
+  user_id: z.int(),
+});
+
+/**
+ * TokenResponse
+ */
+export const zTokenResponse = z.object({
+  data: zToken,
+});
+
+/**
+ * TournamentAccess
+ */
+export const zTournamentAccess = z.object({
+  can_manage: z.boolean(),
+});
+
+/**
+ * TournamentAccessResponse
+ */
+export const zTournamentAccessResponse = z.object({
+  data: zTournamentAccess,
+});
+
+/**
+ * TournamentBody
+ *
+ * A tournament's settings, when it is created and when they change.
+ */
+export const zTournamentBody = z.object({
+  dashboard_endpoint: z.string().nullish(),
+  dashboard_public: z.boolean(),
+  duration_minutes: z.int().gte(1).lte(1440),
+  margin_minutes: z.int().gte(0).lte(1440),
+  name: z.string().min(1).max(100),
+  start_time: z.iso.datetime(),
+});
+
+/**
+ * TournamentPlayer
+ *
+ * A player as they take part in a tournament: the team they play for, and their results.
+ */
+export const zTournamentPlayer = z.object({
+  created: z.iso.datetime(),
+  draws: z.int().default(0),
+  elo_score: z.string().default('1200'),
+  id: z.int(),
+  losses: z.int().default(0),
+  name: z.string(),
+  swiss_score: z.string().default('0.0'),
+  team_id: z.int(),
+  wins: z.int().default(0),
+});
+
+/**
+ * PaginatedTournamentPlayers
+ */
+export const zPaginatedTournamentPlayers = z.object({
+  count: z.int(),
+  players: z.array(zTournamentPlayer),
+});
+
+/**
+ * TournamentPlayersResponse
+ */
+export const zTournamentPlayersResponse = z.object({
+  data: zPaginatedTournamentPlayers,
+});
+
+/**
+ * TournamentRole
+ *
+ * How someone runs a tournament: its owner, or an organizer the owner added.
+ */
+export const zTournamentRole = z.enum(['OWNER', 'COLLABORATOR']);
+
+/**
+ * Organizer
+ *
+ * Someone who runs a tournament: its owner, or an account the owner added to help.
+ */
+export const zOrganizer = z.object({
+  email: z.string(),
+  name: z.string(),
+  role: zTournamentRole,
+  user_id: z.int(),
+});
+
+/**
+ * OrganizersResponse
+ */
+export const zOrganizersResponse = z.object({
+  data: z.array(zOrganizer),
+});
+
+/**
+ * TournamentStatus
+ */
+export const zTournamentStatus = z.enum(['OPEN', 'ARCHIVED']);
+
+/**
+ * TeamParticipation
+ *
+ * A tournament that a team takes part in.
+ */
+export const zTeamParticipation = z.object({
+  active: z.boolean(),
+  tournament_id: z.int(),
+  tournament_name: z.string(),
+  tournament_status: zTournamentStatus,
+});
+
+/**
+ * TeamWithMembers
+ *
+ * A team with its roster and the tournaments it takes part in.
+ */
+export const zTeamWithMembers = z.object({
+  created: z.iso.datetime(),
+  id: z.int(),
+  logo_path: z.string().nullable(),
+  members: z.array(zTeamMember),
+  name: z.string(),
+  participations: z.array(zTeamParticipation),
+});
+
+/**
+ * SingleTeamResponse
+ */
+export const zSingleTeamResponse = z.object({
+  data: zTeamWithMembers,
+});
+
+/**
+ * TeamsResponse
+ */
+export const zTeamsResponse = z.object({
+  data: z.array(zTeamWithMembers),
+});
+
+/**
+ * Tournament
+ */
+export const zTournament = z.object({
+  created: z.iso.datetime(),
+  dashboard_endpoint: z.string().nullable(),
+  dashboard_public: z.boolean(),
+  duration_minutes: z.int().gte(1),
+  id: z.int(),
+  last_match_end: z.iso.datetime().nullable(),
+  logo_path: z.string().nullable(),
+  margin_minutes: z.int().gte(0),
+  matches_played: z.int().default(0),
+  matches_total: z.int().default(0),
+  more_rounds_possible: z.boolean().default(false),
+  name: z.string(),
+  start_time: z.iso.datetime(),
+  status: zTournamentStatus.default('OPEN'),
+});
+
+/**
+ * TournamentChangeStatusBody
+ */
+export const zTournamentChangeStatusBody = z.object({
+  status: zTournamentStatus,
+});
+
+/**
+ * TournamentResponse
+ */
+export const zTournamentResponse = z.object({
+  data: zTournament,
+});
+
+/**
+ * TournamentTeam
+ *
+ * A team as it takes part in a tournament, with its results there.
+ *
+ * It is read from the team's participation in the tournament, which holds the team itself. The
+ * results are replayed from the matches (`bracket.logic.ranking.team_totals`); until then, they
+ * are those of a team that hasn't played.
+ */
+export const zTournamentTeam = z.object({
   active: z.boolean(),
   created: z.iso.datetime(),
   draws: z.int().default(0),
@@ -447,13 +607,6 @@ export const zTeam = z.object({
 });
 
 /**
- * SingleTeamResponse
- */
-export const zSingleTeamResponse = z.object({
-  data: zTeam,
-});
-
-/**
  * StageItemInputFinal
  *
  * Has a team, assigned by an organizer or advanced from an earlier stage item.
@@ -465,7 +618,7 @@ export const zStageItemInputFinal = z.object({
   points: z.string().default('0.0'),
   slot: z.int(),
   stage_item_id: z.int(),
-  team: zTeam,
+  team: zTournamentTeam,
   team_id: z.int(),
   tournament_id: z.int(),
   winner_from_stage_item_id: z.int().nullable(),
@@ -489,14 +642,12 @@ export const zMatch = z.object({
   stage_item_input1: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int().nullable(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int().nullable(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -522,14 +673,12 @@ export const zMatchWithDetails = z.object({
   stage_item_input1: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int().nullable(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int().nullable(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -557,7 +706,6 @@ export const zMatchWithDetailsDefinitive = z.object({
     zStageItemInputFinal,
     zStageItemInputEmpty,
   ]),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
@@ -566,7 +714,6 @@ export const zMatchWithDetailsDefinitive = z.object({
     zStageItemInputFinal,
     zStageItemInputEmpty,
   ]),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -599,8 +746,8 @@ export const zSingleMatchResponse = z.object({
  */
 export const zStageItemInputUpdate = z.object({
   stage_item_input: zStageItemInputTentative,
-  team: zTeam,
-  tied_team: zTeam.nullable(),
+  team: zTournamentTeam,
+  tied_team: zTournamentTeam.nullable(),
 });
 
 /**
@@ -647,108 +794,45 @@ export const zStagesWithStageItemsResponse = z.object({
 });
 
 /**
- * TeamBody
+ * TournamentTeamBody
  */
-export const zTeamBody = z.object({
+export const zTournamentTeamBody = z.object({
   active: z.boolean(),
-  name: z.string().min(1).max(30),
-  player_ids: z.array(z.int()),
 });
 
 /**
- * TeamMultiBody
+ * TournamentTeamResponse
  */
-export const zTeamMultiBody = z.object({
-  active: z.boolean(),
-  names: z.string().min(1),
+export const zTournamentTeamResponse = z.object({
+  data: zTournamentTeam,
 });
 
 /**
- * TeamsWithPlayersResponse
- */
-export const zTeamsWithPlayersResponse = z.object({
-  data: zPaginatedTeams,
-});
-
-/**
- * Token
+ * TournamentTeamWithPlayers
  *
- * A signed-in session.
+ * A team with the players who play for it in the tournament: its lineup.
  */
-export const zToken = z.object({
-  access_token: z.string(),
-  name: z.string(),
-  token_type: z.string(),
-  user_id: z.int(),
-});
-
-/**
- * TokenResponse
- */
-export const zTokenResponse = z.object({
-  data: zToken,
-});
-
-/**
- * TournamentAccess
- */
-export const zTournamentAccess = z.object({
-  can_manage: z.boolean(),
-});
-
-/**
- * TournamentAccessResponse
- */
-export const zTournamentAccessResponse = z.object({
-  data: zTournamentAccess,
-});
-
-/**
- * TournamentBody
- */
-export const zTournamentBody = z.object({
-  club_id: z.int(),
-  dashboard_endpoint: z.string().nullish(),
-  dashboard_public: z.boolean(),
-  duration_minutes: z.int().gte(1).lte(1440),
-  margin_minutes: z.int().gte(0).lte(1440),
-  name: z.string().min(1).max(100),
-  players_can_be_in_multiple_teams: z.boolean(),
-  start_time: z.iso.datetime(),
-});
-
-/**
- * TournamentStatus
- */
-export const zTournamentStatus = z.enum(['OPEN', 'ARCHIVED']);
-
-/**
- * Tournament
- */
-export const zTournament = z.object({
-  club_id: z.int(),
+export const zTournamentTeamWithPlayers = z.object({
+  active: z.boolean(),
   created: z.iso.datetime(),
-  dashboard_endpoint: z.string().nullable(),
-  dashboard_public: z.boolean(),
-  duration_minutes: z.int().gte(1),
+  draws: z.int().default(0),
+  elo_score: z.string().default('1200'),
   id: z.int(),
-  last_match_end: z.iso.datetime().nullable(),
   logo_path: z.string().nullable(),
-  margin_minutes: z.int().gte(0),
-  matches_played: z.int().default(0),
-  matches_total: z.int().default(0),
-  more_rounds_possible: z.boolean().default(false),
+  losses: z.int().default(0),
   name: z.string(),
-  players_can_be_in_multiple_teams: z.boolean(),
-  start_time: z.iso.datetime(),
-  status: zTournamentStatus.default('OPEN'),
+  players: z.array(zPlayer),
+  swiss_score: z.string().default('0.0'),
+  tournament_id: z.int(),
+  wins: z.int().default(0),
 });
 
 /**
- * TournamentChangeStatusBody
+ * PaginatedTournamentTeams
  */
-export const zTournamentChangeStatusBody = z.object({
-  status: zTournamentStatus,
+export const zPaginatedTournamentTeams = z.object({
+  count: z.int(),
+  teams: z.array(zTournamentTeamWithPlayers),
 });
 
 /**
@@ -757,11 +841,11 @@ export const zTournamentChangeStatusBody = z.object({
  * What the Details pages of a tournament show: one answer instead of six requests.
  */
 export const zTournamentDetails = z.object({
-  players: z.array(zPlayer),
+  players: z.array(zTournamentPlayer),
   rankings: z.array(zRanking),
   stages: z.array(zStageWithStageItems),
   standings: z.record(z.string(), z.array(zStageItemInputStanding)),
-  teams: z.array(zFullTeamWithPlayers),
+  teams: z.array(zTournamentTeamWithPlayers),
   tournament: zTournament,
 });
 
@@ -773,23 +857,19 @@ export const zTournamentDetailsResponse = z.object({
 });
 
 /**
- * TournamentResponse
+ * TournamentTeamsBody
+ *
+ * Teams to take part in a tournament.
  */
-export const zTournamentResponse = z.object({
-  data: zTournament,
+export const zTournamentTeamsBody = z.object({
+  team_ids: z.array(z.int()).min(1),
 });
 
 /**
- * TournamentUpdateBody
+ * TournamentTeamsResponse
  */
-export const zTournamentUpdateBody = z.object({
-  dashboard_endpoint: z.string().nullish(),
-  dashboard_public: z.boolean(),
-  duration_minutes: z.int().gte(1).lte(1440),
-  margin_minutes: z.int().gte(0).lte(1440),
-  name: z.string().min(1).max(100),
-  players_can_be_in_multiple_teams: z.boolean(),
-  start_time: z.iso.datetime(),
+export const zTournamentTeamsResponse = z.object({
+  data: zPaginatedTournamentTeams,
 });
 
 /**
@@ -797,7 +877,6 @@ export const zTournamentUpdateBody = z.object({
  */
 export const zTournamentWithAccess = z.object({
   can_manage: z.boolean(),
-  club_id: z.int(),
   created: z.iso.datetime(),
   dashboard_endpoint: z.string().nullable(),
   dashboard_public: z.boolean(),
@@ -810,7 +889,6 @@ export const zTournamentWithAccess = z.object({
   matches_total: z.int().default(0),
   more_rounds_possible: z.boolean().default(false),
   name: z.string(),
-  players_can_be_in_multiple_teams: z.boolean(),
   start_time: z.iso.datetime(),
   status: zTournamentStatus.default('OPEN'),
 });
@@ -826,12 +904,13 @@ export const zTournamentWorkspace = z.object({
     z.string(),
     z.array(z.union([zStageItemInputOptionTentative, zStageItemInputOptionFinal])),
   ),
+  conflicts: z.array(zScheduleConflict),
   next_stage_rankings: z.record(z.string(), z.array(zStageItemInputUpdate)),
-  players: z.array(zPlayer),
+  players: z.array(zTournamentPlayer),
   rankings: z.array(zRanking),
   stages: z.array(zStageWithStageItems),
   standings: z.record(z.string(), z.array(zStageItemInputStanding)),
-  teams: z.array(zFullTeamWithPlayers),
+  teams: z.array(zTournamentTeamWithPlayers),
   tournament: zTournament,
 });
 
@@ -899,30 +978,6 @@ export const zUserToUpdate = z.object({
 });
 
 /**
- * UserXClubRelation
- */
-export const zUserXClubRelation = z.enum(['OWNER', 'COLLABORATOR']);
-
-/**
- * ClubMember
- *
- * An organizer of an event: its owner, or someone the owner added to help run it.
- */
-export const zClubMember = z.object({
-  email: z.string(),
-  name: z.string(),
-  relation: zUserXClubRelation,
-  user_id: z.int(),
-});
-
-/**
- * ClubMembersResponse
- */
-export const zClubMembersResponse = z.object({
-  data: z.array(zClubMember),
-});
-
-/**
  * ValidationError
  */
 export const zValidationError = z.object({
@@ -955,14 +1010,12 @@ export const zMatchWritable = z.object({
   stage_item_input1: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int().nullable(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int().nullable(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -987,14 +1040,12 @@ export const zMatchWithDetailsWritable = z.object({
   stage_item_input1: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int().nullable(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
   stage_item_input2: z
     .union([zStageItemInputTentative, zStageItemInputFinal, zStageItemInputEmpty])
     .nullable(),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int().nullable(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -1021,7 +1072,6 @@ export const zMatchWithDetailsDefinitiveWritable = z.object({
     zStageItemInputFinal,
     zStageItemInputEmpty,
   ]),
-  stage_item_input1_conflict: z.boolean(),
   stage_item_input1_id: z.int(),
   stage_item_input1_score: z.int(),
   stage_item_input1_winner_from_match_id: z.int().nullable(),
@@ -1030,7 +1080,6 @@ export const zMatchWithDetailsDefinitiveWritable = z.object({
     zStageItemInputFinal,
     zStageItemInputEmpty,
   ]),
-  stage_item_input2_conflict: z.boolean(),
   stage_item_input2_id: z.int(),
   stage_item_input2_score: z.int(),
   stage_item_input2_winner_from_match_id: z.int().nullable(),
@@ -1097,11 +1146,11 @@ export const zStagesWithStageItemsResponseWritable = z.object({
  * What the Details pages of a tournament show: one answer instead of six requests.
  */
 export const zTournamentDetailsWritable = z.object({
-  players: z.array(zPlayer),
+  players: z.array(zTournamentPlayer),
   rankings: z.array(zRanking),
   stages: z.array(zStageWithStageItemsWritable),
   standings: z.record(z.string(), z.array(zStageItemInputStanding)),
-  teams: z.array(zFullTeamWithPlayers),
+  teams: z.array(zTournamentTeamWithPlayers),
   tournament: zTournament,
 });
 
@@ -1123,12 +1172,13 @@ export const zTournamentWorkspaceWritable = z.object({
     z.string(),
     z.array(z.union([zStageItemInputOptionTentative, zStageItemInputOptionFinal])),
   ),
+  conflicts: z.array(zScheduleConflict),
   next_stage_rankings: z.record(z.string(), z.array(zStageItemInputUpdate)),
-  players: z.array(zPlayer),
+  players: z.array(zTournamentPlayer),
   rankings: z.array(zRanking),
   stages: z.array(zStageWithStageItemsWritable),
   standings: z.record(z.string(), z.array(zStageItemInputStanding)),
-  teams: z.array(zFullTeamWithPlayers),
+  teams: z.array(zTournamentTeamWithPlayers),
   tournament: zTournament,
 });
 
@@ -1147,79 +1197,6 @@ export const zGetAuthFeaturesApiAuthFeaturesGetResponse = zAuthFeatureFlagsRespo
 /**
  * Successful Response
  */
-export const zGetClubsApiClubsGetResponse = zClubsResponse;
-
-export const zCreateNewClubApiClubsPostBody = zClubCreateBody;
-
-/**
- * Successful Response
- */
-export const zCreateNewClubApiClubsPostResponse = zClubResponse;
-
-export const zDeleteClubApiClubsClubIdDeletePath = z.object({
-  club_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zDeleteClubApiClubsClubIdDeleteResponse = zSuccessResponse;
-
-export const zUpdateClubApiClubsClubIdPutBody = zClubUpdateBody;
-
-export const zUpdateClubApiClubsClubIdPutPath = z.object({
-  club_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zUpdateClubApiClubsClubIdPutResponse = zClubResponse;
-
-export const zGetMembersApiClubsClubIdMembersGetPath = z.object({
-  club_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zGetMembersApiClubsClubIdMembersGetResponse = zClubMembersResponse;
-
-export const zAddMemberApiClubsClubIdMembersPostBody = zClubMemberCreateBody;
-
-export const zAddMemberApiClubsClubIdMembersPostPath = z.object({
-  club_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zAddMemberApiClubsClubIdMembersPostResponse = zClubMembersResponse;
-
-export const zRemoveMemberApiClubsClubIdMembersUserIdDeletePath = z.object({
-  club_id: z.int(),
-  user_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zRemoveMemberApiClubsClubIdMembersUserIdDeleteResponse = zClubMembersResponse;
-
-export const zTransferOwnershipApiClubsClubIdOwnerPutBody = zClubOwnerUpdateBody;
-
-export const zTransferOwnershipApiClubsClubIdOwnerPutPath = z.object({
-  club_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zTransferOwnershipApiClubsClubIdOwnerPutResponse = zClubMembersResponse;
-
-/**
- * Successful Response
- */
 export const zLogoutApiLogoutPostResponse = z.void();
 
 /**
@@ -1228,6 +1205,92 @@ export const zLogoutApiLogoutPostResponse = z.void();
  * Successful Response
  */
 export const zPingApiPingGetResponse = z.string();
+
+/**
+ * Successful Response
+ */
+export const zGetAllPlayersApiPlayersGetResponse = zPlayersResponse;
+
+export const zCreatePlayerApiPlayersPostBody = zPlayerBody;
+
+/**
+ * Successful Response
+ */
+export const zCreatePlayerApiPlayersPostResponse = zSinglePlayerResponse;
+
+export const zDeletePlayerApiPlayersPlayerIdDeletePath = z.object({
+  player_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeletePlayerApiPlayersPlayerIdDeleteResponse = zSuccessResponse;
+
+export const zRenamePlayerApiPlayersPlayerIdPutBody = zPlayerBody;
+
+export const zRenamePlayerApiPlayersPlayerIdPutPath = z.object({
+  player_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRenamePlayerApiPlayersPlayerIdPutResponse = zSinglePlayerResponse;
+
+export const zCreatePlayersApiPlayersMultiPostBody = zPlayerMultiBody;
+
+/**
+ * Successful Response
+ */
+export const zCreatePlayersApiPlayersMultiPostResponse = zSuccessResponse;
+
+/**
+ * Successful Response
+ */
+export const zGetTeamsApiTeamsGetResponse = zTeamsResponse;
+
+export const zCreateTeamApiTeamsPostBody = zTeamBody;
+
+/**
+ * Successful Response
+ */
+export const zCreateTeamApiTeamsPostResponse = zSingleTeamResponse;
+
+export const zDeleteTeamApiTeamsTeamIdDeletePath = z.object({
+  team_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteTeamApiTeamsTeamIdDeleteResponse = zSuccessResponse;
+
+export const zUpdateTeamApiTeamsTeamIdPutBody = zTeamBody;
+
+export const zUpdateTeamApiTeamsTeamIdPutPath = z.object({
+  team_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateTeamApiTeamsTeamIdPutResponse = zSingleTeamResponse;
+
+export const zGetTeamLogoApiTeamsTeamIdLogoGetPath = z.object({
+  team_id: z.int(),
+});
+
+export const zUpdateTeamLogoApiTeamsTeamIdLogoPostBody = zBodyUpdateTeamLogoApiTeamsTeamIdLogoPost;
+
+export const zUpdateTeamLogoApiTeamsTeamIdLogoPostPath = z.object({
+  team_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateTeamLogoApiTeamsTeamIdLogoPostResponse = zSingleTeamResponse;
 
 export const zLoginForAccessTokenApiTokenPostBody = zBodyLoginForAccessTokenApiTokenPost;
 
@@ -1271,7 +1334,7 @@ export const zGetTournamentApiTournamentsTournamentIdGetPath = z.object({
  */
 export const zGetTournamentApiTournamentsTournamentIdGetResponse = zTournamentResponse;
 
-export const zUpdateTournamentByIdApiTournamentsTournamentIdPutBody = zTournamentUpdateBody;
+export const zUpdateTournamentByIdApiTournamentsTournamentIdPutBody = zTournamentBody;
 
 export const zUpdateTournamentByIdApiTournamentsTournamentIdPutPath = z.object({
   tournament_id: z.int(),
@@ -1394,73 +1457,72 @@ export const zGetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGet
 export const zGetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponse =
   zStageRankingResponse;
 
-export const zGetPlayersApiTournamentsTournamentIdPlayersGetPath = z.object({
+export const zGetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetPath = z.object({
   tournament_id: z.int(),
 });
 
-export const zGetPlayersApiTournamentsTournamentIdPlayersGetQuery = z.object({
+/**
+ * Successful Response
+ */
+export const zGetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetResponse =
+  zOrganizersResponse;
+
+export const zAddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostBody =
+  zOrganizerCreateBody;
+
+export const zAddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostPath = z.object({
+  tournament_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zAddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostResponse =
+  zOrganizersResponse;
+
+export const zRemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeletePath =
+  z.object({
+    tournament_id: z.int(),
+    user_id: z.int(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteResponse =
+  zOrganizersResponse;
+
+export const zTransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutBody = zOwnerUpdateBody;
+
+export const zTransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutPath = z.object({
+  tournament_id: z.int(),
+});
+
+/**
+ * Successful Response
+ */
+export const zTransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutResponse =
+  zOrganizersResponse;
+
+export const zGetTournamentPlayersApiTournamentsTournamentIdPlayersGetPath = z.object({
+  tournament_id: z.int(),
+});
+
+export const zGetTournamentPlayersApiTournamentsTournamentIdPlayersGetQuery = z.object({
   limit: z.int().gte(1).lte(500).optional().default(25),
   offset: z.int().gte(0).optional().default(0),
   sort_direction: z.enum(['asc', 'desc']).optional().default('asc'),
   sort_by: z
-    .enum(['name', 'elo_score', 'swiss_score', 'wins', 'draws', 'losses', 'active', 'created'])
+    .enum(['name', 'created', 'elo_score', 'swiss_score', 'wins', 'draws', 'losses'])
     .optional()
     .default('name'),
-  not_in_team: z.boolean().optional().default(false),
 });
 
 /**
  * Successful Response
  */
-export const zGetPlayersApiTournamentsTournamentIdPlayersGetResponse = zPlayersResponse;
-
-export const zCreateSinglePlayerApiTournamentsTournamentIdPlayersPostBody = zPlayerBody;
-
-export const zCreateSinglePlayerApiTournamentsTournamentIdPlayersPostPath = z.object({
-  tournament_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zCreateSinglePlayerApiTournamentsTournamentIdPlayersPostResponse = zSuccessResponse;
-
-export const zDeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeletePath = z.object({
-  tournament_id: z.int(),
-  player_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zDeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteResponse =
-  zSuccessResponse;
-
-export const zUpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutBody = zPlayerBody;
-
-export const zUpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutPath = z.object({
-  tournament_id: z.int(),
-  player_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zUpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutResponse =
-  zSinglePlayerResponse;
-
-export const zCreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostBody =
-  zPlayerMultiBody;
-
-export const zCreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostPath = z.object({
-  tournament_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zCreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostResponse =
-  zSuccessResponse;
+export const zGetTournamentPlayersApiTournamentsTournamentIdPlayersGetResponse =
+  zTournamentPlayersResponse;
 
 export const zGetRankingsApiTournamentsTournamentIdRankingsGetPath = z.object({
   tournament_id: z.int(),
@@ -1685,16 +1747,16 @@ export const zGetStandingsApiTournamentsTournamentIdStandingsGetPath = z.object(
  */
 export const zGetStandingsApiTournamentsTournamentIdStandingsGetResponse = zStandingsResponse;
 
-export const zGetTeamsApiTournamentsTournamentIdTeamsGetPath = z.object({
+export const zGetTournamentTeamsApiTournamentsTournamentIdTeamsGetPath = z.object({
   tournament_id: z.int(),
 });
 
-export const zGetTeamsApiTournamentsTournamentIdTeamsGetQuery = z.object({
+export const zGetTournamentTeamsApiTournamentsTournamentIdTeamsGetQuery = z.object({
   limit: z.int().gte(1).lte(500).optional().default(25),
   offset: z.int().gte(0).optional().default(0),
   sort_direction: z.enum(['asc', 'desc']).optional().default('asc'),
   sort_by: z
-    .enum(['name', 'elo_score', 'swiss_score', 'wins', 'draws', 'losses', 'active', 'created'])
+    .enum(['name', 'active', 'created', 'elo_score', 'swiss_score', 'wins', 'draws', 'losses'])
     .optional()
     .default('name'),
 });
@@ -1702,20 +1764,21 @@ export const zGetTeamsApiTournamentsTournamentIdTeamsGetQuery = z.object({
 /**
  * Successful Response
  */
-export const zGetTeamsApiTournamentsTournamentIdTeamsGetResponse = zTeamsWithPlayersResponse;
+export const zGetTournamentTeamsApiTournamentsTournamentIdTeamsGetResponse =
+  zTournamentTeamsResponse;
 
-export const zCreateTeamApiTournamentsTournamentIdTeamsPostBody = zTeamBody;
+export const zAddTournamentTeamsApiTournamentsTournamentIdTeamsPostBody = zTournamentTeamsBody;
 
-export const zCreateTeamApiTournamentsTournamentIdTeamsPostPath = z.object({
+export const zAddTournamentTeamsApiTournamentsTournamentIdTeamsPostPath = z.object({
   tournament_id: z.int(),
 });
 
 /**
  * Successful Response
  */
-export const zCreateTeamApiTournamentsTournamentIdTeamsPostResponse = zSingleTeamResponse;
+export const zAddTournamentTeamsApiTournamentsTournamentIdTeamsPostResponse = zSuccessResponse;
 
-export const zDeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeletePath = z.object({
+export const zRemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeletePath = z.object({
   tournament_id: z.int(),
   team_id: z.int(),
 });
@@ -1723,11 +1786,13 @@ export const zDeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeletePath = z.obje
 /**
  * Successful Response
  */
-export const zDeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponse = zSuccessResponse;
+export const zRemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponse =
+  zSuccessResponse;
 
-export const zUpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutBody = zTeamBody;
+export const zUpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutBody =
+  zTournamentTeamBody;
 
-export const zUpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutPath = z.object({
+export const zUpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutPath = z.object({
   tournament_id: z.int(),
   team_id: z.int(),
 });
@@ -1735,37 +1800,19 @@ export const zUpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutPath = z.obj
 /**
  * Successful Response
  */
-export const zUpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutResponse = zSingleTeamResponse;
+export const zUpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutResponse =
+  zTournamentTeamResponse;
 
-export const zGetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetPath = z.object({
-  tournament_id: z.int(),
-  team_id: z.int(),
-});
+export const zCreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostBody = zTeamMultiBody;
 
-export const zUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostBody =
-  zBodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost;
-
-export const zUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostPath = z.object({
-  tournament_id: z.int(),
-  team_id: z.int(),
-});
-
-/**
- * Successful Response
- */
-export const zUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostResponse =
-  zSingleTeamResponse;
-
-export const zCreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostBody = zTeamMultiBody;
-
-export const zCreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostPath = z.object({
+export const zCreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostPath = z.object({
   tournament_id: z.int(),
 });
 
 /**
  * Successful Response
  */
-export const zCreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
+export const zCreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
   zSuccessResponse;
 
 export const zGetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetPath = z.object({

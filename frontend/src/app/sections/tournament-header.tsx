@@ -31,16 +31,16 @@ export function detailsTabs(
   ];
 }
 
-export function workspaceTabs(tournamentId: number): Tab[] {
+export function workspaceTabs(tournamentId: number, t: TFunction): Tab[] {
   const base = `/tournaments/${tournamentId}`;
   return [
-    { end: true, label: 'Overview', to: base },
-    { label: 'Players', to: `${base}/players` },
-    { label: 'Teams', to: `${base}/teams` },
-    { label: 'Stages', to: `${base}/stages` },
-    { label: 'Schedule', to: `${base}/schedule` },
-    { label: 'Rankings', to: `${base}/rankings` },
-    { label: 'Settings', to: `${base}/settings` },
+    { end: true, label: t('workspace.overview'), to: base },
+    { label: t('workspace.players'), to: `${base}/players` },
+    { label: t('workspace.teams'), to: `${base}/teams` },
+    { label: t('workspace.stages'), to: `${base}/stages` },
+    { label: t('workspace.schedule'), to: `${base}/schedule` },
+    { label: t('workspace.standings'), to: `${base}/rankings` },
+    { label: t('workspace.settings'), to: `${base}/settings` },
   ];
 }
 
@@ -100,13 +100,11 @@ export function TournamentHeader({
           </div>
           {actions}
         </div>
-        <nav
-          aria-label={t('tournament.pages')}
-          className="tabs tabs-border flex-nowrap overflow-x-auto [scrollbar-width:none]"
-        >
+        {/* The tabs wrap on phones: a row that scrolls would hide the pages at its end. */}
+        <nav aria-label={t('tournament.pages')} className="tabs tabs-border">
           {tabs.map((tab) => (
             <NavLink
-              className={({ isActive }) => cx('tab shrink-0', isActive && 'tab-active')}
+              className={({ isActive }) => cx('tab', isActive && 'tab-active')}
               end={tab.end}
               key={tab.to}
               to={tab.to}

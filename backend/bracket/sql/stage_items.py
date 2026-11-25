@@ -11,6 +11,7 @@ from bracket.sql.matches import sql_delete_matches_for_stage_item_id
 from bracket.sql.rankings import get_default_rankings_in_tournament
 from bracket.sql.stage_item_inputs import sql_create_stage_item_inputs, sql_delete_stage_item_inputs
 from bracket.sql.stages import get_full_tournament_details
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import RankingId, StageItemId, TournamentId
 
 
@@ -90,6 +91,6 @@ async def get_stage_item(
     if len(stages) < 1 or len(stages[0].stage_items) < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stage item doesn't exist",
+            detail=gettext("Stage item doesn't exist"),
         )
     return stages[0].stage_items[0]

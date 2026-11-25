@@ -52,9 +52,9 @@ export type BodyLoginForAccessTokenApiTokenPost = {
 };
 
 /**
- * Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post
+ * Body_update_team_logo_api_teams__team_id__logo_post
  */
-export type BodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost = {
+export type BodyUpdateTeamLogoApiTeamsTeamIdLogoPost = {
   /**
    * File
    */
@@ -69,168 +69,6 @@ export type BodyUploadLogoApiTournamentsTournamentIdLogoPost = {
    * File
    */
   file?: Blob | File | null;
-};
-
-/**
- * Club
- */
-export type Club = {
-  /**
-   * Created
-   */
-  created: string;
-  /**
-   * Id
-   */
-  id: number;
-  /**
-   * Name
-   */
-  name: string;
-};
-
-/**
- * ClubCreateBody
- */
-export type ClubCreateBody = {
-  /**
-   * Name
-   */
-  name: string;
-};
-
-/**
- * ClubMember
- *
- * An organizer of an event: its owner, or someone the owner added to help run it.
- */
-export type ClubMember = {
-  /**
-   * Email
-   */
-  email: string;
-  /**
-   * Name
-   */
-  name: string;
-  relation: UserXClubRelation;
-  /**
-   * User Id
-   */
-  user_id: number;
-};
-
-/**
- * ClubMemberCreateBody
- */
-export type ClubMemberCreateBody = {
-  /**
-   * Email
-   */
-  email: string;
-};
-
-/**
- * ClubMembersResponse
- */
-export type ClubMembersResponse = {
-  /**
-   * Data
-   */
-  data: Array<ClubMember>;
-};
-
-/**
- * ClubOwnerUpdateBody
- */
-export type ClubOwnerUpdateBody = {
-  /**
-   * User Id
-   */
-  user_id: number;
-};
-
-/**
- * ClubResponse
- */
-export type ClubResponse = {
-  data: Club | null;
-};
-
-/**
- * ClubUpdateBody
- */
-export type ClubUpdateBody = {
-  /**
-   * Name
-   */
-  name: string;
-};
-
-/**
- * ClubsResponse
- */
-export type ClubsResponse = {
-  /**
-   * Data
-   */
-  data: Array<Club>;
-};
-
-/**
- * FullTeamWithPlayers
- *
- * A team with its roster.
- */
-export type FullTeamWithPlayers = {
-  /**
-   * Active
-   */
-  active: boolean;
-  /**
-   * Created
-   */
-  created: string;
-  /**
-   * Draws
-   */
-  draws: number;
-  /**
-   * Elo Score
-   */
-  elo_score: string;
-  /**
-   * Id
-   */
-  id: number;
-  /**
-   * Logo Path
-   */
-  logo_path: string | null;
-  /**
-   * Losses
-   */
-  losses: number;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Players
-   */
-  players: Array<Player>;
-  /**
-   * Swiss Score
-   */
-  swiss_score: string;
-  /**
-   * Tournament Id
-   */
-  tournament_id: number;
-  /**
-   * Wins
-   */
-  wins: number;
 };
 
 /**
@@ -290,10 +128,6 @@ export type Match = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number | null;
@@ -309,10 +143,6 @@ export type Match = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -433,10 +263,6 @@ export type MatchWithDetails = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number | null;
@@ -452,10 +278,6 @@ export type MatchWithDetails = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -524,10 +346,6 @@ export type MatchWithDetailsDefinitive = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number;
@@ -543,10 +361,6 @@ export type MatchWithDetailsDefinitive = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -566,9 +380,60 @@ export type MatchWithDetailsDefinitive = {
 };
 
 /**
- * PaginatedPlayers
+ * Organizer
+ *
+ * Someone who runs a tournament: its owner, or an account the owner added to help.
  */
-export type PaginatedPlayers = {
+export type Organizer = {
+  /**
+   * Email
+   */
+  email: string;
+  /**
+   * Name
+   */
+  name: string;
+  role: TournamentRole;
+  /**
+   * User Id
+   */
+  user_id: number;
+};
+
+/**
+ * OrganizerCreateBody
+ */
+export type OrganizerCreateBody = {
+  /**
+   * Email
+   */
+  email: string;
+};
+
+/**
+ * OrganizersResponse
+ */
+export type OrganizersResponse = {
+  /**
+   * Data
+   */
+  data: Array<Organizer>;
+};
+
+/**
+ * OwnerUpdateBody
+ */
+export type OwnerUpdateBody = {
+  /**
+   * User Id
+   */
+  user_id: number;
+};
+
+/**
+ * PaginatedTournamentPlayers
+ */
+export type PaginatedTournamentPlayers = {
   /**
    * Count
    */
@@ -576,13 +441,13 @@ export type PaginatedPlayers = {
   /**
    * Players
    */
-  players: Array<Player>;
+  players: Array<TournamentPlayer>;
 };
 
 /**
- * PaginatedTeams
+ * PaginatedTournamentTeams
  */
-export type PaginatedTeams = {
+export type PaginatedTournamentTeams = {
   /**
    * Count
    */
@@ -590,63 +455,34 @@ export type PaginatedTeams = {
   /**
    * Teams
    */
-  teams: Array<FullTeamWithPlayers>;
+  teams: Array<TournamentTeamWithPlayers>;
 };
 
 /**
  * Player
+ *
+ * Someone who plays. Players are shared by every tournament: one takes part in a tournament as an
+ * active member of one of its teams.
  */
 export type Player = {
-  /**
-   * Active
-   */
-  active: boolean;
   /**
    * Created
    */
   created: string;
   /**
-   * Draws
-   */
-  draws: number;
-  /**
-   * Elo Score
-   */
-  elo_score: string;
-  /**
    * Id
    */
   id: number;
   /**
-   * Losses
-   */
-  losses: number;
-  /**
    * Name
    */
   name: string;
-  /**
-   * Swiss Score
-   */
-  swiss_score: string;
-  /**
-   * Tournament Id
-   */
-  tournament_id: number;
-  /**
-   * Wins
-   */
-  wins: number;
 };
 
 /**
  * PlayerBody
  */
 export type PlayerBody = {
-  /**
-   * Active
-   */
-  active: boolean;
   /**
    * Name
    */
@@ -658,10 +494,6 @@ export type PlayerBody = {
  */
 export type PlayerMultiBody = {
   /**
-   * Active
-   */
-  active: boolean;
-  /**
    * Names
    */
   names: string;
@@ -671,7 +503,10 @@ export type PlayerMultiBody = {
  * PlayersResponse
  */
 export type PlayersResponse = {
-  data: PaginatedPlayers;
+  /**
+   * Data
+   */
+  data: Array<Player>;
 };
 
 /**
@@ -829,6 +664,40 @@ export type RoundWithMatches = {
 };
 
 /**
+ * ScheduleConflict
+ *
+ * A team of a match that has to be somewhere else at the same time: the team, or some of its
+ * players, play another match then. The other match can be in this tournament or in another one
+ * that shares the team or the players.
+ */
+export type ScheduleConflict = {
+  /**
+   * Match Id
+   */
+  match_id: number;
+  /**
+   * Other Match Id
+   */
+  other_match_id: number;
+  /**
+   * Other Tournament Id
+   */
+  other_tournament_id: number;
+  /**
+   * Other Tournament Name
+   */
+  other_tournament_name: string;
+  /**
+   * Player Ids
+   */
+  player_ids: Array<number>;
+  /**
+   * Team Id
+   */
+  team_id: number;
+};
+
+/**
  * ScheduleDelayBody
  */
 export type ScheduleDelayBody = {
@@ -856,7 +725,7 @@ export type SinglePlayerResponse = {
  * SingleTeamResponse
  */
 export type SingleTeamResponse = {
-  data: Team;
+  data: TeamWithMembers;
 };
 
 /**
@@ -978,7 +847,7 @@ export type StageItemInputFinal = {
    * Stage Item Id
    */
   stage_item_id: number;
-  team: Team;
+  team: TournamentTeam;
   /**
    * Team Id
    */
@@ -1138,8 +1007,8 @@ export type StageItemInputTentative = {
  */
 export type StageItemInputUpdate = {
   stage_item_input: StageItemInputTentative;
-  team: Team;
-  tied_team: Team | null;
+  team: TournamentTeam;
+  tied_team: TournamentTeam | null;
 };
 
 /**
@@ -1335,9 +1204,383 @@ export type SuccessResponse = {
 };
 
 /**
- * Team
+ * TeamBody
  */
-export type Team = {
+export type TeamBody = {
+  /**
+   * Members
+   */
+  members?: Array<TeamMemberBody>;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * TeamMember
+ *
+ * A player in a team's roster.
+ */
+export type TeamMember = {
+  /**
+   * Active
+   */
+  active: boolean;
+  player: Player;
+};
+
+/**
+ * TeamMemberBody
+ */
+export type TeamMemberBody = {
+  /**
+   * Active
+   */
+  active?: boolean;
+  /**
+   * Player Id
+   */
+  player_id: number;
+};
+
+/**
+ * TeamMultiBody
+ */
+export type TeamMultiBody = {
+  /**
+   * Names
+   */
+  names: string;
+};
+
+/**
+ * TeamParticipation
+ *
+ * A tournament that a team takes part in.
+ */
+export type TeamParticipation = {
+  /**
+   * Active
+   */
+  active: boolean;
+  /**
+   * Tournament Id
+   */
+  tournament_id: number;
+  /**
+   * Tournament Name
+   */
+  tournament_name: string;
+  tournament_status: TournamentStatus;
+};
+
+/**
+ * TeamWithMembers
+ *
+ * A team with its roster and the tournaments it takes part in.
+ */
+export type TeamWithMembers = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Logo Path
+   */
+  logo_path: string | null;
+  /**
+   * Members
+   */
+  members: Array<TeamMember>;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Participations
+   */
+  participations: Array<TeamParticipation>;
+};
+
+/**
+ * TeamsResponse
+ */
+export type TeamsResponse = {
+  /**
+   * Data
+   */
+  data: Array<TeamWithMembers>;
+};
+
+/**
+ * Token
+ *
+ * A signed-in session.
+ */
+export type Token = {
+  /**
+   * Access Token
+   */
+  access_token: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Token Type
+   */
+  token_type: string;
+  /**
+   * User Id
+   */
+  user_id: number;
+};
+
+/**
+ * TokenResponse
+ */
+export type TokenResponse = {
+  data: Token;
+};
+
+/**
+ * Tournament
+ */
+export type Tournament = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Dashboard Endpoint
+   */
+  dashboard_endpoint: string | null;
+  /**
+   * Dashboard Public
+   */
+  dashboard_public: boolean;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Last Match End
+   */
+  last_match_end: string | null;
+  /**
+   * Logo Path
+   */
+  logo_path: string | null;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Matches Played
+   */
+  matches_played: number;
+  /**
+   * Matches Total
+   */
+  matches_total: number;
+  /**
+   * More Rounds Possible
+   */
+  more_rounds_possible: boolean;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Start Time
+   */
+  start_time: string;
+  status: TournamentStatus;
+};
+
+/**
+ * TournamentAccess
+ */
+export type TournamentAccess = {
+  /**
+   * Can Manage
+   */
+  can_manage: boolean;
+};
+
+/**
+ * TournamentAccessResponse
+ */
+export type TournamentAccessResponse = {
+  data: TournamentAccess;
+};
+
+/**
+ * TournamentBody
+ *
+ * A tournament's settings, when it is created and when they change.
+ */
+export type TournamentBody = {
+  /**
+   * Dashboard Endpoint
+   */
+  dashboard_endpoint?: string | null;
+  /**
+   * Dashboard Public
+   */
+  dashboard_public: boolean;
+  /**
+   * Duration Minutes
+   */
+  duration_minutes: number;
+  /**
+   * Margin Minutes
+   */
+  margin_minutes: number;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Start Time
+   */
+  start_time: string;
+};
+
+/**
+ * TournamentChangeStatusBody
+ */
+export type TournamentChangeStatusBody = {
+  status: TournamentStatus;
+};
+
+/**
+ * TournamentDetails
+ *
+ * What the Details pages of a tournament show: one answer instead of six requests.
+ */
+export type TournamentDetails = {
+  /**
+   * Players
+   */
+  players: Array<TournamentPlayer>;
+  /**
+   * Rankings
+   */
+  rankings: Array<Ranking>;
+  /**
+   * Stages
+   */
+  stages: Array<StageWithStageItems>;
+  /**
+   * Standings
+   */
+  standings: {
+    [key: string]: Array<StageItemInputStanding>;
+  };
+  /**
+   * Teams
+   */
+  teams: Array<TournamentTeamWithPlayers>;
+  tournament: Tournament;
+};
+
+/**
+ * TournamentDetailsResponse
+ */
+export type TournamentDetailsResponse = {
+  data: TournamentDetails;
+};
+
+/**
+ * TournamentPlayer
+ *
+ * A player as they take part in a tournament: the team they play for, and their results.
+ */
+export type TournamentPlayer = {
+  /**
+   * Created
+   */
+  created: string;
+  /**
+   * Draws
+   */
+  draws: number;
+  /**
+   * Elo Score
+   */
+  elo_score: string;
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Losses
+   */
+  losses: number;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Swiss Score
+   */
+  swiss_score: string;
+  /**
+   * Team Id
+   */
+  team_id: number;
+  /**
+   * Wins
+   */
+  wins: number;
+};
+
+/**
+ * TournamentPlayersResponse
+ */
+export type TournamentPlayersResponse = {
+  data: PaginatedTournamentPlayers;
+};
+
+/**
+ * TournamentResponse
+ */
+export type TournamentResponse = {
+  data: Tournament;
+};
+
+/**
+ * TournamentRole
+ *
+ * How someone runs a tournament: its owner, or an organizer the owner added.
+ */
+export type TournamentRole = 'OWNER' | 'COLLABORATOR';
+
+/**
+ * TournamentStatus
+ */
+export type TournamentStatus = 'OPEN' | 'ARCHIVED';
+
+/**
+ * TournamentTeam
+ *
+ * A team as it takes part in a tournament, with its results there.
+ *
+ * It is read from the team's participation in the tournament, which holds the team itself. The
+ * results are replayed from the matches (`bracket.logic.ranking.team_totals`); until then, they
+ * are those of a team that hasn't played.
+ */
+export type TournamentTeam = {
   /**
    * Active
    */
@@ -1385,286 +1628,95 @@ export type Team = {
 };
 
 /**
- * TeamBody
+ * TournamentTeamBody
  */
-export type TeamBody = {
+export type TournamentTeamBody = {
   /**
    * Active
    */
   active: boolean;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Player Ids
-   */
-  player_ids: Array<number>;
 };
 
 /**
- * TeamMultiBody
+ * TournamentTeamResponse
  */
-export type TeamMultiBody = {
-  /**
-   * Active
-   */
-  active: boolean;
-  /**
-   * Names
-   */
-  names: string;
+export type TournamentTeamResponse = {
+  data: TournamentTeam;
 };
 
 /**
- * TeamsWithPlayersResponse
- */
-export type TeamsWithPlayersResponse = {
-  data: PaginatedTeams;
-};
-
-/**
- * Token
+ * TournamentTeamWithPlayers
  *
- * A signed-in session.
+ * A team with the players who play for it in the tournament: its lineup.
  */
-export type Token = {
+export type TournamentTeamWithPlayers = {
   /**
-   * Access Token
+   * Active
    */
-  access_token: string;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Token Type
-   */
-  token_type: string;
-  /**
-   * User Id
-   */
-  user_id: number;
-};
-
-/**
- * TokenResponse
- */
-export type TokenResponse = {
-  data: Token;
-};
-
-/**
- * Tournament
- */
-export type Tournament = {
-  /**
-   * Club Id
-   */
-  club_id: number;
+  active: boolean;
   /**
    * Created
    */
   created: string;
   /**
-   * Dashboard Endpoint
+   * Draws
    */
-  dashboard_endpoint: string | null;
+  draws: number;
   /**
-   * Dashboard Public
+   * Elo Score
    */
-  dashboard_public: boolean;
-  /**
-   * Duration Minutes
-   */
-  duration_minutes: number;
+  elo_score: string;
   /**
    * Id
    */
   id: number;
   /**
-   * Last Match End
-   */
-  last_match_end: string | null;
-  /**
    * Logo Path
    */
   logo_path: string | null;
   /**
-   * Margin Minutes
+   * Losses
    */
-  margin_minutes: number;
-  /**
-   * Matches Played
-   */
-  matches_played: number;
-  /**
-   * Matches Total
-   */
-  matches_total: number;
-  /**
-   * More Rounds Possible
-   */
-  more_rounds_possible: boolean;
+  losses: number;
   /**
    * Name
    */
   name: string;
-  /**
-   * Players Can Be In Multiple Teams
-   */
-  players_can_be_in_multiple_teams: boolean;
-  /**
-   * Start Time
-   */
-  start_time: string;
-  status: TournamentStatus;
-};
-
-/**
- * TournamentAccess
- */
-export type TournamentAccess = {
-  /**
-   * Can Manage
-   */
-  can_manage: boolean;
-};
-
-/**
- * TournamentAccessResponse
- */
-export type TournamentAccessResponse = {
-  data: TournamentAccess;
-};
-
-/**
- * TournamentBody
- */
-export type TournamentBody = {
-  /**
-   * Club Id
-   */
-  club_id: number;
-  /**
-   * Dashboard Endpoint
-   */
-  dashboard_endpoint?: string | null;
-  /**
-   * Dashboard Public
-   */
-  dashboard_public: boolean;
-  /**
-   * Duration Minutes
-   */
-  duration_minutes: number;
-  /**
-   * Margin Minutes
-   */
-  margin_minutes: number;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Players Can Be In Multiple Teams
-   */
-  players_can_be_in_multiple_teams: boolean;
-  /**
-   * Start Time
-   */
-  start_time: string;
-};
-
-/**
- * TournamentChangeStatusBody
- */
-export type TournamentChangeStatusBody = {
-  status: TournamentStatus;
-};
-
-/**
- * TournamentDetails
- *
- * What the Details pages of a tournament show: one answer instead of six requests.
- */
-export type TournamentDetails = {
   /**
    * Players
    */
   players: Array<Player>;
   /**
-   * Rankings
+   * Swiss Score
    */
-  rankings: Array<Ranking>;
+  swiss_score: string;
   /**
-   * Stages
+   * Tournament Id
    */
-  stages: Array<StageWithStageItems>;
+  tournament_id: number;
   /**
-   * Standings
+   * Wins
    */
-  standings: {
-    [key: string]: Array<StageItemInputStanding>;
-  };
-  /**
-   * Teams
-   */
-  teams: Array<FullTeamWithPlayers>;
-  tournament: Tournament;
+  wins: number;
 };
 
 /**
- * TournamentDetailsResponse
+ * TournamentTeamsBody
+ *
+ * Teams to take part in a tournament.
  */
-export type TournamentDetailsResponse = {
-  data: TournamentDetails;
+export type TournamentTeamsBody = {
+  /**
+   * Team Ids
+   */
+  team_ids: Array<number>;
 };
 
 /**
- * TournamentResponse
+ * TournamentTeamsResponse
  */
-export type TournamentResponse = {
-  data: Tournament;
-};
-
-/**
- * TournamentStatus
- */
-export type TournamentStatus = 'OPEN' | 'ARCHIVED';
-
-/**
- * TournamentUpdateBody
- */
-export type TournamentUpdateBody = {
-  /**
-   * Dashboard Endpoint
-   */
-  dashboard_endpoint?: string | null;
-  /**
-   * Dashboard Public
-   */
-  dashboard_public: boolean;
-  /**
-   * Duration Minutes
-   */
-  duration_minutes: number;
-  /**
-   * Margin Minutes
-   */
-  margin_minutes: number;
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Players Can Be In Multiple Teams
-   */
-  players_can_be_in_multiple_teams: boolean;
-  /**
-   * Start Time
-   */
-  start_time: string;
+export type TournamentTeamsResponse = {
+  data: PaginatedTournamentTeams;
 };
 
 /**
@@ -1676,10 +1728,6 @@ export type TournamentWithAccess = {
    */
   can_manage: boolean;
   /**
-   * Club Id
-   */
-  club_id: number;
-  /**
    * Created
    */
   created: string;
@@ -1727,10 +1775,6 @@ export type TournamentWithAccess = {
    * Name
    */
   name: string;
-  /**
-   * Players Can Be In Multiple Teams
-   */
-  players_can_be_in_multiple_teams: boolean;
   /**
    * Start Time
    */
@@ -1752,6 +1796,10 @@ export type TournamentWorkspace = {
     [key: string]: Array<StageItemInputOptionTentative | StageItemInputOptionFinal>;
   };
   /**
+   * Conflicts
+   */
+  conflicts: Array<ScheduleConflict>;
+  /**
    * Next Stage Rankings
    */
   next_stage_rankings: {
@@ -1760,7 +1808,7 @@ export type TournamentWorkspace = {
   /**
    * Players
    */
-  players: Array<Player>;
+  players: Array<TournamentPlayer>;
   /**
    * Rankings
    */
@@ -1778,7 +1826,7 @@ export type TournamentWorkspace = {
   /**
    * Teams
    */
-  teams: Array<FullTeamWithPlayers>;
+  teams: Array<TournamentTeamWithPlayers>;
   tournament: Tournament;
 };
 
@@ -1885,11 +1933,6 @@ export type UserToUpdate = {
 };
 
 /**
- * UserXClubRelation
- */
-export type UserXClubRelation = 'OWNER' | 'COLLABORATOR';
-
-/**
  * ValidationError
  */
 export type ValidationError = {
@@ -1958,10 +2001,6 @@ export type MatchWritable = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number | null;
@@ -1977,10 +2016,6 @@ export type MatchWritable = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -2043,10 +2078,6 @@ export type MatchWithDetailsWritable = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number | null;
@@ -2062,10 +2093,6 @@ export type MatchWithDetailsWritable = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty | null;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -2128,10 +2155,6 @@ export type MatchWithDetailsDefinitiveWritable = {
    */
   stage_item_input1: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
   /**
-   * Stage Item Input1 Conflict
-   */
-  stage_item_input1_conflict: boolean;
-  /**
    * Stage Item Input1 Id
    */
   stage_item_input1_id: number;
@@ -2147,10 +2170,6 @@ export type MatchWithDetailsDefinitiveWritable = {
    * Stage Item Input2
    */
   stage_item_input2: StageItemInputTentative | StageItemInputFinal | StageItemInputEmpty;
-  /**
-   * Stage Item Input2 Conflict
-   */
-  stage_item_input2_conflict: boolean;
   /**
    * Stage Item Input2 Id
    */
@@ -2298,7 +2317,7 @@ export type TournamentDetailsWritable = {
   /**
    * Players
    */
-  players: Array<Player>;
+  players: Array<TournamentPlayer>;
   /**
    * Rankings
    */
@@ -2316,7 +2335,7 @@ export type TournamentDetailsWritable = {
   /**
    * Teams
    */
-  teams: Array<FullTeamWithPlayers>;
+  teams: Array<TournamentTeamWithPlayers>;
   tournament: Tournament;
 };
 
@@ -2341,6 +2360,10 @@ export type TournamentWorkspaceWritable = {
     [key: string]: Array<StageItemInputOptionTentative | StageItemInputOptionFinal>;
   };
   /**
+   * Conflicts
+   */
+  conflicts: Array<ScheduleConflict>;
+  /**
    * Next Stage Rankings
    */
   next_stage_rankings: {
@@ -2349,7 +2372,7 @@ export type TournamentWorkspaceWritable = {
   /**
    * Players
    */
-  players: Array<Player>;
+  players: Array<TournamentPlayer>;
   /**
    * Rankings
    */
@@ -2367,7 +2390,7 @@ export type TournamentWorkspaceWritable = {
   /**
    * Teams
    */
-  teams: Array<FullTeamWithPlayers>;
+  teams: Array<TournamentTeamWithPlayers>;
   tournament: Tournament;
 };
 
@@ -2394,246 +2417,6 @@ export type GetAuthFeaturesApiAuthFeaturesGetResponses = {
 
 export type GetAuthFeaturesApiAuthFeaturesGetResponse =
   GetAuthFeaturesApiAuthFeaturesGetResponses[keyof GetAuthFeaturesApiAuthFeaturesGetResponses];
-
-export type GetClubsApiClubsGetData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/api/clubs';
-};
-
-export type GetClubsApiClubsGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubsResponse;
-};
-
-export type GetClubsApiClubsGetResponse =
-  GetClubsApiClubsGetResponses[keyof GetClubsApiClubsGetResponses];
-
-export type CreateNewClubApiClubsPostData = {
-  body: ClubCreateBody;
-  path?: never;
-  query?: never;
-  url: '/api/clubs';
-};
-
-export type CreateNewClubApiClubsPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type CreateNewClubApiClubsPostError =
-  CreateNewClubApiClubsPostErrors[keyof CreateNewClubApiClubsPostErrors];
-
-export type CreateNewClubApiClubsPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubResponse;
-};
-
-export type CreateNewClubApiClubsPostResponse =
-  CreateNewClubApiClubsPostResponses[keyof CreateNewClubApiClubsPostResponses];
-
-export type DeleteClubApiClubsClubIdDeleteData = {
-  body?: never;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}';
-};
-
-export type DeleteClubApiClubsClubIdDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type DeleteClubApiClubsClubIdDeleteError =
-  DeleteClubApiClubsClubIdDeleteErrors[keyof DeleteClubApiClubsClubIdDeleteErrors];
-
-export type DeleteClubApiClubsClubIdDeleteResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type DeleteClubApiClubsClubIdDeleteResponse =
-  DeleteClubApiClubsClubIdDeleteResponses[keyof DeleteClubApiClubsClubIdDeleteResponses];
-
-export type UpdateClubApiClubsClubIdPutData = {
-  body: ClubUpdateBody;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}';
-};
-
-export type UpdateClubApiClubsClubIdPutErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UpdateClubApiClubsClubIdPutError =
-  UpdateClubApiClubsClubIdPutErrors[keyof UpdateClubApiClubsClubIdPutErrors];
-
-export type UpdateClubApiClubsClubIdPutResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubResponse;
-};
-
-export type UpdateClubApiClubsClubIdPutResponse =
-  UpdateClubApiClubsClubIdPutResponses[keyof UpdateClubApiClubsClubIdPutResponses];
-
-export type GetMembersApiClubsClubIdMembersGetData = {
-  body?: never;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}/members';
-};
-
-export type GetMembersApiClubsClubIdMembersGetErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GetMembersApiClubsClubIdMembersGetError =
-  GetMembersApiClubsClubIdMembersGetErrors[keyof GetMembersApiClubsClubIdMembersGetErrors];
-
-export type GetMembersApiClubsClubIdMembersGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubMembersResponse;
-};
-
-export type GetMembersApiClubsClubIdMembersGetResponse =
-  GetMembersApiClubsClubIdMembersGetResponses[keyof GetMembersApiClubsClubIdMembersGetResponses];
-
-export type AddMemberApiClubsClubIdMembersPostData = {
-  body: ClubMemberCreateBody;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}/members';
-};
-
-export type AddMemberApiClubsClubIdMembersPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type AddMemberApiClubsClubIdMembersPostError =
-  AddMemberApiClubsClubIdMembersPostErrors[keyof AddMemberApiClubsClubIdMembersPostErrors];
-
-export type AddMemberApiClubsClubIdMembersPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubMembersResponse;
-};
-
-export type AddMemberApiClubsClubIdMembersPostResponse =
-  AddMemberApiClubsClubIdMembersPostResponses[keyof AddMemberApiClubsClubIdMembersPostResponses];
-
-export type RemoveMemberApiClubsClubIdMembersUserIdDeleteData = {
-  body?: never;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-    /**
-     * User Id
-     */
-    user_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}/members/{user_id}';
-};
-
-export type RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type RemoveMemberApiClubsClubIdMembersUserIdDeleteError =
-  RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors[keyof RemoveMemberApiClubsClubIdMembersUserIdDeleteErrors];
-
-export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubMembersResponse;
-};
-
-export type RemoveMemberApiClubsClubIdMembersUserIdDeleteResponse =
-  RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses[keyof RemoveMemberApiClubsClubIdMembersUserIdDeleteResponses];
-
-export type TransferOwnershipApiClubsClubIdOwnerPutData = {
-  body: ClubOwnerUpdateBody;
-  path: {
-    /**
-     * Club Id
-     */
-    club_id: number;
-  };
-  query?: never;
-  url: '/api/clubs/{club_id}/owner';
-};
-
-export type TransferOwnershipApiClubsClubIdOwnerPutErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type TransferOwnershipApiClubsClubIdOwnerPutError =
-  TransferOwnershipApiClubsClubIdOwnerPutErrors[keyof TransferOwnershipApiClubsClubIdOwnerPutErrors];
-
-export type TransferOwnershipApiClubsClubIdOwnerPutResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClubMembersResponse;
-};
-
-export type TransferOwnershipApiClubsClubIdOwnerPutResponse =
-  TransferOwnershipApiClubsClubIdOwnerPutResponses[keyof TransferOwnershipApiClubsClubIdOwnerPutResponses];
 
 export type LogoutApiLogoutPostData = {
   body?: never;
@@ -2669,6 +2452,310 @@ export type PingApiPingGetResponses = {
 };
 
 export type PingApiPingGetResponse = PingApiPingGetResponses[keyof PingApiPingGetResponses];
+
+export type GetAllPlayersApiPlayersGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/players';
+};
+
+export type GetAllPlayersApiPlayersGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: PlayersResponse;
+};
+
+export type GetAllPlayersApiPlayersGetResponse =
+  GetAllPlayersApiPlayersGetResponses[keyof GetAllPlayersApiPlayersGetResponses];
+
+export type CreatePlayerApiPlayersPostData = {
+  body: PlayerBody;
+  path?: never;
+  query?: never;
+  url: '/api/players';
+};
+
+export type CreatePlayerApiPlayersPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreatePlayerApiPlayersPostError =
+  CreatePlayerApiPlayersPostErrors[keyof CreatePlayerApiPlayersPostErrors];
+
+export type CreatePlayerApiPlayersPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SinglePlayerResponse;
+};
+
+export type CreatePlayerApiPlayersPostResponse =
+  CreatePlayerApiPlayersPostResponses[keyof CreatePlayerApiPlayersPostResponses];
+
+export type DeletePlayerApiPlayersPlayerIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Player Id
+     */
+    player_id: number;
+  };
+  query?: never;
+  url: '/api/players/{player_id}';
+};
+
+export type DeletePlayerApiPlayersPlayerIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeletePlayerApiPlayersPlayerIdDeleteError =
+  DeletePlayerApiPlayersPlayerIdDeleteErrors[keyof DeletePlayerApiPlayersPlayerIdDeleteErrors];
+
+export type DeletePlayerApiPlayersPlayerIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuccessResponse;
+};
+
+export type DeletePlayerApiPlayersPlayerIdDeleteResponse =
+  DeletePlayerApiPlayersPlayerIdDeleteResponses[keyof DeletePlayerApiPlayersPlayerIdDeleteResponses];
+
+export type RenamePlayerApiPlayersPlayerIdPutData = {
+  body: PlayerBody;
+  path: {
+    /**
+     * Player Id
+     */
+    player_id: number;
+  };
+  query?: never;
+  url: '/api/players/{player_id}';
+};
+
+export type RenamePlayerApiPlayersPlayerIdPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RenamePlayerApiPlayersPlayerIdPutError =
+  RenamePlayerApiPlayersPlayerIdPutErrors[keyof RenamePlayerApiPlayersPlayerIdPutErrors];
+
+export type RenamePlayerApiPlayersPlayerIdPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: SinglePlayerResponse;
+};
+
+export type RenamePlayerApiPlayersPlayerIdPutResponse =
+  RenamePlayerApiPlayersPlayerIdPutResponses[keyof RenamePlayerApiPlayersPlayerIdPutResponses];
+
+export type CreatePlayersApiPlayersMultiPostData = {
+  body: PlayerMultiBody;
+  path?: never;
+  query?: never;
+  url: '/api/players_multi';
+};
+
+export type CreatePlayersApiPlayersMultiPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreatePlayersApiPlayersMultiPostError =
+  CreatePlayersApiPlayersMultiPostErrors[keyof CreatePlayersApiPlayersMultiPostErrors];
+
+export type CreatePlayersApiPlayersMultiPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuccessResponse;
+};
+
+export type CreatePlayersApiPlayersMultiPostResponse =
+  CreatePlayersApiPlayersMultiPostResponses[keyof CreatePlayersApiPlayersMultiPostResponses];
+
+export type GetTeamsApiTeamsGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/teams';
+};
+
+export type GetTeamsApiTeamsGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: TeamsResponse;
+};
+
+export type GetTeamsApiTeamsGetResponse =
+  GetTeamsApiTeamsGetResponses[keyof GetTeamsApiTeamsGetResponses];
+
+export type CreateTeamApiTeamsPostData = {
+  body: TeamBody;
+  path?: never;
+  query?: never;
+  url: '/api/teams';
+};
+
+export type CreateTeamApiTeamsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateTeamApiTeamsPostError =
+  CreateTeamApiTeamsPostErrors[keyof CreateTeamApiTeamsPostErrors];
+
+export type CreateTeamApiTeamsPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SingleTeamResponse;
+};
+
+export type CreateTeamApiTeamsPostResponse =
+  CreateTeamApiTeamsPostResponses[keyof CreateTeamApiTeamsPostResponses];
+
+export type DeleteTeamApiTeamsTeamIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Team Id
+     */
+    team_id: number;
+  };
+  query?: never;
+  url: '/api/teams/{team_id}';
+};
+
+export type DeleteTeamApiTeamsTeamIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteTeamApiTeamsTeamIdDeleteError =
+  DeleteTeamApiTeamsTeamIdDeleteErrors[keyof DeleteTeamApiTeamsTeamIdDeleteErrors];
+
+export type DeleteTeamApiTeamsTeamIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: SuccessResponse;
+};
+
+export type DeleteTeamApiTeamsTeamIdDeleteResponse =
+  DeleteTeamApiTeamsTeamIdDeleteResponses[keyof DeleteTeamApiTeamsTeamIdDeleteResponses];
+
+export type UpdateTeamApiTeamsTeamIdPutData = {
+  body: TeamBody;
+  path: {
+    /**
+     * Team Id
+     */
+    team_id: number;
+  };
+  query?: never;
+  url: '/api/teams/{team_id}';
+};
+
+export type UpdateTeamApiTeamsTeamIdPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateTeamApiTeamsTeamIdPutError =
+  UpdateTeamApiTeamsTeamIdPutErrors[keyof UpdateTeamApiTeamsTeamIdPutErrors];
+
+export type UpdateTeamApiTeamsTeamIdPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: SingleTeamResponse;
+};
+
+export type UpdateTeamApiTeamsTeamIdPutResponse =
+  UpdateTeamApiTeamsTeamIdPutResponses[keyof UpdateTeamApiTeamsTeamIdPutResponses];
+
+export type GetTeamLogoApiTeamsTeamIdLogoGetData = {
+  body?: never;
+  path: {
+    /**
+     * Team Id
+     */
+    team_id: number;
+  };
+  query?: never;
+  url: '/api/teams/{team_id}/logo';
+};
+
+export type GetTeamLogoApiTeamsTeamIdLogoGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTeamLogoApiTeamsTeamIdLogoGetError =
+  GetTeamLogoApiTeamsTeamIdLogoGetErrors[keyof GetTeamLogoApiTeamsTeamIdLogoGetErrors];
+
+export type GetTeamLogoApiTeamsTeamIdLogoGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
+
+export type UpdateTeamLogoApiTeamsTeamIdLogoPostData = {
+  body?: BodyUpdateTeamLogoApiTeamsTeamIdLogoPost;
+  path: {
+    /**
+     * Team Id
+     */
+    team_id: number;
+  };
+  query?: never;
+  url: '/api/teams/{team_id}/logo';
+};
+
+export type UpdateTeamLogoApiTeamsTeamIdLogoPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateTeamLogoApiTeamsTeamIdLogoPostError =
+  UpdateTeamLogoApiTeamsTeamIdLogoPostErrors[keyof UpdateTeamLogoApiTeamsTeamIdLogoPostErrors];
+
+export type UpdateTeamLogoApiTeamsTeamIdLogoPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SingleTeamResponse;
+};
+
+export type UpdateTeamLogoApiTeamsTeamIdLogoPostResponse =
+  UpdateTeamLogoApiTeamsTeamIdLogoPostResponses[keyof UpdateTeamLogoApiTeamsTeamIdLogoPostResponses];
 
 export type LoginForAccessTokenApiTokenPostData = {
   body: BodyLoginForAccessTokenApiTokenPost;
@@ -2825,7 +2912,7 @@ export type GetTournamentApiTournamentsTournamentIdGetResponse =
   GetTournamentApiTournamentsTournamentIdGetResponses[keyof GetTournamentApiTournamentsTournamentIdGetResponses];
 
 export type UpdateTournamentByIdApiTournamentsTournamentIdPutData = {
-  body: TournamentUpdateBody;
+  body: TournamentBody;
   path: {
     /**
      * Tournament Id
@@ -3213,7 +3300,139 @@ export type GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetRe
 export type GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponse =
   GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponses[keyof GetNextStageRankingsApiTournamentsTournamentIdNextStageRankingsGetResponses];
 
-export type GetPlayersApiTournamentsTournamentIdPlayersGetData = {
+export type GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/organizers';
+};
+
+export type GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetError =
+  GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetErrors[keyof GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetErrors];
+
+export type GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrganizersResponse;
+};
+
+export type GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetResponse =
+  GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetResponses[keyof GetTournamentOrganizersApiTournamentsTournamentIdOrganizersGetResponses];
+
+export type AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostData = {
+  body: OrganizerCreateBody;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/organizers';
+};
+
+export type AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostError =
+  AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostErrors[keyof AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostErrors];
+
+export type AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrganizersResponse;
+};
+
+export type AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostResponse =
+  AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostResponses[keyof AddTournamentOrganizerApiTournamentsTournamentIdOrganizersPostResponses];
+
+export type RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+    /**
+     * User Id
+     */
+    user_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/organizers/{user_id}';
+};
+
+export type RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteError =
+  RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteErrors[keyof RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteErrors];
+
+export type RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrganizersResponse;
+};
+
+export type RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteResponse =
+  RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteResponses[keyof RemoveTournamentOrganizerApiTournamentsTournamentIdOrganizersUserIdDeleteResponses];
+
+export type TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutData = {
+  body: OwnerUpdateBody;
+  path: {
+    /**
+     * Tournament Id
+     */
+    tournament_id: number;
+  };
+  query?: never;
+  url: '/api/tournaments/{tournament_id}/owner';
+};
+
+export type TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutError =
+  TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutErrors[keyof TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutErrors];
+
+export type TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrganizersResponse;
+};
+
+export type TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutResponse =
+  TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutResponses[keyof TransferTournamentOwnershipApiTournamentsTournamentIdOwnerPutResponses];
+
+export type GetTournamentPlayersApiTournamentsTournamentIdPlayersGetData = {
   body?: never;
   path: {
     /**
@@ -3241,178 +3460,30 @@ export type GetPlayersApiTournamentsTournamentIdPlayersGetData = {
     /**
      * Sort By
      */
-    sort_by?:
-      | 'name'
-      | 'elo_score'
-      | 'swiss_score'
-      | 'wins'
-      | 'draws'
-      | 'losses'
-      | 'active'
-      | 'created';
-    /**
-     * Not In Team
-     */
-    not_in_team?: boolean;
+    sort_by?: 'name' | 'created' | 'elo_score' | 'swiss_score' | 'wins' | 'draws' | 'losses';
   };
   url: '/api/tournaments/{tournament_id}/players';
 };
 
-export type GetPlayersApiTournamentsTournamentIdPlayersGetErrors = {
+export type GetTournamentPlayersApiTournamentsTournamentIdPlayersGetErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type GetPlayersApiTournamentsTournamentIdPlayersGetError =
-  GetPlayersApiTournamentsTournamentIdPlayersGetErrors[keyof GetPlayersApiTournamentsTournamentIdPlayersGetErrors];
+export type GetTournamentPlayersApiTournamentsTournamentIdPlayersGetError =
+  GetTournamentPlayersApiTournamentsTournamentIdPlayersGetErrors[keyof GetTournamentPlayersApiTournamentsTournamentIdPlayersGetErrors];
 
-export type GetPlayersApiTournamentsTournamentIdPlayersGetResponses = {
+export type GetTournamentPlayersApiTournamentsTournamentIdPlayersGetResponses = {
   /**
    * Successful Response
    */
-  200: PlayersResponse;
+  200: TournamentPlayersResponse;
 };
 
-export type GetPlayersApiTournamentsTournamentIdPlayersGetResponse =
-  GetPlayersApiTournamentsTournamentIdPlayersGetResponses[keyof GetPlayersApiTournamentsTournamentIdPlayersGetResponses];
-
-export type CreateSinglePlayerApiTournamentsTournamentIdPlayersPostData = {
-  body: PlayerBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/players';
-};
-
-export type CreateSinglePlayerApiTournamentsTournamentIdPlayersPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type CreateSinglePlayerApiTournamentsTournamentIdPlayersPostError =
-  CreateSinglePlayerApiTournamentsTournamentIdPlayersPostErrors[keyof CreateSinglePlayerApiTournamentsTournamentIdPlayersPostErrors];
-
-export type CreateSinglePlayerApiTournamentsTournamentIdPlayersPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type CreateSinglePlayerApiTournamentsTournamentIdPlayersPostResponse =
-  CreateSinglePlayerApiTournamentsTournamentIdPlayersPostResponses[keyof CreateSinglePlayerApiTournamentsTournamentIdPlayersPostResponses];
-
-export type DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteData = {
-  body?: never;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Player Id
-     */
-    player_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/players/{player_id}';
-};
-
-export type DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteError =
-  DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteErrors[keyof DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteErrors];
-
-export type DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteResponse =
-  DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteResponses[keyof DeletePlayerApiTournamentsTournamentIdPlayersPlayerIdDeleteResponses];
-
-export type UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutData = {
-  body: PlayerBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Player Id
-     */
-    player_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/players/{player_id}';
-};
-
-export type UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutError =
-  UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutErrors[keyof UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutErrors];
-
-export type UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutResponses = {
-  /**
-   * Successful Response
-   */
-  200: SinglePlayerResponse;
-};
-
-export type UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutResponse =
-  UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutResponses[keyof UpdatePlayerByIdApiTournamentsTournamentIdPlayersPlayerIdPutResponses];
-
-export type CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostData = {
-  body: PlayerMultiBody;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/players_multi';
-};
-
-export type CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostError =
-  CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostErrors[keyof CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostErrors];
-
-export type CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SuccessResponse;
-};
-
-export type CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostResponse =
-  CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostResponses[keyof CreateMultiplePlayersApiTournamentsTournamentIdPlayersMultiPostResponses];
+export type GetTournamentPlayersApiTournamentsTournamentIdPlayersGetResponse =
+  GetTournamentPlayersApiTournamentsTournamentIdPlayersGetResponses[keyof GetTournamentPlayersApiTournamentsTournamentIdPlayersGetResponses];
 
 export type GetRankingsApiTournamentsTournamentIdRankingsGetData = {
   body?: never;
@@ -4080,7 +4151,7 @@ export type GetStandingsApiTournamentsTournamentIdStandingsGetResponses = {
 export type GetStandingsApiTournamentsTournamentIdStandingsGetResponse =
   GetStandingsApiTournamentsTournamentIdStandingsGetResponses[keyof GetStandingsApiTournamentsTournamentIdStandingsGetResponses];
 
-export type GetTeamsApiTournamentsTournamentIdTeamsGetData = {
+export type GetTournamentTeamsApiTournamentsTournamentIdTeamsGetData = {
   body?: never;
   path: {
     /**
@@ -4110,39 +4181,39 @@ export type GetTeamsApiTournamentsTournamentIdTeamsGetData = {
      */
     sort_by?:
       | 'name'
+      | 'active'
+      | 'created'
       | 'elo_score'
       | 'swiss_score'
       | 'wins'
       | 'draws'
-      | 'losses'
-      | 'active'
-      | 'created';
+      | 'losses';
   };
   url: '/api/tournaments/{tournament_id}/teams';
 };
 
-export type GetTeamsApiTournamentsTournamentIdTeamsGetErrors = {
+export type GetTournamentTeamsApiTournamentsTournamentIdTeamsGetErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type GetTeamsApiTournamentsTournamentIdTeamsGetError =
-  GetTeamsApiTournamentsTournamentIdTeamsGetErrors[keyof GetTeamsApiTournamentsTournamentIdTeamsGetErrors];
+export type GetTournamentTeamsApiTournamentsTournamentIdTeamsGetError =
+  GetTournamentTeamsApiTournamentsTournamentIdTeamsGetErrors[keyof GetTournamentTeamsApiTournamentsTournamentIdTeamsGetErrors];
 
-export type GetTeamsApiTournamentsTournamentIdTeamsGetResponses = {
+export type GetTournamentTeamsApiTournamentsTournamentIdTeamsGetResponses = {
   /**
    * Successful Response
    */
-  200: TeamsWithPlayersResponse;
+  200: TournamentTeamsResponse;
 };
 
-export type GetTeamsApiTournamentsTournamentIdTeamsGetResponse =
-  GetTeamsApiTournamentsTournamentIdTeamsGetResponses[keyof GetTeamsApiTournamentsTournamentIdTeamsGetResponses];
+export type GetTournamentTeamsApiTournamentsTournamentIdTeamsGetResponse =
+  GetTournamentTeamsApiTournamentsTournamentIdTeamsGetResponses[keyof GetTournamentTeamsApiTournamentsTournamentIdTeamsGetResponses];
 
-export type CreateTeamApiTournamentsTournamentIdTeamsPostData = {
-  body: TeamBody;
+export type AddTournamentTeamsApiTournamentsTournamentIdTeamsPostData = {
+  body: TournamentTeamsBody;
   path: {
     /**
      * Tournament Id
@@ -4153,64 +4224,28 @@ export type CreateTeamApiTournamentsTournamentIdTeamsPostData = {
   url: '/api/tournaments/{tournament_id}/teams';
 };
 
-export type CreateTeamApiTournamentsTournamentIdTeamsPostErrors = {
+export type AddTournamentTeamsApiTournamentsTournamentIdTeamsPostErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type CreateTeamApiTournamentsTournamentIdTeamsPostError =
-  CreateTeamApiTournamentsTournamentIdTeamsPostErrors[keyof CreateTeamApiTournamentsTournamentIdTeamsPostErrors];
+export type AddTournamentTeamsApiTournamentsTournamentIdTeamsPostError =
+  AddTournamentTeamsApiTournamentsTournamentIdTeamsPostErrors[keyof AddTournamentTeamsApiTournamentsTournamentIdTeamsPostErrors];
 
-export type CreateTeamApiTournamentsTournamentIdTeamsPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SingleTeamResponse;
-};
-
-export type CreateTeamApiTournamentsTournamentIdTeamsPostResponse =
-  CreateTeamApiTournamentsTournamentIdTeamsPostResponses[keyof CreateTeamApiTournamentsTournamentIdTeamsPostResponses];
-
-export type DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteData = {
-  body?: never;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Team Id
-     */
-    team_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/teams/{team_id}';
-};
-
-export type DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteError =
-  DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors[keyof DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors];
-
-export type DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses = {
+export type AddTournamentTeamsApiTournamentsTournamentIdTeamsPostResponses = {
   /**
    * Successful Response
    */
   200: SuccessResponse;
 };
 
-export type DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponse =
-  DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses[keyof DeleteTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses];
+export type AddTournamentTeamsApiTournamentsTournamentIdTeamsPostResponse =
+  AddTournamentTeamsApiTournamentsTournamentIdTeamsPostResponses[keyof AddTournamentTeamsApiTournamentsTournamentIdTeamsPostResponses];
 
-export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutData = {
-  body: TeamBody;
+export type RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteData = {
+  body?: never;
   path: {
     /**
      * Tournament Id
@@ -4225,28 +4260,28 @@ export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutData = {
   url: '/api/tournaments/{tournament_id}/teams/{team_id}';
 };
 
-export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutErrors = {
+export type RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutError =
-  UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutErrors[keyof UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutErrors];
+export type RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteError =
+  RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors[keyof RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteErrors];
 
-export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutResponses = {
+export type RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses = {
   /**
    * Successful Response
    */
-  200: SingleTeamResponse;
+  200: SuccessResponse;
 };
 
-export type UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutResponse =
-  UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutResponses[keyof UpdateTeamByIdApiTournamentsTournamentIdTeamsTeamIdPutResponses];
+export type RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponse =
+  RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses[keyof RemoveTournamentTeamApiTournamentsTournamentIdTeamsTeamIdDeleteResponses];
 
-export type GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetData = {
-  body?: never;
+export type UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutData = {
+  body: TournamentTeamBody;
   path: {
     /**
      * Tournament Id
@@ -4258,63 +4293,30 @@ export type GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetData = {
     team_id: number;
   };
   query?: never;
-  url: '/api/tournaments/{tournament_id}/teams/{team_id}/logo';
+  url: '/api/tournaments/{tournament_id}/teams/{team_id}';
 };
 
-export type GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetErrors = {
+export type UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetError =
-  GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetErrors[keyof GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetErrors];
+export type UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutError =
+  UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutErrors[keyof UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutErrors];
 
-export type GetTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoGetResponses = {
+export type UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutResponses = {
   /**
    * Successful Response
    */
-  200: unknown;
+  200: TournamentTeamResponse;
 };
 
-export type UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostData = {
-  body?: BodyUpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPost;
-  path: {
-    /**
-     * Tournament Id
-     */
-    tournament_id: number;
-    /**
-     * Team Id
-     */
-    team_id: number;
-  };
-  query?: never;
-  url: '/api/tournaments/{tournament_id}/teams/{team_id}/logo';
-};
+export type UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutResponse =
+  UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutResponses[keyof UpdateTournamentTeamApiTournamentsTournamentIdTeamsTeamIdPutResponses];
 
-export type UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostError =
-  UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostErrors[keyof UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostErrors];
-
-export type UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: SingleTeamResponse;
-};
-
-export type UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostResponse =
-  UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostResponses[keyof UpdateTeamLogoApiTournamentsTournamentIdTeamsTeamIdLogoPostResponses];
-
-export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostData = {
+export type CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostData = {
   body: TeamMultiBody;
   path: {
     /**
@@ -4326,25 +4328,25 @@ export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostData = {
   url: '/api/tournaments/{tournament_id}/teams_multi';
 };
 
-export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostErrors = {
+export type CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostError =
-  CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostErrors[keyof CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostErrors];
+export type CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostError =
+  CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostErrors[keyof CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostErrors];
 
-export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses = {
+export type CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostResponses = {
   /**
    * Successful Response
    */
   200: SuccessResponse;
 };
 
-export type CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
-  CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses[keyof CreateMultipleTeamsApiTournamentsTournamentIdTeamsMultiPostResponses];
+export type CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostResponse =
+  CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostResponses[keyof CreateTournamentTeamsApiTournamentsTournamentIdTeamsMultiPostResponses];
 
 export type GetTournamentWorkspaceApiTournamentsTournamentIdWorkspaceGetData = {
   body?: never;

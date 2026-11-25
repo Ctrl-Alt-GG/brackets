@@ -38,12 +38,38 @@ export function stageTypeName(stageItem: Pick<OpenApi.StageItemWithRounds, 'type
   return t(`stageType.${stageItem.type}`);
 }
 
+/**
+ * The name the site stores for a stage item created without one, in English. It is shown as the
+ * format's name, in the language of the page.
+ */
+const DEFAULT_STAGE_ITEM_NAMES: Record<OpenApi.StageType, string> = {
+  ROUND_ROBIN: 'Round Robin',
+  SINGLE_ELIMINATION: 'Single Elimination',
+  SWISS: 'Swiss',
+};
+
 /** The name the organizers gave the stage item, or else its format. */
 export function stageItemName(
   stageItem: Pick<OpenApi.StageItemWithRounds, 'name' | 'type'>,
   t: TFunction,
 ) {
-  return stageItem.name || stageTypeName(stageItem, t);
+  return stageItem.name && stageItem.name !== DEFAULT_STAGE_ITEM_NAMES[stageItem.type]
+    ? stageItem.name
+    : stageTypeName(stageItem, t);
+}
+
+/**
+ * A round's name. The site names the rounds it creates "Round 01" and so on, in English; those
+ * are shown in the language of the page, and names the organizers gave stay as they are.
+ */
+export function roundName(round: Pick<OpenApi.RoundWithMatches, 'name'>, t: TFunction) {
+  const number = /^Round (\d+)$/.exec(round.name)?.[1];
+  return number ? t('round.generated', { number: Number(number), padded: number }) : round.name;
+}
+
+/** A stage's name. A new stage is called "Stage", which is shown in the language of the page. */
+export function stageName(stage: Pick<OpenApi.StageWithStageItems, 'name'>, t: TFunction) {
+  return stage.name === 'Stage' ? t('round.defaultStage') : stage.name;
 }
 
 /** Whether the Bracket page draws the stage item: its knockout bracket, or its Swiss rounds. */

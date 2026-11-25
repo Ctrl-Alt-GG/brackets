@@ -11,7 +11,6 @@ from bracket.models.db.match import MatchWithDetails, MatchWithDetailsDefinitive
 from bracket.models.db.ranking import Ranking
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
-from bracket.models.db.team import Team
 from bracket.models.enums import StageType
 from bracket.models.results import TeamStatistics
 from bracket.utils.id_types import (
@@ -24,7 +23,7 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
-from tests.dummy_records import DUMMY_TEAM1, DUMMY_TEAM2
+from tests.dummy_records import DUMMY_TEAM1, DUMMY_TEAM2, tournament_team
 
 
 def test_determine_ranking_for_stage_item_elimination() -> None:
@@ -36,7 +35,7 @@ def test_determine_ranking_for_stage_item_elimination() -> None:
         team_id=TeamId(-1),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(-1)),
+        team=tournament_team(DUMMY_TEAM1, -1),
     )
     stage_item_input2 = StageItemInputFinal(
         stage_item_id=StageItemId(-1),
@@ -44,7 +43,7 @@ def test_determine_ranking_for_stage_item_elimination() -> None:
         team_id=TeamId(-2),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM2.model_dump(), id=TeamId(-2)),
+        team=tournament_team(DUMMY_TEAM2, -2),
     )
 
     ranking = determine_ranking_for_stage_item(
@@ -65,8 +64,6 @@ def test_determine_ranking_for_stage_item_elimination() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=2,
                             stage_item_input2_score=0,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                         MatchWithDetailsDefinitive(
                             id=MatchId(-2),
@@ -80,8 +77,6 @@ def test_determine_ranking_for_stage_item_elimination() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=2,
                             stage_item_input2_score=2,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                         MatchWithDetails(  # This gets ignored in ranking calculation
                             id=MatchId(-3),
@@ -91,8 +86,6 @@ def test_determine_ranking_for_stage_item_elimination() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=3,
                             stage_item_input2_score=2,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                     ],
                     stage_item_id=StageItemId(-1),
@@ -141,7 +134,7 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
         team_id=TeamId(-1),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(-1)),
+        team=tournament_team(DUMMY_TEAM1, -1),
     )
     stage_item_input2 = StageItemInputFinal(
         stage_item_id=StageItemId(-1),
@@ -149,7 +142,7 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
         team_id=TeamId(-2),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM2.model_dump(), id=TeamId(-2)),
+        team=tournament_team(DUMMY_TEAM2, -2),
     )
 
     ranking = determine_ranking_for_stage_item(
@@ -170,8 +163,6 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=2,
                             stage_item_input2_score=0,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                         MatchWithDetailsDefinitive(
                             id=MatchId(-2),
@@ -185,8 +176,6 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=2,
                             stage_item_input2_score=2,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                         MatchWithDetails(  # This gets ignored in ranking calculation
                             id=MatchId(-3),
@@ -196,8 +185,6 @@ def test_determine_ranking_for_stage_item_swiss() -> None:
                             round_id=RoundId(-1),
                             stage_item_input1_score=3,
                             stage_item_input2_score=2,
-                            stage_item_input1_conflict=False,
-                            stage_item_input2_conflict=False,
                         ),
                     ],
                     stage_item_id=StageItemId(-1),
@@ -248,7 +235,7 @@ def test_determine_ranking_for_stage_item_swiss_no_matches() -> None:
         team_id=TeamId(-1),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(-1)),
+        team=tournament_team(DUMMY_TEAM1, -1),
     )
     stage_item_input2 = StageItemInputFinal(
         stage_item_id=StageItemId(-1),
@@ -256,7 +243,7 @@ def test_determine_ranking_for_stage_item_swiss_no_matches() -> None:
         team_id=TeamId(-2),
         slot=1,
         tournament_id=tournament_id,
-        team=Team(**DUMMY_TEAM2.model_dump(), id=TeamId(-2)),
+        team=tournament_team(DUMMY_TEAM2, -2),
     )
 
     ranking = determine_ranking_for_stage_item(
@@ -317,7 +304,7 @@ def make_input(input_id: int, slot: int, points: Decimal = Decimal("0")) -> Stag
         team_id=TeamId(input_id),
         slot=slot,
         tournament_id=TournamentId(-1),
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(input_id)),
+        team=tournament_team(DUMMY_TEAM1, input_id),
         points=points,
     )
 
@@ -341,8 +328,6 @@ def make_match(
         round_id=RoundId(1),
         stage_item_input1_score=score1,
         stage_item_input2_score=score2,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
     )
 
 

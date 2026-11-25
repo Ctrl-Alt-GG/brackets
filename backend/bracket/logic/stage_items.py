@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from bracket import orm
-from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.ranking.elimination import update_inputs_in_complete_elimination_stage_item
@@ -36,6 +35,7 @@ from bracket.utils.errors import (
     check_foreign_key_violation,
     check_unique_constraint_violation,
 )
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import StageItemId, StageItemInputId, TournamentId
 
 
@@ -95,7 +95,7 @@ async def delete_stage_item(
     stages = await get_full_tournament_details(session, tournament_id)
     fed_with_results = sorted(
         {
-            stage_item.name
+            stage_item.label
             for stage in stages
             for stage_item in stage.stage_items
             if any(
@@ -107,9 +107,10 @@ async def delete_stage_item(
     if fed_with_results:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"{', '.join(fed_with_results)} takes teams from this stage item and already "
-                "has results. Delete it first."
+            detail=gettext(
+                "{items} takes teams from this stage item and already has results. Delete it "
+                "first.",
+                items=", ".join(fed_with_results),
             ),
         )
 
@@ -150,8 +151,10 @@ async def update_stage_item_input(
     ):
         raise HTTPException(
             400,
-            "Clear this team's match results in Rounds before changing its slot. "
-            "Recorded results must stay with the teams that played them.",
+            gettext(
+                "Clear this team's match results in Rounds before changing its slot. "
+                "Recorded results must stay with the teams that played them."
+            ),
         )
 
     with (
@@ -171,4 +174,5 @@ async def update_stage_item_input(
     await recalculate_ranking_for_stage_item(
         session, tournament_id, graph.stage_item(stage_item.id)
     )
-    await handle_conflicts(session, graph)
+    # The slot's team may play elsewhere at the times its matches were planned for.
+    await schedule_all_matches(session, tournament_id, graph=graph)

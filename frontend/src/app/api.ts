@@ -1,4 +1,5 @@
 import type { AxiosError } from 'axios';
+import { getI18n } from 'react-i18next';
 
 import { client } from '../openapi/client.gen';
 import * as OpenApi from '../openapi';
@@ -73,6 +74,8 @@ export function configureApiClient() {
 
   client.instance.interceptors.request.use((config) => {
     config.sentInSession = sessionMarker(readSession());
+    // The API writes its messages in the language of the page.
+    config.headers.set('Accept-Language', getI18n().resolvedLanguage);
     // Reads give up eventually, so that the page can offer to try again. Changes don't: one that
     // takes long can still be saved, so the page mustn't report it as failed.
     if (config.method?.toLowerCase() === 'get') config.timeout ||= READ_TIMEOUT_MS;
@@ -99,7 +102,7 @@ export async function fetchTournament(tournamentKey: string, signal?: AbortSigna
     });
     const tournament = data.data[0];
     if (!tournament) {
-      throw new Error(`No tournament has the Details link "${tournamentKey}".`);
+      throw new Error(getI18n().t('errors.noTournamentWithLink', { link: tournamentKey }));
     }
     return tournament;
   }
@@ -143,6 +146,7 @@ async function fetchDetailsBundle(
   return {
     availableInputs: {},
     canManage: access?.data.data.can_manage ?? false,
+    conflicts: [],
     nextStageRankings: {},
     players,
     rankings,
@@ -163,7 +167,7 @@ async function fetchWorkspaceBundle(
   signal?: AbortSignal,
 ): Promise<TournamentBundle> {
   if (!isNumericIdentifier(tournamentKey)) {
-    throw new Error('Tournament management routes require a numeric tournament id.');
+    throw new Error(getI18n().t('errors.organizerViewNeedsId'));
   }
 
   try {

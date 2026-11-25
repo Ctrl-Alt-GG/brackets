@@ -1,15 +1,32 @@
 from heliclockter import timedelta
 
+from bracket.logic.planning.calendar import Booking, Calendar, Lineups
 from bracket.logic.planning.matches import plan_match_timings
-from bracket.models.db.match import MatchWithDetails
+from bracket.models.db.match import (
+    MatchTiming,
+    MatchWithDetails,
+    MatchWithDetailsDefinitive,
+    MatchWithSlots,
+)
+from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds, StageWithStageItems
 from bracket.models.db.tournament import Tournament
 from bracket.models.enums import StageType
-from bracket.utils.id_types import MatchId, RankingId, RoundId, StageId, StageItemId, TournamentId
-from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
+from bracket.utils.id_types import (
+    MatchId,
+    PlayerId,
+    RankingId,
+    RoundId,
+    StageId,
+    StageItemId,
+    StageItemInputId,
+    TeamId,
+    TournamentId,
+)
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TOURNAMENT, tournament_team
 
 
-def get_round(round_id: int, *matches: MatchWithDetails) -> RoundWithMatches:
+def get_round(round_id: int, *matches: MatchWithSlots) -> RoundWithMatches:
     return RoundWithMatches(
         id=RoundId(round_id),
         stage_item_id=StageItemId(-1),
@@ -30,8 +47,6 @@ def get_match(match_id: int, custom_duration_minutes: int | None = None) -> Matc
         round_id=RoundId(-1),
         stage_item_input1_score=0,
         stage_item_input2_score=0,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
     )
 
 
@@ -145,3 +160,84 @@ def test_plan_match_timings_with_custom_stage_duration() -> None:
         # Other stages keep the match duration of the tournament.
         4: (stage_end, tournament.duration_minutes, margin_minutes),
     }
+
+
+def slot(team_id: int) -> StageItemInputFinal:
+    return StageItemInputFinal(
+        id=StageItemInputId(team_id),
+        slot=team_id,
+        stage_item_id=StageItemId(-1),
+        tournament_id=TournamentId(-1),
+        team_id=TeamId(team_id),
+        team=tournament_team(DUMMY_TEAM1, team_id),
+    )
+
+
+def versus(match_id: int, team1: int, team2: int) -> MatchWithDetailsDefinitive:
+    return MatchWithDetailsDefinitive(
+        id=MatchId(match_id),
+        created=DUMMY_MOCK_TIME,
+        duration_minutes=0,
+        margin_minutes=0,
+        round_id=RoundId(-1),
+        stage_item_input1=slot(team1),
+        stage_item_input1_id=StageItemInputId(team1),
+        stage_item_input2=slot(team2),
+        stage_item_input2_id=StageItemInputId(team2),
+        stage_item_input1_score=0,
+        stage_item_input2_score=0,
+    )
+
+
+def test_matches_wait_for_teams_and_players_who_play_elsewhere() -> None:
+    """
+    Team 2 plays in another tournament until 20 minutes in, so its first match waits. The next
+    round starts once that match is over. Alex plays for team 3, and is busy elsewhere when the
+    second round would start.
+    """
+    tournament = Tournament(**DUMMY_TOURNAMENT.model_dump(), id=TournamentId(-1))
+    start = tournament.start_time
+    round_minutes = tournament.duration_minutes + tournament.margin_minutes
+    alex = PlayerId(-10)
+    elsewhere = Calendar()
+    elsewhere.book_team(
+        TeamId(2),
+        Booking(MatchId(-100), TournamentId(-2), "Other", start, start + timedelta(minutes=20)),
+    )
+    second_round = start + timedelta(minutes=20 + round_minutes)
+    elsewhere.book_player(
+        alex,
+        Booking(
+            MatchId(-101),
+            TournamentId(-2),
+            "Other",
+            second_round,
+            second_round + timedelta(minutes=25),
+        ),
+    )
+    stages = [
+        get_stage(
+            1,
+            [
+                get_round(1, versus(1, 1, 2), versus(2, 3, 4)),
+                get_round(2, versus(3, 1, 3)),
+            ],
+        )
+    ]
+
+    timings = plan_match_timings(
+        stages,
+        tournament,
+        lineups=Lineups({TeamId(3): frozenset({alex})}),
+        elsewhere=elsewhere,
+    )
+
+    def timing(match_id: int, minutes: int) -> MatchTiming:
+        return MatchTiming(
+            match_id=MatchId(match_id),
+            start_time=start + timedelta(minutes=minutes),
+            duration_minutes=tournament.duration_minutes,
+            margin_minutes=tournament.margin_minutes,
+        )
+
+    assert timings == [timing(1, 20), timing(2, 0), timing(3, 20 + round_minutes + 25)]

@@ -36,7 +36,6 @@ async function profileApi(page: Page) {
       });
     }
     if (path === '/api/tournaments') return route.fulfill({ json: { data: [] } });
-    if (path === '/api/clubs') return route.fulfill({ json: { data: [] } });
     return route.fulfill({ status: 404, json: { detail: `Unexpected request: ${path}` } });
   });
   return state;
@@ -161,34 +160,32 @@ test('going offline before refresh warns on paused updates and recovers online',
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
 
-test('event loading and failures are distinct from having no events', async ({ page }) => {
+test('the shared teams and players load apart from having none', async ({ page }) => {
   await signIn(page.context());
   await profileApi(page);
   const loading = deferred();
   let fail = true;
-  await page.route('**/api/clubs', async (route) => {
+  await page.route('**/api/teams', async (route) => {
     await loading.promise;
     return fail
-      ? route.fulfill({ status: 503, json: { detail: 'Events unavailable' } })
-      : route.fulfill({
-          json: {
-            data: [{ created: initialUser.created, id: 1, name: 'My event' }],
-          } satisfies OpenApi.ClubsResponse,
-        });
+      ? route.fulfill({ status: 503, json: { detail: 'Teams unavailable' } })
+      : route.fulfill({ json: { data: [] } satisfies OpenApi.TeamsResponse });
   });
-  await page.goto('/');
-  await expect(page.getByText('Loading events…')).toBeVisible();
-  await expect(
-    page.getByText('You need an event before you can create a tournament.'),
-  ).toBeHidden();
+  await page.route('**/api/players', (route) =>
+    route.fulfill({ json: { data: [] } satisfies OpenApi.PlayersResponse }),
+  );
+  await page.goto('/roster');
+  await expect(page.getByText('Loading teams and players…')).toBeVisible();
+  await expect(page.getByText('No teams yet.')).toBeHidden();
   loading.release();
-  await expect(page.getByRole('heading', { name: 'Unable to load events' })).toBeVisible();
   await expect(
-    page.getByText('You need an event before you can create a tournament.'),
-  ).toBeHidden();
+    page.getByRole('heading', { name: 'Unable to load teams and players' }),
+  ).toBeVisible();
+  await expect(page.getByText('No teams yet.')).toBeHidden();
   fail = false;
-  await page.getByRole('button', { name: 'Retry loading events' }).click();
-  await expect(page.getByRole('button', { name: 'Create tournament', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByText('No teams yet.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create team' })).toBeVisible();
 });
 
 test('failed logout remains signed in and a successful retry ends the session', async ({

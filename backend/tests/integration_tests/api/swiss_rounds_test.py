@@ -42,9 +42,7 @@ async def test_generate_and_publish_swiss_rounds(
         teams = [
             await stack.enter_async_context(
                 inserted_team(
-                    DUMMY_TEAM1.model_copy(
-                        update={"tournament_id": tournament_id, "name": f"Team {index}"}
-                    )
+                    DUMMY_TEAM1.model_copy(update={"name": f"Team {index}"}), tournament_id
                 )
             )
             for index in range(5)
@@ -121,7 +119,7 @@ async def test_generate_round_needs_swiss_stage_item_with_teams(
     tournament_id = auth_context.tournament.id
     async with (
         inserted_stage(DUMMY_STAGE1.model_copy(update={"tournament_id": tournament_id})) as stage,
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": tournament_id})) as team,
+        inserted_team(DUMMY_TEAM1, tournament_id) as team,
     ):
         round_robin = await sql_create_stage_item_with_inputs(
             session,

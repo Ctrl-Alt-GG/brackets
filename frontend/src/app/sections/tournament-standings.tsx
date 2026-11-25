@@ -1,13 +1,13 @@
 import type { TFunction } from 'i18next';
 import { Trans, useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
+import { BigScreenLink } from '../components/big-screen';
 import { TeamLink } from '../components/team-link';
 import { useTournamentContext } from '../tournament-context';
 import type { TournamentBundle } from '../types';
 import { formatPoints, formatScoreDifference, pointsLabel, pointsPhrase } from '../format';
-import { isBracket, stageItemName, stageItemStandings, stageTypeName } from '../matches';
+import { isBracket, stageItemName, stageItemStandings, stageName, stageTypeName } from '../matches';
 import { cx } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
@@ -55,7 +55,7 @@ export function StandingsSection({
   rankings: OpenApi.Ranking[];
   stages: OpenApi.StageWithStageItems[];
   standings: TournamentBundle['standings'];
-  teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
+  teamMap: Map<number, OpenApi.TournamentTeamWithPlayers>;
 }) {
   const { t } = useTranslation();
   const { myTeamId } = useTournamentContext();
@@ -72,13 +72,7 @@ export function StandingsSection({
     <div className="space-y-6">
       <Surface>
         <SurfaceHeading
-          actions={
-            bigScreenPath ? (
-              <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
-                {t('common.bigScreen')}
-              </Link>
-            ) : null
-          }
+          actions={bigScreenPath ? <BigScreenLink to={bigScreenPath} /> : null}
           title={t('tournament.standings')}
         />
         {tables.length === 0 ? (
@@ -93,7 +87,7 @@ export function StandingsSection({
             <div>
               <h3 className="text-lg font-semibold">{stageItemName(stageItem, t)}</h3>
               <p className="text-sm text-base-content/70">
-                {stage.name} · {stageTypeName(stageItem, t)}
+                {stageName(stage, t)} · {stageTypeName(stageItem, t)}
                 {compact ? null : ` · ${pointsRule(stageItem, rankings, t)}`}
               </p>
             </div>
@@ -131,7 +125,8 @@ export function StandingsSection({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="table">
+                {/* Narrow cells on phones, so that the points don't end up off-screen. */}
+                <table className="table [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-4 sm:[&_th]:px-4">
                   <thead>
                     <tr>
                       <th>#</th>

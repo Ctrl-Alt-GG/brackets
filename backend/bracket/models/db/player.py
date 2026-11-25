@@ -1,35 +1,28 @@
-from decimal import Decimal
-
 from heliclockter import datetime_utc
 from pydantic import Field, field_validator
 
 from bracket.models.db.shared import BaseModelORM
-from bracket.utils.id_types import PlayerId, TournamentId
+from bracket.utils.i18n import gettext
+from bracket.utils.id_types import PlayerId
 from bracket.utils.pydantic import ParticipantName, check_participant_names
 
 
 class PlayerInsertable(BaseModelORM):
-    active: bool
     name: str
     created: datetime_utc
-    tournament_id: TournamentId
-    # The player's results over the tournament. Repositories read the unmaintained columns of the
-    # players table here; answers that show results replace them with the replayed statistics
-    # (`bracket.logic.ranking.players`).
-    elo_score: Decimal = Decimal("0.0")
-    swiss_score: Decimal = Decimal("0.0")
-    wins: int = 0
-    draws: int = 0
-    losses: int = 0
 
 
 class Player(PlayerInsertable):
+    """
+    Someone who plays. Players are shared by every tournament: one takes part in a tournament as an
+    active member of one of its teams.
+    """
+
     id: PlayerId
 
 
 class PlayerBody(BaseModelORM):
     name: ParticipantName
-    active: bool
 
 
 def parse_player_names(names: str) -> list[str]:
@@ -39,14 +32,13 @@ def parse_player_names(names: str) -> list[str]:
 
 class PlayerMultiBody(BaseModelORM):
     names: str = Field(..., min_length=1)
-    active: bool
 
     @field_validator("names")
     @classmethod
     def validate_names(cls, value: str) -> str:
         names = parse_player_names(value)
         if not names:
-            raise ValueError("Enter at least one player")
+            raise ValueError(gettext("Enter at least one player"))
         check_participant_names(names)
         return value
 

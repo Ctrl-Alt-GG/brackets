@@ -1,0 +1,601 @@
+# Hungarian texts of the API's messages, under the English message they translate. Informal,
+# second person, like the frontend's Hungarian texts.
+#
+# Messages name their variable parts as {name}. A translation can move them, and must keep
+# their names. A test checks that every message of the code, and every piece of zxcvbn's
+# password advice, has a translation here.
+msgid ""
+msgstr ""
+"Language: hu\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Internal server error"
+msgstr "Belső szerverhiba"
+
+msgid "{name} owns it already"
+msgstr "Már {name} a tulajdonosa"
+
+msgid "No account has this email address. They need an account first."
+msgstr "Ezzel az e-mail-címmel nincs fiók. Előbb fiókot kell létrehoznia."
+
+msgid "Choose two assigned teams from this round's stage item"
+msgstr "Válassz két csapatot azok közül, amelyek ennek a fordulónak a szakaszeleméhez tartoznak"
+
+msgid "Swiss matches use assigned teams, not winners of other matches"
+msgstr "A svájci rendszerű meccseken kiosztott csapatok játszanak, nem más meccsek győztesei"
+
+msgid "A match can only get a result once both of its teams are known"
+msgstr "Egy meccsnek csak akkor lehet eredménye, ha mindkét csapata ismert"
+
+msgid "A knockout match needs a winner. Enter the score after overtime or the tiebreak."
+msgstr ""
+"Egy kieséses meccsnek kell győztes. A hosszabbítás vagy a döntő játék utáni eredményt vidd fel."
+
+msgid "Can only create matches in draft rounds of Swiss stage items"
+msgstr "Meccset csak svájci rendszerű szakaszelem piszkozat fordulójában lehet létrehozni"
+
+msgid "A team can't play against itself"
+msgstr "Egy csapat nem játszhat saját maga ellen"
+
+msgid "One of these teams already has a match in this round"
+msgstr "Az egyik csapatnak már van meccse ebben a fordulóban"
+
+msgid "Can only delete matches from draft rounds in Swiss stage items"
+msgstr "Meccset csak svájci rendszerű szakaszelem piszkozat fordulójából lehet törölni"
+
+msgid "Every round has started already, so there is nothing left to move"
+msgstr "Minden forduló elkezdődött már, így nincs mit eltolni"
+
+msgid ""
+"The remaining rounds can move later by at most {available} minutes without exceeding the maximum "
+"break of {maximum} minutes."
+msgstr ""
+"A hátralévő fordulók legfeljebb {available} perccel tolhatók későbbre, hogy a szünet ne legyen "
+"hosszabb a megengedett {maximum} percnél."
+
+msgid ""
+"The remaining rounds can move earlier by at most {available} minutes without overlapping the "
+"previous round."
+msgstr ""
+"A hátralévő fordulók legfeljebb {available} perccel hozhatók előrébb, hogy ne fedjék az előző "
+"fordulót."
+
+msgid "Could not find player with id {id}"
+msgstr "Nem található játékos ezzel az azonosítóval: {id}"
+
+msgid "A tournament needs at least one ranking"
+msgstr "Egy versenynek legalább egy pontozásra szüksége van"
+
+msgid "Only a draft Swiss round can be regenerated"
+msgstr "Csak svájci rendszerű piszkozat forduló generálható újra"
+
+msgid "Clear the draft's results before regenerating its pairings"
+msgstr "A párosítás újragenerálása előtt töröld a piszkozat eredményeit"
+
+msgid "No replacement pairings are available. The draft was kept."
+msgstr "Nincs más lehetséges párosítás. A piszkozat megmaradt."
+
+msgid "Rounds of {format} stage items are created automatically"
+msgstr "Ennél a lebonyolításnál ({format}) a fordulók maguktól jönnek létre"
+
+msgid "Publish or discard the draft {round} first"
+msgstr "Előbb tedd közzé vagy vesd el ezt a piszkozatot: {round}"
+
+msgid "The rounds of a {format} belong to its format and can't be deleted"
+msgstr "Ennél a lebonyolításnál ({format}) a fordulók a formátum részei, nem törölhetők"
+
+msgid "The rounds of a {format} are always published. Only Swiss rounds can be drafts."
+msgstr ""
+"Ennél a lebonyolításnál ({format}) a fordulók mindig közzé vannak téve. Csak svájci rendszerű "
+"forduló lehet piszkozat."
+
+msgid "Assign at least two active teams to this stage item first"
+msgstr "Előbb rendelj legalább két aktív csapatot ehhez a szakaszelemhez"
+
+msgid "Every team has already played every other team"
+msgstr "Már minden csapat játszott minden másikkal"
+
+msgid "an earlier stage item"
+msgstr "egy korábbi szakaszelem"
+
+msgid "{problem}. Assign the missing teams in the current stage, or change the slot."
+msgstr ""
+"{problem}. Rendeld hozzá a hiányzó csapatokat a mostani szakaszban, vagy módosítsd a pozíciót."
+
+msgid "slot {slot} ({source} #{position})"
+msgstr "{slot}. pozíció ({source} #{position})"
+
+msgid ""
+"Slot {slot} of {stage_item} takes #{position} of {source}, which doesn't have that many teams"
+msgstr ""
+"{stage_item}, {slot}. pozíció: {source} #{position} helyezettjét kapná, de ott nincs ennyi csapat"
+
+msgid "slot {slot}"
+msgstr "{slot}. pozíció"
+
+msgid ""
+"{team} would take {slots} of {stage_item}, but a team can have only one slot in it. Change one of "
+"those slots, then activate the stage."
+msgstr ""
+"{team} több pozíciót is kapna itt: {stage_item} ({slots}), de egy csapatnak csak egy pozíciója "
+"lehet benne. Módosítsd valamelyiket, aztán indítsd el a szakaszt."
+
+msgid " and "
+msgstr " és "
+
+msgid "Number of teams invalid, should be one of {counts}"
+msgstr "Érvénytelen csapatszám, ezek egyike lehet: {counts}"
+
+msgid ""
+"Clear this team's match results in Rounds before changing its slot. Recorded results must stay "
+"with the teams that played them."
+msgstr ""
+"A pozíció módosítása előtt töröld a csapat meccseredményeit a Fordulóknál. A rögzített "
+"eredményeknek azoknál a csapatoknál kell maradniuk, amelyek lejátszották őket."
+
+msgid "{items} takes teams from this stage item and already has results. Delete it first."
+msgstr "{items} ebből a szakaszelemből kap csapatokat, és már vannak eredményei. Előbb azt töröld."
+
+msgid "Stage contains stage items, please delete those first"
+msgstr "A szakaszban szakaszelemek vannak, előbb azokat töröld"
+
+msgid "No stage is active yet, so there is no previous stage to go back to"
+msgstr "Még nincs aktív szakasz, így nincs előző szakasz, ahova vissza lehetne lépni"
+
+msgid "There is no next stage"
+msgstr "Nincs következő szakasz"
+
+msgid "There is no previous stage"
+msgstr "Nincs előző szakasz"
+
+msgid "That would be more than the {maximum} teams in a tournament that are allowed."
+msgstr "Ez túllépné a korlátot: egy versenyben legfeljebb {maximum} csapat lehet."
+
+msgid "That would be more than the {maximum} stages in a tournament that are allowed."
+msgstr "Ez túllépné a korlátot: egy versenyben legfeljebb {maximum} szakasz lehet."
+
+msgid "That would be more than the {maximum} stage items in a tournament that are allowed."
+msgstr "Ez túllépné a korlátot: egy versenyben legfeljebb {maximum} szakaszelem lehet."
+
+msgid "That would be more than the {maximum} rounds in a tournament that are allowed."
+msgstr "Ez túllépné a korlátot: egy versenyben legfeljebb {maximum} forduló lehet."
+
+msgid "That would be more than the {maximum} rankings in a tournament that are allowed."
+msgstr "Ez túllépné a korlátot: egy versenyben legfeljebb {maximum} pontozás lehet."
+
+msgid "Enter how many minutes to move the schedule by"
+msgstr "Add meg, hány perccel tolódjon el a menetrend"
+
+msgid "Enter at least one player"
+msgstr "Adj meg legalább egy játékost"
+
+msgid "A single elimination bracket has {counts} teams"
+msgstr "Egyenes kieséses ágrajzban {counts} csapat lehet"
+
+msgid "team_count doesn't match length of inputs"
+msgstr "A csapatok száma (team_count) nem egyezik a pozíciók számával"
+
+msgid "Enter at least one team"
+msgstr "Adj meg legalább egy csapatot"
+
+msgid "Every line needs a team name before its players"
+msgstr "Minden sorban a csapat neve álljon a játékosai előtt"
+
+msgid "Round robin"
+msgstr "Körmérkőzés"
+
+msgid "Single elimination"
+msgstr "Egyenes kiesés"
+
+msgid "Swiss"
+msgstr "Svájci rendszer"
+
+msgid "Could not validate credentials or page is not publicly available"
+msgstr "A bejelentkezés nem érvényes, vagy az oldal nem nyilvános"
+
+msgid "You don't have access to this tournament"
+msgstr "Ehhez a versenyhez nincs hozzáférésed"
+
+msgid "Requests signed in with the session cookie need the {header} header"
+msgstr "A munkamenet-sütivel küldött kérésekhez szükséges ez a fejléc: {header}"
+
+msgid "This request can't be made from another site"
+msgstr "Ez a kérés nem érkezhet másik oldalról"
+
+msgid "Incorrect email or password"
+msgstr "Hibás e-mail-cím vagy jelszó"
+
+msgid "Could not find round with id {id}"
+msgstr "Nem található forduló ezzel az azonosítóval: {id}"
+
+msgid "Could not find stage with id {id}"
+msgstr "Nem található szakasz ezzel az azonosítóval: {id}"
+
+msgid "Could not find match with id {id}"
+msgstr "Nem található meccs ezzel az azonosítóval: {id}"
+
+msgid "Could not find team with id {id}"
+msgstr "Nem található csapat ezzel az azonosítóval: {id}"
+
+msgid "Could not find ranking with id {id}"
+msgstr "Nem található pontozás ezzel az azonosítóval: {id}"
+
+msgid "Can't update archived tournament"
+msgstr "Archivált verseny nem módosítható"
+
+msgid "Can't view draft rounds when not authorized"
+msgstr "A piszkozat fordulókat csak a szervezők láthatják"
+
+msgid "Tournament already has the requested status"
+msgstr "A verseny már ilyen állapotú"
+
+msgid "No tournament has the Details link \"{link}\""
+msgstr "Nincs verseny ezzel a Részletek-linkkel: „{link}”"
+
+msgid "You can only manage your own account"
+msgstr "Csak a saját fiókodat kezelheted"
+
+msgid "The current password is incorrect"
+msgstr "A jelenlegi jelszó hibás"
+
+msgid "Account creation is unavailable for now"
+msgstr "Fiókot létrehozni most nem lehet"
+
+msgid "Email address already in use"
+msgstr "Ez az e-mail-cím már foglalt"
+
+msgid "Enter your current password to change your email"
+msgstr "Az e-mail-cím módosításához add meg a jelenlegi jelszavad"
+
+msgid "Stage item doesn't exist"
+msgstr "Nincs ilyen szakaszelem"
+
+msgid "This tournament has no stage with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú szakasz: {ids}"
+
+msgid "This tournament has no stage item with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú szakaszelem: {ids}"
+
+msgid "This tournament has no round with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú forduló: {ids}"
+
+msgid "This tournament has no ranking with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú pontozás: {ids}"
+
+msgid "This tournament has no slot with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú pozíció: {ids}"
+
+msgid "This tournament has no match with the ID {ids}"
+msgstr "Ebben a versenyben nincs ilyen azonosítójú meccs: {ids}"
+
+msgid "Could not find the stage item input"
+msgstr "Nem található a pozíció"
+
+msgid "Could not find stage item with id {id}"
+msgstr "Nem található szakaszelem ezzel az azonosítóval: {id}"
+
+msgid "Choose a group or Swiss stage item from an earlier stage"
+msgstr "Egy korábbi szakasz csoportját vagy svájci rendszerű szakaszelemét válaszd"
+
+msgid "The source stage item doesn't have that many team slots"
+msgstr "A forrásként választott szakaszelemben nincs ennyi pozíció"
+
+msgid "This Details link is already taken"
+msgstr "Ez a Részletek-link már foglalt"
+
+msgid "This email is already taken"
+msgstr "Ez az e-mail-cím már foglalt"
+
+msgid "This team already has another slot in this stage item"
+msgstr "Ennek a csapatnak már van másik pozíciója ebben a szakaszelemben"
+
+msgid "This place is already taken by another slot of this stage item"
+msgstr "Ezt a helyezést már a szakaszelem egy másik pozíciója kapja"
+
+msgid "This slot is already part of this stage item"
+msgstr "Ez a pozíció már ennek a szakaszelemnek a része"
+
+msgid "This team is still part of matches"
+msgstr "Ez a csapat még meccsekben szerepel"
+
+msgid "This team still has a slot in a stage. Open that slot in Stages first."
+msgstr "Ennek a csapatnak még van pozíciója egy szakaszban. Előbb szabadítsd fel a Szakaszoknál."
+
+msgid "Could not validate credentials"
+msgstr "A bejelentkezés nem érvényes"
+
+msgid "Stage"
+msgstr "Szakasz"
+
+msgid "Round {padded}"
+msgstr "{number}. forduló"
+
+msgid "The Details link can be at most {maximum} characters long"
+msgstr "A Részletek-link legfeljebb {maximum} karakter lehet"
+
+msgid "Use only letters, numbers, \"-\" and \"_\" in the Details link, with at least one letter"
+msgstr ""
+"A Részletek-linkben csak betűket, számokat, „-” és „_” jelet használj, és legyen benne legalább "
+"egy betű"
+
+msgid "\"{name}\" is longer than the {maximum} characters a name can have"
+msgstr "„{name}” hosszabb a névhez megengedett {maximum} karakternél"
+
+msgid "Too many failed password attempts. Try again in a few minutes."
+msgstr "Túl sok sikertelen jelszópróbálkozás. Próbáld újra néhány perc múlva."
+
+msgid "Too many requests. Try again in a minute."
+msgstr "Túl sok kérés. Próbáld újra egy perc múlva."
+
+msgid "Too many requests. Try again in a few minutes."
+msgstr "Túl sok kérés. Próbáld újra néhány perc múlva."
+
+msgid "Password must not start or end with whitespace"
+msgstr "A jelszó nem kezdődhet és nem végződhet szóközzel"
+
+msgid "Password must be at least {minimum} characters long"
+msgstr "A jelszó legalább {minimum} karakter legyen"
+
+msgid "Password must be at most {maximum} characters long"
+msgstr "A jelszó legfeljebb {maximum} karakter lehet"
+
+msgid "Enter a valid email address"
+msgstr "Érvényes e-mail-címet adj meg"
+
+msgid "Password is too easy to guess"
+msgstr "A jelszót túl könnyű kitalálni"
+
+msgid "Image is too large. Use at most 4096 pixels per side and 4 megapixels."
+msgstr "A kép túl nagy. Oldalanként legfeljebb 4096 képpont, összesen legfeljebb 4 megapixel lehet."
+
+msgid "Unsupported logo type"
+msgstr "Nem támogatott logótípus"
+
+msgid "Logo not found"
+msgstr "A logó nem található"
+
+msgid "Uploaded file exceeds the {limit}-byte limit"
+msgstr "A feltöltött fájl nagyobb a megengedett {limit} bájtnál"
+
+msgid "Uploaded file is empty"
+msgstr "A feltöltött fájl üres"
+
+msgid "Only PNG and JPEG image uploads are supported"
+msgstr "Csak PNG és JPEG kép tölthető fel"
+
+msgid "This field is required"
+msgstr "Ezt a mezőt ki kell tölteni"
+
+msgid "This doesn't have the expected format"
+msgstr "Ez nem a várt formátumú"
+
+msgid "Enter text"
+msgstr "Szöveget adj meg"
+
+msgid "Enter a whole number"
+msgstr "Egész számot adj meg"
+
+msgid "Enter a number"
+msgstr "Számot adj meg"
+
+msgid "Enter a number greater than {limit}"
+msgstr "Adj meg egy számot, ami nagyobb, mint {limit}"
+
+msgid "Enter {limit} or more"
+msgstr "Legalább {limit} legyen"
+
+msgid "Enter a number less than {limit}"
+msgstr "Adj meg egy számot, ami kisebb, mint {limit}"
+
+msgid "Enter {limit} or less"
+msgstr "Legfeljebb {limit} lehet"
+
+msgid "Enter true or false"
+msgstr "Igaz vagy hamis értéket adj meg"
+
+msgid "Choose one of these: {choices}"
+msgstr "Ezek közül válassz: {choices}"
+
+msgid "Enter a date and time"
+msgstr "Dátumot és időpontot adj meg"
+
+msgid "This field isn't expected here"
+msgstr "Ez a mező itt nem várt"
+
+msgid "This isn't valid JSON"
+msgstr "Ez nem érvényes JSON"
+
+msgid "Could not delete ranking since it's used by {count} stage item"
+msgid_plural "Could not delete ranking since it's used by {count} stage items"
+msgstr[0] "A pontozás nem törölhető, mert {count} szakaszelem használja"
+msgstr[1] "A pontozás nem törölhető, mert {count} szakaszelem használja"
+
+msgid "Going back discards the {count} result of {stage}. Confirm that it can be discarded."
+msgid_plural ""
+"Going back discards the {count} results of {stage}. Confirm that they can be discarded."
+msgstr[0] ""
+"Visszalépéskor elvész {count} eredmény ebből a szakaszból: {stage}. Erősítsd meg, hogy elvethető."
+msgstr[1] ""
+"Visszalépéskor elvész {count} eredmény ebből a szakaszból: {stage}. Erősítsd meg, hogy elvethetők."
+
+msgid "Enter at least {count} character"
+msgid_plural "Enter at least {count} characters"
+msgstr[0] "Legalább {count} karaktert adj meg"
+msgstr[1] "Legalább {count} karaktert adj meg"
+
+msgid "Enter at most {count} character"
+msgid_plural "Enter at most {count} characters"
+msgstr[0] "Legfeljebb {count} karaktert adj meg"
+msgstr[1] "Legfeljebb {count} karaktert adj meg"
+
+msgid "Use at most {count} decimal place"
+msgid_plural "Use at most {count} decimal places"
+msgstr[0] "Legfeljebb {count} tizedesjegyet használj"
+msgstr[1] "Legfeljebb {count} tizedesjegyet használj"
+
+msgid "Give at least {count} item"
+msgid_plural "Give at least {count} items"
+msgstr[0] "Legalább {count} elemet adj meg"
+msgstr[1] "Legalább {count} elemet adj meg"
+
+msgid "Give at most {count} item"
+msgid_plural "Give at most {count} items"
+msgstr[0] "Legfeljebb {count} elemet adj meg"
+msgstr[1] "Legfeljebb {count} elemet adj meg"
+
+#. zxcvbn's password advice, which zxcvbn writes in English.
+msgid "Add another word or two. Uncommon words are better."
+msgstr "Adj hozzá még egy-két szót. A ritka szavak jobbak."
+
+msgid "Capitalization doesn't help very much."
+msgstr "A nagy kezdőbetű nem sokat segít."
+
+msgid "Reversed words aren't much harder to guess."
+msgstr "A visszafelé írt szavakat sem sokkal nehezebb kitalálni."
+
+msgid "Predictable substitutions like '@' instead of 'a' don't help very much."
+msgstr "A kiszámítható cserék, például „@” az „a” helyett, nem sokat segítenek."
+
+msgid "Use a few words, avoid common phrases."
+msgstr "Használj néhány szót, és kerüld a gyakori kifejezéseket."
+
+msgid "No need for symbols, digits, or uppercase letters."
+msgstr "Nincs szükség szimbólumokra, számjegyekre vagy nagybetűkre."
+
+msgid "Straight rows of keys are easy to guess."
+msgstr "Az egymás melletti billentyűk sorát könnyű kitalálni."
+
+msgid "Short keyboard patterns are easy to guess."
+msgstr "A rövid billentyűzetmintákat könnyű kitalálni."
+
+msgid "This is a top-10 common password."
+msgstr "Ez a 10 leggyakoribb jelszó egyike."
+
+msgid "This is similar to a commonly used password."
+msgstr "Ez hasonlít egy gyakran használt jelszóhoz."
+
+msgid "A word by itself is easy to guess."
+msgstr "Egyetlen szót könnyű kitalálni."
+
+msgid "All-uppercase is almost as easy to guess as all-lowercase."
+msgstr "A csupa nagybetűt majdnem olyan könnyű kitalálni, mint a csupa kisbetűt."
+
+msgid "Use a longer keyboard pattern with more turns."
+msgstr "Használj hosszabb billentyűzetmintát, több irányváltással."
+
+msgid "Repeats like \"aaa\" are easy to guess."
+msgstr "Az olyan ismétléseket, mint az „aaa”, könnyű kitalálni."
+
+msgid "Repeats like \"abcabcabc\" are only slightly harder to guess than \"abc\"."
+msgstr ""
+"Az olyan ismétléseket, mint az „abcabcabc”, csak kicsivel nehezebb kitalálni, mint az „abc”-t."
+
+msgid "This is a top-100 common password."
+msgstr "Ez a 100 leggyakoribb jelszó egyike."
+
+msgid "This is a very common password."
+msgstr "Ez egy nagyon gyakori jelszó."
+
+msgid "Names and surnames by themselves are easy to guess."
+msgstr "Önmagukban a kereszt- és vezetékneveket könnyű kitalálni."
+
+msgid "Common names and surnames are easy to guess."
+msgstr "A gyakori kereszt- és vezetékneveket könnyű kitalálni."
+
+msgid "Avoid repeated words and characters."
+msgstr "Kerüld az ismétlődő szavakat és karaktereket."
+
+msgid "Sequences like \"abc\" or \"6543\" are easy to guess."
+msgstr "Az olyan sorozatokat, mint az „abc” vagy a „6543”, könnyű kitalálni."
+
+msgid "Avoid sequences."
+msgstr "Kerüld a sorozatokat."
+
+msgid "Recent years are easy to guess."
+msgstr "A közelmúlt éveit könnyű kitalálni."
+
+msgid "Dates are often easy to guess."
+msgstr "A dátumokat gyakran könnyű kitalálni."
+
+msgid "Avoid recent years."
+msgstr "Kerüld a közelmúlt éveit."
+
+msgid "Avoid years that are associated with you."
+msgstr "Kerüld a hozzád köthető évszámokat."
+
+msgid "Avoid dates and years that are associated with you."
+msgstr "Kerüld a hozzád köthető dátumokat és évszámokat."
+
+msgid "Only the owner of this tournament can do that"
+msgstr "Ezt csak a verseny tulajdonosa teheti meg"
+
+msgid "Only the owner of this tournament can remove someone else"
+msgstr "Mást csak a verseny tulajdonosa távolíthat el"
+
+msgid "Only an organizer of the tournament can become its owner. Add them first."
+msgstr "A verseny tulajdonosa csak a szervezői közül kerülhet ki. Előbb add hozzá szervezőként."
+
+msgid "The owner can't leave the tournament. Make someone else the owner first."
+msgstr "A tulajdonos nem léphet ki a versenyből. Előbb tegyél meg valaki mást tulajdonosnak."
+
+msgid "{name} already helps run this tournament"
+msgstr "{name} már segít a verseny szervezésében"
+
+msgid "This account already helps run this tournament"
+msgstr "Ez a fiók már segít a verseny szervezésében"
+
+msgid "This account doesn't help run the tournament"
+msgstr "Ez a fiók nem segít a verseny szervezésében"
+
+msgid "This tournament already has an owner"
+msgstr "Ennek a versenynek már van tulajdonosa"
+
+msgid "That would be more than the {maximum} tournaments an account can own."
+msgstr "Ez túllépné a korlátot: legfeljebb {maximum} versenyed lehet."
+
+msgid "That would be more than the {maximum} players in a team that are allowed."
+msgstr "Ez túllépné a korlátot: egy csapatban legfeljebb {maximum} játékos lehet."
+
+msgid "There is no player with the ID {ids}"
+msgstr "Nincs ilyen azonosítójú játékos: {ids}"
+
+msgid "There is no team with the ID {ids}"
+msgstr "Nincs ilyen azonosítójú csapat: {ids}"
+
+msgid "No team with id {id} takes part in this tournament"
+msgstr "Ebben a versenyben nem vesz részt csapat ezzel az azonosítóval: {id}"
+
+msgid "A player can be in a team's roster once"
+msgstr "Egy játékos csak egyszer szerepelhet a csapat névsorában"
+
+msgid "Some of these teams already take part in this tournament"
+msgstr "Ezek közül a csapatok közül néhány már részt vesz ebben a versenyben"
+
+msgid "This team already takes part in this tournament"
+msgstr "Ez a csapat már részt vesz ebben a versenyben"
+
+msgid "This team takes part in a tournament. Remove it from the tournament first."
+msgstr "Ez a csapat részt vesz egy versenyben. Előbb vedd ki a versenyből."
+
+msgid "{team} takes part in {tournaments}. Remove it from those tournaments first."
+msgstr "{team} részt vesz ezekben a versenyekben: {tournaments}. Előbb vedd ki belőlük."
+
+msgid "A player in these teams already plays for another team of the tournament"
+msgstr "Ezeknek a csapatoknak az egyik játékosa már a verseny egy másik csapatában játszik"
+
+msgid ""
+"{player} can't play for both {first} and {second} in {tournament}. A player can be an active "
+"member of only one of a tournament's teams."
+msgstr ""
+"{player} nem játszhat két csapatban is ezen a versenyen: {tournament} ({first}, {second}). Egy "
+"versenyen egy játékos csak egy csapatnak lehet aktív tagja."
+
+msgid ""
+"Several players are called {name}. Add that player to the team in Teams and players, where you can"
+" choose which of them it is."
+msgstr ""
+"Több játékost is így hívnak: {name}. Őt a Csapatok és játékosok oldalon add a csapathoz, ahol "
+"kiválaszthatod, melyikük az."

@@ -5,30 +5,46 @@ from heliclockter import datetime_utc, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from bracket.logic.planning.conflicts import handle_conflicts
+from bracket.logic.planning.calendar import Calendar, Lineups
 from bracket.logic.tournament_graph import TournamentGraph
 from bracket.models.db.match import MAX_MINUTES, MatchTiming, is_played
 from bracket.models.db.stage_tree import RoundWithMatches, StageWithStageItems
 from bracket.models.db.tournament import Tournament
-from bracket.sql.matches import sql_add_margin_to_matches, sql_update_match_timings
+from bracket.sql.matches import (
+    get_matches_elsewhere,
+    sql_add_margin_to_matches,
+    sql_update_match_timings,
+)
+from bracket.sql.participation import get_lineups
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.tournaments import sql_get_tournament, sql_move_tournament_start
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import MatchId, TournamentId
 
 
 def plan_match_timings(
-    stages: list[StageWithStageItems], tournament: Tournament
+    stages: list[StageWithStageItems],
+    tournament: Tournament,
+    *,
+    lineups: Lineups | None = None,
+    elsewhere: Calendar | None = None,
 ) -> list[MatchTiming]:
     """
     Plan when every match of the tournament starts.
 
-    All matches of a round start together, and the next round starts once the longest match of
-    the previous round (including its margin) has finished. The stage items of a stage are played
-    in parallel, and a stage starts once every stage item of the previous stage has finished.
+    The rounds of a stage item follow each other: a round starts once every match of the previous
+    round has finished, including its margin. The stage items of a stage are played in parallel,
+    and a stage starts once every stage item of the previous stage has finished.
+
+    The matches of a round start with the round, unless their teams, or the players of the
+    `lineups`, play a match of another tournament then (`elsewhere`). Such a match waits until all
+    of them are free.
 
     The tournament's match duration is a default that a stage can overwrite for its matches. The
     custom duration of a match takes precedence over both.
     """
+    lineups = lineups if lineups is not None else Lineups({})
+    elsewhere = elsewhere if elsewhere is not None else Calendar()
     timings: list[MatchTiming] = []
     stage_start = tournament.start_time
 
@@ -44,7 +60,7 @@ def plan_match_timings(
             round_start = stage_start
 
             for round_ in sorted(stage_item.rounds, key=lambda round_: round_.id):
-                round_minutes = 0
+                round_end = round_start
 
                 for match in round_.matches:
                     duration_minutes = (
@@ -57,17 +73,23 @@ def plan_match_timings(
                         if match.custom_margin_minutes is None
                         else match.custom_margin_minutes
                     )
+                    start_time = elsewhere.earliest_start(
+                        lineups.competitors(match), round_start, duration_minutes + margin_minutes
+                    )
                     timings.append(
                         MatchTiming(
                             match_id=match.id,
-                            start_time=round_start,
+                            start_time=start_time,
                             duration_minutes=duration_minutes,
                             margin_minutes=margin_minutes,
                         )
                     )
-                    round_minutes = max(round_minutes, duration_minutes + margin_minutes)
+                    round_end = max(
+                        round_end,
+                        start_time + timedelta(minutes=duration_minutes + margin_minutes),
+                    )
 
-                round_start += timedelta(minutes=round_minutes)
+                round_start = round_end
 
             stage_end = max(stage_end, round_start)
 
@@ -89,14 +111,20 @@ async def schedule_all_matches(
     Call this whenever rounds or matches are added or removed, or when the tournament's start
     time or any match duration or margin changes. A command that has the whole tournament's
     graph passes it, which also gets the new times.
+
+    The matches of other tournaments stay where they are: this tournament's matches avoid them.
     """
     if tournament is None:
         tournament = await sql_get_tournament(session, tournament_id)
     if graph is None:
         graph = TournamentGraph(await get_full_tournament_details(session, tournament_id))
+    lineups = Lineups(await get_lineups(session, tournament_id))
+    elsewhere = Calendar.of_matches_elsewhere(await get_matches_elsewhere(session, tournament_id))
 
     changed_timings: list[MatchTiming] = []
-    for timing in plan_match_timings(graph.stages, tournament):
+    for timing in plan_match_timings(
+        graph.stages, tournament, lineups=lineups, elsewhere=elsewhere
+    ):
         match = graph.match(timing.match_id)
         if (match.start_time, match.duration_minutes, match.margin_minutes) != (
             timing.start_time,
@@ -112,8 +140,6 @@ async def schedule_all_matches(
             duration_minutes=timing.duration_minutes,
             margin_minutes=timing.margin_minutes,
         )
-    # Adding/removing competitors can change conflicts even when every time stays the same.
-    await handle_conflicts(session, graph)
 
 
 class ScheduleDelay(NamedTuple):
@@ -216,7 +242,7 @@ async def delay_upcoming_matches(
     if delay is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Every round has started already, so there is nothing left to move",
+            detail=gettext("Every round has started already, so there is nothing left to move"),
         )
 
     if delay.moves_tournament_start:
@@ -236,9 +262,11 @@ async def delay_upcoming_matches(
         if minutes > MAX_MINUTES - max(margins):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"The remaining rounds can move later by at most {MAX_MINUTES - max(margins)} "
-                    f"minutes without exceeding the maximum break of {MAX_MINUTES} minutes."
+                detail=gettext(
+                    "The remaining rounds can move later by at most {available} minutes without "
+                    "exceeding the maximum break of {maximum} minutes.",
+                    available=MAX_MINUTES - max(margins),
+                    maximum=MAX_MINUTES,
                 ),
             )
         if minutes < 0:
@@ -246,9 +274,10 @@ async def delay_upcoming_matches(
             if -minutes > available_break:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"The remaining rounds can move earlier by at most {available_break} "
-                        "minutes without overlapping the previous round."
+                    detail=gettext(
+                        "The remaining rounds can move earlier by at most {available} minutes "
+                        "without overlapping the previous round.",
+                        available=available_break,
                     ),
                 )
         await sql_add_margin_to_matches(

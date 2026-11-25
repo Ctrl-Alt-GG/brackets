@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 
-from bracket.models.enums import TournamentStatus
+from bracket.models.enums import TournamentRole, TournamentStatus
 from bracket.orm.base import Base
 
 if TYPE_CHECKING:
@@ -34,18 +34,9 @@ class Tournament(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    club_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("clubs.id", name="tournaments_club_id_fkey"),
-        index=True,
-        nullable=False,
-    )
     dashboard_public: Mapped[bool] = mapped_column(Boolean, nullable=False)
     logo_path: Mapped[str | None] = mapped_column(String, nullable=True)
     dashboard_endpoint: Mapped[str | None] = mapped_column(String, nullable=True)
-    players_can_be_in_multiple_teams: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="f"
-    )
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="15")
     margin_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="5")
     status: Mapped[TournamentStatus] = mapped_column(
@@ -69,6 +60,35 @@ class Tournament(Base):
         ),
         CheckConstraint("duration_minutes BETWEEN 1 AND 1440", name="ck_tournaments_duration"),
         CheckConstraint("margin_minutes BETWEEN 0 AND 1440", name="ck_tournaments_margin"),
+    )
+
+
+class TournamentOrganizer(Base):
+    """An account that runs a tournament. Each tournament has one owner, who decides who helps."""
+
+    __tablename__ = "tournament_organizers"
+
+    tournament_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[TournamentRole] = mapped_column(
+        Enum(
+            TournamentRole, name="tournament_role", values_callable=lambda e: [m.value for m in e]
+        ),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_tournament_organizers_owner",
+            "tournament_id",
+            unique=True,
+            postgresql_where=role == TournamentRole.OWNER,
+        ),
+        Index("ix_tournament_organizers_user_id", "user_id"),
     )
 
 

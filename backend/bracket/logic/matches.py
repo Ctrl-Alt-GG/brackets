@@ -4,7 +4,6 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from bracket.logic.planning.conflicts import handle_conflicts
 from bracket.logic.planning.matches import schedule_all_matches
 from bracket.logic.ranking.calculation import recalculate_ranking_for_stage_item
 from bracket.logic.ranking.elimination import update_inputs_in_subsequent_elimination_rounds
@@ -22,6 +21,7 @@ from bracket.sql.matches import (
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.stages import get_full_tournament_details
 from bracket.sql.validation import validate_match_create
+from bracket.utils.i18n import gettext
 
 
 async def record_match_result(
@@ -29,10 +29,11 @@ async def record_match_result(
 ) -> None:
     """
     Save a match's result and custom timing, and everything that follows from them: the later
-    matches of a knockout bracket, the schedule and conflicts, and the standings.
+    matches of a knockout bracket, the schedule, and the standings.
 
     Correcting a knockout result empties the later matches the previous winner had reached, with
-    their results, before conflicts and standings are worked out.
+    their results, before the schedule and standings are worked out. The winner's next match can
+    move, when the winner plays elsewhere at the time it was planned for.
     """
     graph = TournamentGraph(await get_full_tournament_details(session, tournament.id))
     stage_item, round_ = graph.locate_round(match.round_id)
@@ -46,7 +47,7 @@ async def record_match_result(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A match can only get a result once both of its teams are known",
+            detail=gettext("A match can only get a result once both of its teams are known"),
         )
 
     if (
@@ -56,7 +57,7 @@ async def record_match_result(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+            detail=gettext(
                 "A knockout match needs a winner. Enter the score after overtime or the tiebreak."
             ),
         )
@@ -73,10 +74,8 @@ async def record_match_result(
             session, graph, stage_item, round_.id, {match.id}
         )
 
-    if timing_changes:
+    if timing_changes or is_knockout:
         await schedule_all_matches(session, tournament.id, graph=graph, tournament=tournament)
-    elif is_knockout:
-        await handle_conflicts(session, graph)
 
     await recalculate_ranking_for_stage_item(session, tournament.id, stage_item)
 
@@ -92,7 +91,7 @@ async def create_swiss_match(
     if not round_.is_draft or stage_item.type is not StageType.SWISS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only create matches in draft rounds of Swiss stage items",
+            detail=gettext("Can only create matches in draft rounds of Swiss stage items"),
         )
 
     input_ids = [body.stage_item_input1_id, body.stage_item_input2_id]
@@ -100,16 +99,18 @@ async def create_swiss_match(
         input_.id for input_ in stage_item.inputs if isinstance(input_, StageItemInputFinal)
     }
     if any(input_id not in local_inputs for input_id in input_ids):
-        raise HTTPException(400, "Choose two assigned teams from this round's stage item")
+        raise HTTPException(400, gettext("Choose two assigned teams from this round's stage item"))
     if (
         body.stage_item_input1_winner_from_match_id is not None
         or body.stage_item_input2_winner_from_match_id is not None
     ):
-        raise HTTPException(400, "Swiss matches use assigned teams, not winners of other matches")
+        raise HTTPException(
+            400, gettext("Swiss matches use assigned teams, not winners of other matches")
+        )
     if input_ids[0] is not None and input_ids[0] == input_ids[1]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A team can't play against itself",
+            detail=gettext("A team can't play against itself"),
         )
 
     input_ids_in_round = {
@@ -121,7 +122,7 @@ async def create_swiss_match(
     if any(input_id in input_ids_in_round for input_id in input_ids if input_id is not None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One of these teams already has a match in this round",
+            detail=gettext("One of these teams already has a match in this round"),
         )
 
     [match] = await sql_create_matches(
@@ -146,7 +147,7 @@ async def delete_swiss_match(session: AsyncSession, tournament: Tournament, matc
     if not round_.is_draft or stage_item.type is not StageType.SWISS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only delete matches from draft rounds in Swiss stage items",
+            detail=gettext("Can only delete matches from draft rounds in Swiss stage items"),
         )
 
     await sql_delete_match(session, match.id)

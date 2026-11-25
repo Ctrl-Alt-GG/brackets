@@ -1,21 +1,23 @@
 import { isAxiosError } from 'axios';
+import { getI18n } from 'react-i18next';
 
-const FALLBACK = 'The request failed. Check your connection and try again.';
-
-/** What went wrong with a request, in words an organizer can act on. */
+/**
+ * What went wrong with a request, in words an organizer can act on, in the page's language. The
+ * API writes its own messages in the language the page asks for.
+ */
 export function getErrorMessage(error: unknown) {
+  const { t } = getI18n();
   if (!isAxiosError<{ detail?: string | Array<{ loc: string[]; msg: string }> }>(error)) {
-    return error instanceof Error && error.message ? error.message : FALLBACK;
+    return error instanceof Error && error.message ? error.message : t('errors.requestFailed');
   }
 
   const response = error.response;
   // Rate limits say how long to wait; the message follows that, whatever the answer's text.
   if (response?.status === 429) {
     const seconds = Number(response.headers?.['retry-after']);
-    const minutes = Math.ceil(seconds / 60);
     return Number.isFinite(seconds) && seconds > 0
-      ? `Too many attempts. Try again in ${minutes === 1 ? 'a minute' : `${minutes} minutes`}.`
-      : 'Too many attempts. Try again in a few minutes.';
+      ? t('errors.tooManyAttemptsIn', { count: Math.ceil(seconds / 60) })
+      : t('errors.tooManyAttempts');
   }
 
   const detail = response?.data?.detail;
@@ -27,8 +29,9 @@ export function getErrorMessage(error: unknown) {
 
   // A change can still have been saved when its answer didn't arrive in time.
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-    return 'The server took too long to answer. Reload to see what was saved.';
+    return t('errors.timeout');
   }
 
-  return error.message || FALLBACK;
+  // Axios's own message, such as "Network Error", is in English.
+  return t('errors.requestFailed');
 }

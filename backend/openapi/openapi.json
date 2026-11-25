@@ -85,7 +85,7 @@
         "title": "Body_login_for_access_token_api_token_post",
         "type": "object"
       },
-      "Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post": {
+      "Body_update_team_logo_api_teams__team_id__logo_post": {
         "properties": {
           "file": {
             "anyOf": [
@@ -100,7 +100,7 @@
             "title": "File"
           }
         },
-        "title": "Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post",
+        "title": "Body_update_team_logo_api_teams__team_id__logo_post",
         "type": "object"
       },
       "Body_upload_logo_api_tournaments__tournament_id__logo_post": {
@@ -119,251 +119,6 @@
           }
         },
         "title": "Body_upload_logo_api_tournaments__tournament_id__logo_post",
-        "type": "object"
-      },
-      "Club": {
-        "properties": {
-          "created": {
-            "format": "date-time",
-            "title": "Created",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "created",
-          "id"
-        ],
-        "title": "Club",
-        "type": "object"
-      },
-      "ClubCreateBody": {
-        "properties": {
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "ClubCreateBody",
-        "type": "object"
-      },
-      "ClubMember": {
-        "description": "An organizer of an event: its owner, or someone the owner added to help run it.",
-        "properties": {
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "relation": {
-            "$ref": "#/components/schemas/UserXClubRelation"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "user_id",
-          "name",
-          "email",
-          "relation"
-        ],
-        "title": "ClubMember",
-        "type": "object"
-      },
-      "ClubMemberCreateBody": {
-        "properties": {
-          "email": {
-            "format": "email",
-            "title": "Email",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email"
-        ],
-        "title": "ClubMemberCreateBody",
-        "type": "object"
-      },
-      "ClubMembersResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ClubMember"
-            },
-            "title": "Data",
-            "type": "array"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ClubMembersResponse",
-        "type": "object"
-      },
-      "ClubOwnerUpdateBody": {
-        "properties": {
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "user_id"
-        ],
-        "title": "ClubOwnerUpdateBody",
-        "type": "object"
-      },
-      "ClubResponse": {
-        "properties": {
-          "data": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Club"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ClubResponse",
-        "type": "object"
-      },
-      "ClubUpdateBody": {
-        "properties": {
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "ClubUpdateBody",
-        "type": "object"
-      },
-      "ClubsResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/Club"
-            },
-            "title": "Data",
-            "type": "array"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "ClubsResponse",
-        "type": "object"
-      },
-      "FullTeamWithPlayers": {
-        "description": "A team with its roster.",
-        "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
-          "created": {
-            "format": "date-time",
-            "title": "Created",
-            "type": "string"
-          },
-          "draws": {
-            "default": 0,
-            "title": "Draws",
-            "type": "integer"
-          },
-          "elo_score": {
-            "default": "1200",
-            "title": "Elo Score",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "logo_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Logo Path"
-          },
-          "losses": {
-            "default": 0,
-            "title": "Losses",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "players": {
-            "items": {
-              "$ref": "#/components/schemas/Player"
-            },
-            "title": "Players",
-            "type": "array"
-          },
-          "swiss_score": {
-            "default": "0.0",
-            "title": "Swiss Score",
-            "type": "string"
-          },
-          "tournament_id": {
-            "title": "Tournament Id",
-            "type": "integer"
-          },
-          "wins": {
-            "default": 0,
-            "title": "Wins",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "created",
-          "name",
-          "tournament_id",
-          "active",
-          "elo_score",
-          "swiss_score",
-          "wins",
-          "draws",
-          "losses",
-          "logo_path",
-          "id",
-          "players"
-        ],
-        "title": "FullTeamWithPlayers",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -452,10 +207,6 @@
             ],
             "title": "Stage Item Input1"
           },
-          "stage_item_input1_conflict": {
-            "title": "Stage Item Input1 Conflict",
-            "type": "boolean"
-          },
           "stage_item_input1_id": {
             "anyOf": [
               {
@@ -498,10 +249,6 @@
               }
             ],
             "title": "Stage Item Input2"
-          },
-          "stage_item_input2_conflict": {
-            "title": "Stage Item Input2 Conflict",
-            "type": "boolean"
           },
           "stage_item_input2_id": {
             "anyOf": [
@@ -552,8 +299,6 @@
           "round_id",
           "stage_item_input1_score",
           "stage_item_input2_score",
-          "stage_item_input1_conflict",
-          "stage_item_input2_conflict",
           "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
@@ -749,10 +494,6 @@
             ],
             "title": "Stage Item Input1"
           },
-          "stage_item_input1_conflict": {
-            "title": "Stage Item Input1 Conflict",
-            "type": "boolean"
-          },
           "stage_item_input1_id": {
             "anyOf": [
               {
@@ -795,10 +536,6 @@
               }
             ],
             "title": "Stage Item Input2"
-          },
-          "stage_item_input2_conflict": {
-            "title": "Stage Item Input2 Conflict",
-            "type": "boolean"
           },
           "stage_item_input2_id": {
             "anyOf": [
@@ -849,8 +586,6 @@
           "round_id",
           "stage_item_input1_score",
           "stage_item_input2_score",
-          "stage_item_input1_conflict",
-          "stage_item_input2_conflict",
           "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
@@ -935,10 +670,6 @@
             ],
             "title": "Stage Item Input1"
           },
-          "stage_item_input1_conflict": {
-            "title": "Stage Item Input1 Conflict",
-            "type": "boolean"
-          },
           "stage_item_input1_id": {
             "title": "Stage Item Input1 Id",
             "type": "integer"
@@ -971,10 +702,6 @@
               }
             ],
             "title": "Stage Item Input2"
-          },
-          "stage_item_input2_conflict": {
-            "title": "Stage Item Input2 Conflict",
-            "type": "boolean"
           },
           "stage_item_input2_id": {
             "title": "Stage Item Input2 Id",
@@ -1018,8 +745,6 @@
           "round_id",
           "stage_item_input1_score",
           "stage_item_input2_score",
-          "stage_item_input1_conflict",
-          "stage_item_input2_conflict",
           "scoreless_result",
           "stage_item_input1_id",
           "stage_item_input2_id",
@@ -1033,7 +758,78 @@
         "title": "MatchWithDetailsDefinitive",
         "type": "object"
       },
-      "PaginatedPlayers": {
+      "Organizer": {
+        "description": "Someone who runs a tournament: its owner, or an account the owner added to help.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TournamentRole"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "role"
+        ],
+        "title": "Organizer",
+        "type": "object"
+      },
+      "OrganizerCreateBody": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "OrganizerCreateBody",
+        "type": "object"
+      },
+      "OrganizersResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Organizer"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "OrganizersResponse",
+        "type": "object"
+      },
+      "OwnerUpdateBody": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "OwnerUpdateBody",
+        "type": "object"
+      },
+      "PaginatedTournamentPlayers": {
         "properties": {
           "count": {
             "title": "Count",
@@ -1041,7 +837,7 @@
           },
           "players": {
             "items": {
-              "$ref": "#/components/schemas/Player"
+              "$ref": "#/components/schemas/TournamentPlayer"
             },
             "title": "Players",
             "type": "array"
@@ -1051,10 +847,10 @@
           "count",
           "players"
         ],
-        "title": "PaginatedPlayers",
+        "title": "PaginatedTournamentPlayers",
         "type": "object"
       },
-      "PaginatedTeams": {
+      "PaginatedTournamentTeams": {
         "properties": {
           "count": {
             "title": "Count",
@@ -1062,7 +858,7 @@
           },
           "teams": {
             "items": {
-              "$ref": "#/components/schemas/FullTeamWithPlayers"
+              "$ref": "#/components/schemas/TournamentTeamWithPlayers"
             },
             "title": "Teams",
             "type": "array"
@@ -1072,68 +868,29 @@
           "count",
           "teams"
         ],
-        "title": "PaginatedTeams",
+        "title": "PaginatedTournamentTeams",
         "type": "object"
       },
       "Player": {
+        "description": "Someone who plays. Players are shared by every tournament: one takes part in a tournament as an\nactive member of one of its teams.",
         "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
           "created": {
             "format": "date-time",
             "title": "Created",
-            "type": "string"
-          },
-          "draws": {
-            "default": 0,
-            "title": "Draws",
-            "type": "integer"
-          },
-          "elo_score": {
-            "default": "0.0",
-            "title": "Elo Score",
             "type": "string"
           },
           "id": {
             "title": "Id",
             "type": "integer"
           },
-          "losses": {
-            "default": 0,
-            "title": "Losses",
-            "type": "integer"
-          },
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "swiss_score": {
-            "default": "0.0",
-            "title": "Swiss Score",
-            "type": "string"
-          },
-          "tournament_id": {
-            "title": "Tournament Id",
-            "type": "integer"
-          },
-          "wins": {
-            "default": 0,
-            "title": "Wins",
-            "type": "integer"
           }
         },
         "required": [
-          "active",
           "name",
           "created",
-          "tournament_id",
-          "elo_score",
-          "swiss_score",
-          "wins",
-          "draws",
-          "losses",
           "id"
         ],
         "title": "Player",
@@ -1141,10 +898,6 @@
       },
       "PlayerBody": {
         "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
           "name": {
             "maxLength": 30,
             "minLength": 1,
@@ -1153,18 +906,13 @@
           }
         },
         "required": [
-          "name",
-          "active"
+          "name"
         ],
         "title": "PlayerBody",
         "type": "object"
       },
       "PlayerMultiBody": {
         "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
           "names": {
             "minLength": 1,
             "title": "Names",
@@ -1172,8 +920,7 @@
           }
         },
         "required": [
-          "names",
-          "active"
+          "names"
         ],
         "title": "PlayerMultiBody",
         "type": "object"
@@ -1181,7 +928,11 @@
       "PlayersResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/PaginatedPlayers"
+            "items": {
+              "$ref": "#/components/schemas/Player"
+            },
+            "title": "Data",
+            "type": "array"
           }
         },
         "required": [
@@ -1464,6 +1215,48 @@
         "title": "RoundWithMatches",
         "type": "object"
       },
+      "ScheduleConflict": {
+        "description": "A team of a match that has to be somewhere else at the same time: the team, or some of its\nplayers, play another match then. The other match can be in this tournament or in another one\nthat shares the team or the players.",
+        "properties": {
+          "match_id": {
+            "title": "Match Id",
+            "type": "integer"
+          },
+          "other_match_id": {
+            "title": "Other Match Id",
+            "type": "integer"
+          },
+          "other_tournament_id": {
+            "title": "Other Tournament Id",
+            "type": "integer"
+          },
+          "other_tournament_name": {
+            "title": "Other Tournament Name",
+            "type": "string"
+          },
+          "player_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Player Ids",
+            "type": "array"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "match_id",
+          "team_id",
+          "player_ids",
+          "other_match_id",
+          "other_tournament_id",
+          "other_tournament_name"
+        ],
+        "title": "ScheduleConflict",
+        "type": "object"
+      },
       "ScheduleDelayBody": {
         "properties": {
           "minutes": {
@@ -1506,7 +1299,7 @@
       "SingleTeamResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/Team"
+            "$ref": "#/components/schemas/TeamWithMembers"
           }
         },
         "required": [
@@ -1682,7 +1475,7 @@
             "type": "integer"
           },
           "team": {
-            "$ref": "#/components/schemas/Team"
+            "$ref": "#/components/schemas/TournamentTeam"
           },
           "team_id": {
             "title": "Team Id",
@@ -1929,12 +1722,12 @@
             "$ref": "#/components/schemas/StageItemInputTentative"
           },
           "team": {
-            "$ref": "#/components/schemas/Team"
+            "$ref": "#/components/schemas/TournamentTeam"
           },
           "tied_team": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Team"
+                "$ref": "#/components/schemas/TournamentTeam"
               },
               {
                 "type": "null"
@@ -2253,7 +2046,583 @@
         "title": "SuccessResponse",
         "type": "object"
       },
-      "Team": {
+      "TeamBody": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberBody"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TeamBody",
+        "type": "object"
+      },
+      "TeamMember": {
+        "description": "A player in a team's roster.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "player": {
+            "$ref": "#/components/schemas/Player"
+          }
+        },
+        "required": [
+          "player",
+          "active"
+        ],
+        "title": "TeamMember",
+        "type": "object"
+      },
+      "TeamMemberBody": {
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "player_id"
+        ],
+        "title": "TeamMemberBody",
+        "type": "object"
+      },
+      "TeamMultiBody": {
+        "properties": {
+          "names": {
+            "minLength": 1,
+            "title": "Names",
+            "type": "string"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "TeamMultiBody",
+        "type": "object"
+      },
+      "TeamParticipation": {
+        "description": "A tournament that a team takes part in.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "tournament_id": {
+            "title": "Tournament Id",
+            "type": "integer"
+          },
+          "tournament_name": {
+            "title": "Tournament Name",
+            "type": "string"
+          },
+          "tournament_status": {
+            "$ref": "#/components/schemas/TournamentStatus"
+          }
+        },
+        "required": [
+          "tournament_id",
+          "tournament_name",
+          "tournament_status",
+          "active"
+        ],
+        "title": "TeamParticipation",
+        "type": "object"
+      },
+      "TeamWithMembers": {
+        "description": "A team with its roster and the tournaments it takes part in.",
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "logo_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Path"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "participations": {
+            "items": {
+              "$ref": "#/components/schemas/TeamParticipation"
+            },
+            "title": "Participations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "created",
+          "logo_path",
+          "id",
+          "members",
+          "participations"
+        ],
+        "title": "TeamWithMembers",
+        "type": "object"
+      },
+      "TeamsResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/TeamWithMembers"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TeamsResponse",
+        "type": "object"
+      },
+      "Token": {
+        "description": "A signed-in session.",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "token_type": {
+            "title": "Token Type",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "user_id",
+          "name"
+        ],
+        "title": "Token",
+        "type": "object"
+      },
+      "TokenResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Token"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
+      "Tournament": {
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "dashboard_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dashboard Endpoint"
+          },
+          "dashboard_public": {
+            "title": "Dashboard Public",
+            "type": "boolean"
+          },
+          "duration_minutes": {
+            "minimum": 1.0,
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_match_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Match End"
+          },
+          "logo_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Path"
+          },
+          "margin_minutes": {
+            "minimum": 0.0,
+            "title": "Margin Minutes",
+            "type": "integer"
+          },
+          "matches_played": {
+            "default": 0,
+            "title": "Matches Played",
+            "type": "integer"
+          },
+          "matches_total": {
+            "default": 0,
+            "title": "Matches Total",
+            "type": "integer"
+          },
+          "more_rounds_possible": {
+            "default": false,
+            "title": "More Rounds Possible",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TournamentStatus",
+            "default": "OPEN"
+          }
+        },
+        "required": [
+          "name",
+          "created",
+          "start_time",
+          "duration_minutes",
+          "margin_minutes",
+          "dashboard_public",
+          "dashboard_endpoint",
+          "logo_path",
+          "status",
+          "id",
+          "matches_total",
+          "matches_played",
+          "last_match_end",
+          "more_rounds_possible"
+        ],
+        "title": "Tournament",
+        "type": "object"
+      },
+      "TournamentAccess": {
+        "properties": {
+          "can_manage": {
+            "title": "Can Manage",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_manage"
+        ],
+        "title": "TournamentAccess",
+        "type": "object"
+      },
+      "TournamentAccessResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TournamentAccess"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentAccessResponse",
+        "type": "object"
+      },
+      "TournamentBody": {
+        "description": "A tournament's settings, when it is created and when they change.",
+        "properties": {
+          "dashboard_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dashboard Endpoint"
+          },
+          "dashboard_public": {
+            "title": "Dashboard Public",
+            "type": "boolean"
+          },
+          "duration_minutes": {
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "margin_minutes": {
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Margin Minutes",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_time": {
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_time",
+          "name",
+          "dashboard_public",
+          "duration_minutes",
+          "margin_minutes"
+        ],
+        "title": "TournamentBody",
+        "type": "object"
+      },
+      "TournamentChangeStatusBody": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/TournamentStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TournamentChangeStatusBody",
+        "type": "object"
+      },
+      "TournamentDetails": {
+        "description": "What the Details pages of a tournament show: one answer instead of six requests.",
+        "properties": {
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/TournamentPlayer"
+            },
+            "title": "Players",
+            "type": "array"
+          },
+          "rankings": {
+            "items": {
+              "$ref": "#/components/schemas/Ranking"
+            },
+            "title": "Rankings",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageWithStageItems"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "standings": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StageItemInputStanding"
+              },
+              "type": "array"
+            },
+            "title": "Standings",
+            "type": "object"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/TournamentTeamWithPlayers"
+            },
+            "title": "Teams",
+            "type": "array"
+          },
+          "tournament": {
+            "$ref": "#/components/schemas/Tournament"
+          }
+        },
+        "required": [
+          "tournament",
+          "stages",
+          "players",
+          "teams",
+          "rankings",
+          "standings"
+        ],
+        "title": "TournamentDetails",
+        "type": "object"
+      },
+      "TournamentDetailsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TournamentDetails"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentDetailsResponse",
+        "type": "object"
+      },
+      "TournamentPlayer": {
+        "description": "A player as they take part in a tournament: the team they play for, and their results.",
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "draws": {
+            "default": 0,
+            "title": "Draws",
+            "type": "integer"
+          },
+          "elo_score": {
+            "default": "1200",
+            "title": "Elo Score",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "losses": {
+            "default": 0,
+            "title": "Losses",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "swiss_score": {
+            "default": "0.0",
+            "title": "Swiss Score",
+            "type": "string"
+          },
+          "team_id": {
+            "title": "Team Id",
+            "type": "integer"
+          },
+          "wins": {
+            "default": 0,
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wins",
+          "draws",
+          "losses",
+          "elo_score",
+          "swiss_score",
+          "name",
+          "created",
+          "id",
+          "team_id"
+        ],
+        "title": "TournamentPlayer",
+        "type": "object"
+      },
+      "TournamentPlayersResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedTournamentPlayers"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentPlayersResponse",
+        "type": "object"
+      },
+      "TournamentResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Tournament"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentResponse",
+        "type": "object"
+      },
+      "TournamentRole": {
+        "description": "How someone runs a tournament: its owner, or an organizer the owner added.",
+        "enum": [
+          "OWNER",
+          "COLLABORATOR"
+        ],
+        "title": "TournamentRole",
+        "type": "string"
+      },
+      "TournamentStatus": {
+        "enum": [
+          "OPEN",
+          "ARCHIVED"
+        ],
+        "title": "TournamentStatus",
+        "type": "string"
+      },
+      "TournamentTeam": {
+        "description": "A team as it takes part in a tournament, with its results there.\n\nIt is read from the team's participation in the tournament, which holds the team itself. The\nresults are replayed from the matches (`bracket.logic.ranking.team_totals`); until then, they\nare those of a team that hasn't played.",
         "properties": {
           "active": {
             "title": "Active",
@@ -2314,168 +2683,71 @@
           }
         },
         "required": [
-          "created",
-          "name",
-          "tournament_id",
-          "active",
-          "elo_score",
-          "swiss_score",
           "wins",
           "draws",
           "losses",
-          "logo_path",
-          "id"
-        ],
-        "title": "Team",
-        "type": "object"
-      },
-      "TeamBody": {
-        "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
-          "name": {
-            "maxLength": 30,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "player_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Player Ids",
-            "type": "array",
-            "uniqueItems": true
-          }
-        },
-        "required": [
+          "elo_score",
+          "swiss_score",
+          "id",
           "name",
-          "active",
-          "player_ids"
-        ],
-        "title": "TeamBody",
-        "type": "object"
-      },
-      "TeamMultiBody": {
-        "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
-          "names": {
-            "minLength": 1,
-            "title": "Names",
-            "type": "string"
-          }
-        },
-        "required": [
-          "names",
+          "created",
+          "logo_path",
+          "tournament_id",
           "active"
         ],
-        "title": "TeamMultiBody",
+        "title": "TournamentTeam",
         "type": "object"
       },
-      "TeamsWithPlayersResponse": {
+      "TournamentTeamBody": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "TournamentTeamBody",
+        "type": "object"
+      },
+      "TournamentTeamResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/PaginatedTeams"
+            "$ref": "#/components/schemas/TournamentTeam"
           }
         },
         "required": [
           "data"
         ],
-        "title": "TeamsWithPlayersResponse",
+        "title": "TournamentTeamResponse",
         "type": "object"
       },
-      "Token": {
-        "description": "A signed-in session.",
+      "TournamentTeamWithPlayers": {
+        "description": "A team with the players who play for it in the tournament: its lineup.",
         "properties": {
-          "access_token": {
-            "title": "Access Token",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "token_type": {
-            "title": "Token Type",
-            "type": "string"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "access_token",
-          "token_type",
-          "user_id",
-          "name"
-        ],
-        "title": "Token",
-        "type": "object"
-      },
-      "TokenResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Token"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "TokenResponse",
-        "type": "object"
-      },
-      "Tournament": {
-        "properties": {
-          "club_id": {
-            "title": "Club Id",
-            "type": "integer"
+          "active": {
+            "title": "Active",
+            "type": "boolean"
           },
           "created": {
             "format": "date-time",
             "title": "Created",
             "type": "string"
           },
-          "dashboard_endpoint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dashboard Endpoint"
-          },
-          "dashboard_public": {
-            "title": "Dashboard Public",
-            "type": "boolean"
-          },
-          "duration_minutes": {
-            "minimum": 1.0,
-            "title": "Duration Minutes",
+          "draws": {
+            "default": 0,
+            "title": "Draws",
             "type": "integer"
+          },
+          "elo_score": {
+            "default": "1200",
+            "title": "Elo Score",
+            "type": "string"
           },
           "id": {
             "title": "Id",
             "type": "integer"
-          },
-          "last_match_end": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Match End"
           },
           "logo_path": {
             "anyOf": [
@@ -2488,166 +2760,15 @@
             ],
             "title": "Logo Path"
           },
-          "margin_minutes": {
-            "minimum": 0.0,
-            "title": "Margin Minutes",
-            "type": "integer"
-          },
-          "matches_played": {
+          "losses": {
             "default": 0,
-            "title": "Matches Played",
+            "title": "Losses",
             "type": "integer"
-          },
-          "matches_total": {
-            "default": 0,
-            "title": "Matches Total",
-            "type": "integer"
-          },
-          "more_rounds_possible": {
-            "default": false,
-            "title": "More Rounds Possible",
-            "type": "boolean"
           },
           "name": {
             "title": "Name",
             "type": "string"
           },
-          "players_can_be_in_multiple_teams": {
-            "title": "Players Can Be In Multiple Teams",
-            "type": "boolean"
-          },
-          "start_time": {
-            "format": "date-time",
-            "title": "Start Time",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/TournamentStatus",
-            "default": "OPEN"
-          }
-        },
-        "required": [
-          "club_id",
-          "name",
-          "created",
-          "start_time",
-          "duration_minutes",
-          "margin_minutes",
-          "dashboard_public",
-          "dashboard_endpoint",
-          "logo_path",
-          "players_can_be_in_multiple_teams",
-          "status",
-          "id",
-          "matches_total",
-          "matches_played",
-          "last_match_end",
-          "more_rounds_possible"
-        ],
-        "title": "Tournament",
-        "type": "object"
-      },
-      "TournamentAccess": {
-        "properties": {
-          "can_manage": {
-            "title": "Can Manage",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "can_manage"
-        ],
-        "title": "TournamentAccess",
-        "type": "object"
-      },
-      "TournamentAccessResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/TournamentAccess"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "TournamentAccessResponse",
-        "type": "object"
-      },
-      "TournamentBody": {
-        "properties": {
-          "club_id": {
-            "title": "Club Id",
-            "type": "integer"
-          },
-          "dashboard_endpoint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dashboard Endpoint"
-          },
-          "dashboard_public": {
-            "title": "Dashboard Public",
-            "type": "boolean"
-          },
-          "duration_minutes": {
-            "maximum": 1440.0,
-            "minimum": 1.0,
-            "title": "Duration Minutes",
-            "type": "integer"
-          },
-          "margin_minutes": {
-            "maximum": 1440.0,
-            "minimum": 0.0,
-            "title": "Margin Minutes",
-            "type": "integer"
-          },
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "players_can_be_in_multiple_teams": {
-            "title": "Players Can Be In Multiple Teams",
-            "type": "boolean"
-          },
-          "start_time": {
-            "format": "date-time",
-            "title": "Start Time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "start_time",
-          "name",
-          "dashboard_public",
-          "players_can_be_in_multiple_teams",
-          "duration_minutes",
-          "margin_minutes",
-          "club_id"
-        ],
-        "title": "TournamentBody",
-        "type": "object"
-      },
-      "TournamentChangeStatusBody": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/TournamentStatus"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "TournamentChangeStatusBody",
-        "type": "object"
-      },
-      "TournamentDetails": {
-        "description": "What the Details pages of a tournament show: one answer instead of six requests.",
-        "properties": {
           "players": {
             "items": {
               "$ref": "#/components/schemas/Player"
@@ -2655,138 +2776,67 @@
             "title": "Players",
             "type": "array"
           },
-          "rankings": {
-            "items": {
-              "$ref": "#/components/schemas/Ranking"
-            },
-            "title": "Rankings",
-            "type": "array"
-          },
-          "stages": {
-            "items": {
-              "$ref": "#/components/schemas/StageWithStageItems"
-            },
-            "title": "Stages",
-            "type": "array"
-          },
-          "standings": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/StageItemInputStanding"
-              },
-              "type": "array"
-            },
-            "title": "Standings",
-            "type": "object"
-          },
-          "teams": {
-            "items": {
-              "$ref": "#/components/schemas/FullTeamWithPlayers"
-            },
-            "title": "Teams",
-            "type": "array"
-          },
-          "tournament": {
-            "$ref": "#/components/schemas/Tournament"
-          }
-        },
-        "required": [
-          "tournament",
-          "stages",
-          "players",
-          "teams",
-          "rankings",
-          "standings"
-        ],
-        "title": "TournamentDetails",
-        "type": "object"
-      },
-      "TournamentDetailsResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/TournamentDetails"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "TournamentDetailsResponse",
-        "type": "object"
-      },
-      "TournamentResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Tournament"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "TournamentResponse",
-        "type": "object"
-      },
-      "TournamentStatus": {
-        "enum": [
-          "OPEN",
-          "ARCHIVED"
-        ],
-        "title": "TournamentStatus",
-        "type": "string"
-      },
-      "TournamentUpdateBody": {
-        "properties": {
-          "dashboard_endpoint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dashboard Endpoint"
-          },
-          "dashboard_public": {
-            "title": "Dashboard Public",
-            "type": "boolean"
-          },
-          "duration_minutes": {
-            "maximum": 1440.0,
-            "minimum": 1.0,
-            "title": "Duration Minutes",
-            "type": "integer"
-          },
-          "margin_minutes": {
-            "maximum": 1440.0,
-            "minimum": 0.0,
-            "title": "Margin Minutes",
-            "type": "integer"
-          },
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
+          "swiss_score": {
+            "default": "0.0",
+            "title": "Swiss Score",
             "type": "string"
           },
-          "players_can_be_in_multiple_teams": {
-            "title": "Players Can Be In Multiple Teams",
-            "type": "boolean"
+          "tournament_id": {
+            "title": "Tournament Id",
+            "type": "integer"
           },
-          "start_time": {
-            "format": "date-time",
-            "title": "Start Time",
-            "type": "string"
+          "wins": {
+            "default": 0,
+            "title": "Wins",
+            "type": "integer"
           }
         },
         "required": [
-          "start_time",
+          "wins",
+          "draws",
+          "losses",
+          "elo_score",
+          "swiss_score",
+          "id",
           "name",
-          "dashboard_public",
-          "players_can_be_in_multiple_teams",
-          "duration_minutes",
-          "margin_minutes"
+          "created",
+          "logo_path",
+          "tournament_id",
+          "active",
+          "players"
         ],
-        "title": "TournamentUpdateBody",
+        "title": "TournamentTeamWithPlayers",
+        "type": "object"
+      },
+      "TournamentTeamsBody": {
+        "description": "Teams to take part in a tournament.",
+        "properties": {
+          "team_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Team Ids",
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "team_ids"
+        ],
+        "title": "TournamentTeamsBody",
+        "type": "object"
+      },
+      "TournamentTeamsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedTournamentTeams"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "TournamentTeamsResponse",
         "type": "object"
       },
       "TournamentWithAccess": {
@@ -2795,10 +2845,6 @@
             "title": "Can Manage",
             "type": "boolean"
           },
-          "club_id": {
-            "title": "Club Id",
-            "type": "integer"
-          },
           "created": {
             "format": "date-time",
             "title": "Created",
@@ -2875,10 +2921,6 @@
             "title": "Name",
             "type": "string"
           },
-          "players_can_be_in_multiple_teams": {
-            "title": "Players Can Be In Multiple Teams",
-            "type": "boolean"
-          },
           "start_time": {
             "format": "date-time",
             "title": "Start Time",
@@ -2890,7 +2932,6 @@
           }
         },
         "required": [
-          "club_id",
           "name",
           "created",
           "start_time",
@@ -2899,7 +2940,6 @@
           "dashboard_public",
           "dashboard_endpoint",
           "logo_path",
-          "players_can_be_in_multiple_teams",
           "status",
           "id",
           "matches_total",
@@ -2931,6 +2971,13 @@
             "title": "Available Inputs",
             "type": "object"
           },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
           "next_stage_rankings": {
             "additionalProperties": {
               "items": {
@@ -2943,7 +2990,7 @@
           },
           "players": {
             "items": {
-              "$ref": "#/components/schemas/Player"
+              "$ref": "#/components/schemas/TournamentPlayer"
             },
             "title": "Players",
             "type": "array"
@@ -2974,7 +3021,7 @@
           },
           "teams": {
             "items": {
-              "$ref": "#/components/schemas/FullTeamWithPlayers"
+              "$ref": "#/components/schemas/TournamentTeamWithPlayers"
             },
             "title": "Teams",
             "type": "array"
@@ -2991,7 +3038,8 @@
           "rankings",
           "standings",
           "available_inputs",
-          "next_stage_rankings"
+          "next_stage_rankings",
+          "conflicts"
         ],
         "title": "TournamentWorkspace",
         "type": "object"
@@ -3155,14 +3203,6 @@
         "title": "UserToUpdate",
         "type": "object"
       },
-      "UserXClubRelation": {
-        "enum": [
-          "OWNER",
-          "COLLABORATOR"
-        ],
-        "title": "UserXClubRelation",
-        "type": "string"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -3254,421 +3294,6 @@
         ]
       }
     },
-    "/api/clubs": {
-      "get": {
-        "operationId": "get_clubs_api_clubs_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Get Clubs",
-        "tags": [
-          "Clubs"
-        ]
-      },
-      "post": {
-        "operationId": "create_new_club_api_clubs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClubCreateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Create New Club",
-        "tags": [
-          "Clubs"
-        ]
-      }
-    },
-    "/api/clubs/{club_id}": {
-      "delete": {
-        "operationId": "delete_club_api_clubs__club_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Delete Club",
-        "tags": [
-          "Clubs"
-        ]
-      },
-      "put": {
-        "operationId": "update_club_api_clubs__club_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClubUpdateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Update Club",
-        "tags": [
-          "Clubs"
-        ]
-      }
-    },
-    "/api/clubs/{club_id}/members": {
-      "get": {
-        "description": "The organizers of an event: its owner and the people the owner added.",
-        "operationId": "get_members_api_clubs__club_id__members_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubMembersResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Get Members",
-        "tags": [
-          "Clubs"
-        ]
-      },
-      "post": {
-        "description": "Let another account help run this event and its tournaments, so that organizers don't have\nto share one login.",
-        "operationId": "add_member_api_clubs__club_id__members_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClubMemberCreateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubMembersResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Add Member",
-        "tags": [
-          "Clubs"
-        ]
-      }
-    },
-    "/api/clubs/{club_id}/members/{user_id}": {
-      "delete": {
-        "description": "Remove an organizer from the event. The owner removes others; anyone can leave.",
-        "operationId": "remove_member_api_clubs__club_id__members__user_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "title": "User Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubMembersResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Remove Member",
-        "tags": [
-          "Clubs"
-        ]
-      }
-    },
-    "/api/clubs/{club_id}/owner": {
-      "put": {
-        "description": "Hand the event over to another of its organizers, for an owner who leaves the organizing\nteam. The previous owner stays on as an organizer.",
-        "operationId": "transfer_ownership_api_clubs__club_id__owner_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "club_id",
-            "required": true,
-            "schema": {
-              "title": "Club Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClubOwnerUpdateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClubMembersResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Transfer Ownership",
-        "tags": [
-          "Clubs"
-        ]
-      }
-    },
     "/api/logout": {
       "post": {
         "description": "Ends the session: its cookie is removed from this browser, and its tokens stop working, also\nfor anyone who copied one.",
@@ -3711,6 +3336,526 @@
         "summary": "Healthcheck ping",
         "tags": [
           "Internals"
+        ]
+      }
+    },
+    "/api/players": {
+      "get": {
+        "description": "Every player by name. The teams they are in come with the teams.",
+        "operationId": "get_all_players_api_players_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get All Players",
+        "tags": [
+          "Players"
+        ]
+      },
+      "post": {
+        "operationId": "create_player_api_players_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SinglePlayerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Create Player",
+        "tags": [
+          "Players"
+        ]
+      }
+    },
+    "/api/players/{player_id}": {
+      "delete": {
+        "description": "Delete the player, who leaves their teams and the lineups of every tournament.",
+        "operationId": "delete_player_api_players__player_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "title": "Player Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Delete Player",
+        "tags": [
+          "Players"
+        ]
+      },
+      "put": {
+        "operationId": "rename_player_api_players__player_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "title": "Player Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SinglePlayerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Rename Player",
+        "tags": [
+          "Players"
+        ]
+      }
+    },
+    "/api/players_multi": {
+      "post": {
+        "operationId": "create_players_api_players_multi_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerMultiBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Create Players",
+        "tags": [
+          "Players"
+        ]
+      }
+    },
+    "/api/teams": {
+      "get": {
+        "description": "Every team by name, with its roster and the tournaments it takes part in.",
+        "operationId": "get_teams_api_teams_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Teams",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "post": {
+        "operationId": "create_team_api_teams_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleTeamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Create Team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}": {
+      "delete": {
+        "description": "Delete a team that takes part in no tournament.",
+        "operationId": "delete_team_api_teams__team_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Delete Team",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "put": {
+        "description": "Rename the team and replace its roster. The lineups of its open tournaments follow the roster,\nand their schedules make room for what the new players play elsewhere.",
+        "operationId": "update_team_api_teams__team_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleTeamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Update Team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/api/teams/{team_id}/logo": {
+      "get": {
+        "description": "Anyone can see a team's logo: the Details pages of its tournaments show it.",
+        "operationId": "get_team_logo_api_teams__team_id__logo_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Team Logo",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "post": {
+        "operationId": "update_team_logo_api_teams__team_id__logo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_update_team_logo_api_teams__team_id__logo_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleTeamResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Update Team Logo",
+        "tags": [
+          "Teams"
         ]
       }
     },
@@ -3757,7 +3902,7 @@
     },
     "/api/tournaments": {
       "get": {
-        "description": "The tournaments that everyone may see, and for an organizer also those of their events, with\nwhether the one who asks can manage each.\n\nWith `endpoint_name`, only the tournament whose Details link that is.",
+        "description": "The tournaments that everyone may see, and for an organizer also those they run, with whether\nthe one who asks can manage each.\n\nWith `endpoint_name`, only the tournament whose Details link that is.",
         "operationId": "get_tournaments_api_tournaments_get",
         "parameters": [
           {
@@ -3877,6 +4022,7 @@
     },
     "/api/tournaments/{tournament_id}": {
       "delete": {
+        "description": "Delete the tournament with everything in it. Its teams and players stay.",
         "operationId": "delete_tournament_api_tournaments__tournament_id__delete",
         "parameters": [
           {
@@ -3989,7 +4135,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TournamentUpdateBody"
+                "$ref": "#/components/schemas/TournamentBody"
               }
             }
           },
@@ -4134,7 +4280,7 @@
     },
     "/api/tournaments/{tournament_id}/change-status": {
       "post": {
-        "description": "Make a tournament archived or non-archived.",
+        "description": "Archive the tournament, which keeps its lineups as they are, or reopen it. A reopened\ntournament's lineups follow its teams' rosters again.",
         "operationId": "change_status_api_tournaments__tournament_id__change_status_post",
         "parameters": [
           {
@@ -4647,9 +4793,241 @@
         ]
       }
     },
+    "/api/tournaments/{tournament_id}/organizers": {
+      "get": {
+        "description": "Who runs the tournament: its owner, and the accounts the owner added to help.",
+        "operationId": "get_tournament_organizers_api_tournaments__tournament_id__organizers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Get Tournament Organizers",
+        "tags": [
+          "Organizers"
+        ]
+      },
+      "post": {
+        "description": "Let another account help run the tournament, so that organizers don't share a login.",
+        "operationId": "add_tournament_organizer_api_tournaments__tournament_id__organizers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizerCreateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Add Tournament Organizer",
+        "tags": [
+          "Organizers"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/organizers/{user_id}": {
+      "delete": {
+        "description": "Remove an organizer from the tournament. The owner removes others; anyone can leave.",
+        "operationId": "remove_tournament_organizer_api_tournaments__tournament_id__organizers__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Remove Tournament Organizer",
+        "tags": [
+          "Organizers"
+        ]
+      }
+    },
+    "/api/tournaments/{tournament_id}/owner": {
+      "put": {
+        "description": "Hand the tournament over to another of its organizers, for an owner who leaves the organizing\nteam. The previous owner stays on as an organizer.",
+        "operationId": "transfer_tournament_ownership_api_tournaments__tournament_id__owner_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tournament_id",
+            "required": true,
+            "schema": {
+              "title": "Tournament Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Transfer Tournament Ownership",
+        "tags": [
+          "Organizers"
+        ]
+      }
+    },
     "/api/tournaments/{tournament_id}/players": {
       "get": {
-        "operationId": "get_players_api_tournaments__tournament_id__players_get",
+        "description": "The tournament's lineup: its players, the teams they play for, and their results.",
+        "operationId": "get_tournament_players_api_tournaments__tournament_id__players_get",
         "parameters": [
           {
             "in": "path",
@@ -4709,27 +5087,16 @@
               "default": "name",
               "enum": [
                 "name",
+                "created",
                 "elo_score",
                 "swiss_score",
                 "wins",
                 "draws",
-                "losses",
-                "active",
-                "created"
+                "losses"
               ],
               "title": "Sort By",
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "not_in_team",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Not In Team",
-              "type": "boolean"
-            }
           }
         ],
         "responses": {
@@ -4737,7 +5104,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlayersResponse"
+                  "$ref": "#/components/schemas/TournamentPlayersResponse"
                 }
               }
             },
@@ -4762,253 +5129,9 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Get Players",
+        "summary": "Get Tournament Players",
         "tags": [
-          "Players"
-        ]
-      },
-      "post": {
-        "operationId": "create_single_player_api_tournaments__tournament_id__players_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlayerBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Create Single Player",
-        "tags": [
-          "Players"
-        ]
-      }
-    },
-    "/api/tournaments/{tournament_id}/players/{player_id}": {
-      "delete": {
-        "operationId": "delete_player_api_tournaments__tournament_id__players__player_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "player_id",
-            "required": true,
-            "schema": {
-              "title": "Player Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Delete Player",
-        "tags": [
-          "Players"
-        ]
-      },
-      "put": {
-        "operationId": "update_player_by_id_api_tournaments__tournament_id__players__player_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "player_id",
-            "required": true,
-            "schema": {
-              "title": "Player Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlayerBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SinglePlayerResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Update Player By Id",
-        "tags": [
-          "Players"
-        ]
-      }
-    },
-    "/api/tournaments/{tournament_id}/players_multi": {
-      "post": {
-        "operationId": "create_multiple_players_api_tournaments__tournament_id__players_multi_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlayerMultiBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Create Multiple Players",
-        "tags": [
-          "Players"
+          "Participation"
         ]
       }
     },
@@ -5496,6 +5619,7 @@
     },
     "/api/tournaments/{tournament_id}/schedule_matches": {
       "post": {
+        "description": "Plan the schedule again. Every match starts with its round, unless its teams or their players\nplay a match of another tournament then; it waits until they are free.",
         "operationId": "schedule_matches_api_tournaments__tournament_id__schedule_matches_post",
         "parameters": [
           {
@@ -6167,7 +6291,8 @@
     },
     "/api/tournaments/{tournament_id}/teams": {
       "get": {
-        "operationId": "get_teams_api_tournaments__tournament_id__teams_get",
+        "description": "The teams that take part, with their lineups and their results in the tournament.",
+        "operationId": "get_tournament_teams_api_tournaments__tournament_id__teams_get",
         "parameters": [
           {
             "in": "path",
@@ -6227,13 +6352,13 @@
               "default": "name",
               "enum": [
                 "name",
+                "active",
+                "created",
                 "elo_score",
                 "swiss_score",
                 "wins",
                 "draws",
-                "losses",
-                "active",
-                "created"
+                "losses"
               ],
               "title": "Sort By",
               "type": "string"
@@ -6245,7 +6370,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamsWithPlayersResponse"
+                  "$ref": "#/components/schemas/TournamentTeamsResponse"
                 }
               }
             },
@@ -6270,13 +6395,14 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Get Teams",
+        "summary": "Get Tournament Teams",
         "tags": [
-          "Teams"
+          "Participation"
         ]
       },
       "post": {
-        "operationId": "create_team_api_tournaments__tournament_id__teams_post",
+        "description": "Let these teams take part. Their active members join the tournament's lineup, unless one of\nthem already plays for another of its teams.",
+        "operationId": "add_tournament_teams_api_tournaments__tournament_id__teams_post",
         "parameters": [
           {
             "in": "path",
@@ -6292,7 +6418,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamBody"
+                "$ref": "#/components/schemas/TournamentTeamsBody"
               }
             }
           },
@@ -6303,7 +6429,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleTeamResponse"
+                  "$ref": "#/components/schemas/SuccessResponse"
                 }
               }
             },
@@ -6328,15 +6454,16 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Create Team",
+        "summary": "Add Tournament Teams",
         "tags": [
-          "Teams"
+          "Participation"
         ]
       }
     },
     "/api/tournaments/{tournament_id}/teams/{team_id}": {
       "delete": {
-        "operationId": "delete_team_api_tournaments__tournament_id__teams__team_id__delete",
+        "description": "The team leaves the tournament. One that has a slot in a stage can't.",
+        "operationId": "remove_tournament_team_api_tournaments__tournament_id__teams__team_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -6387,13 +6514,13 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Delete Team",
+        "summary": "Remove Tournament Team",
         "tags": [
-          "Teams"
+          "Participation"
         ]
       },
       "put": {
-        "operationId": "update_team_by_id_api_tournaments__tournament_id__teams__team_id__put",
+        "operationId": "update_tournament_team_api_tournaments__tournament_id__teams__team_id__put",
         "parameters": [
           {
             "in": "path",
@@ -6418,7 +6545,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamBody"
+                "$ref": "#/components/schemas/TournamentTeamBody"
               }
             }
           },
@@ -6429,7 +6556,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SingleTeamResponse"
+                  "$ref": "#/components/schemas/TournamentTeamResponse"
                 }
               }
             },
@@ -6454,138 +6581,16 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Update Team By Id",
+        "summary": "Update Tournament Team",
         "tags": [
-          "Teams"
-        ]
-      }
-    },
-    "/api/tournaments/{tournament_id}/teams/{team_id}/logo": {
-      "get": {
-        "operationId": "get_team_logo_api_tournaments__tournament_id__teams__team_id__logo_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "team_id",
-            "required": true,
-            "schema": {
-              "title": "Team Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Get Team Logo",
-        "tags": [
-          "Teams"
-        ]
-      },
-      "post": {
-        "operationId": "update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tournament_id",
-            "required": true,
-            "schema": {
-              "title": "Tournament Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "team_id",
-            "required": true,
-            "schema": {
-              "title": "Team Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_update_team_logo_api_tournaments__tournament_id__teams__team_id__logo_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SingleTeamResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "summary": "Update Team Logo",
-        "tags": [
-          "Teams"
+          "Participation"
         ]
       }
     },
     "/api/tournaments/{tournament_id}/teams_multi": {
       "post": {
-        "operationId": "create_multiple_teams_api_tournaments__tournament_id__teams_multi_post",
+        "description": "Create teams from a list and let them take part. A player whose name is already taken,\nregardless of case, joins as that player.",
+        "operationId": "create_tournament_teams_api_tournaments__tournament_id__teams_multi_post",
         "parameters": [
           {
             "in": "path",
@@ -6637,9 +6642,9 @@
             "APIKeyCookie": []
           }
         ],
-        "summary": "Create Multiple Teams",
+        "summary": "Create Tournament Teams",
         "tags": [
-          "Teams"
+          "Participation"
         ]
       }
     },

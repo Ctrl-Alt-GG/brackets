@@ -1,11 +1,19 @@
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import * as OpenApi from '../../openapi';
 import { toBracketViewerData } from '../bracket-adapter';
+import { BigScreenLink } from '../components/big-screen';
 import { BracketViewer } from '../components/bracket-viewer';
 import { teamPath, useTournamentContext } from '../tournament-context';
-import { hasBracketView, hasTeam, isBracket, stageItemName, stageTypeName } from '../matches';
+import {
+  hasBracketView,
+  hasTeam,
+  isBracket,
+  stageItemName,
+  stageName,
+  stageTypeName,
+} from '../matches';
 import { Surface, SurfaceHeading } from '../ui';
 
 export function BracketSection({
@@ -31,13 +39,7 @@ export function BracketSection({
   return (
     <Surface className="space-y-6">
       <SurfaceHeading
-        actions={
-          bigScreenPath ? (
-            <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
-              {t('common.bigScreen')}
-            </Link>
-          ) : null
-        }
+        actions={bigScreenPath ? <BigScreenLink to={bigScreenPath} /> : null}
         title={t('bracket.title', { count: brackets.length })}
       />
       {brackets.map(({ stage, stageItem }) => {
@@ -61,7 +63,7 @@ export function BracketSection({
             <div>
               <h3 className="text-lg font-semibold">{stageItemName(stageItem, t)}</h3>
               <p className="text-sm text-base-content/70">
-                {stage.name} · {stageTypeName(stageItem, t)} ·{' '}
+                {stageName(stage, t)} · {stageTypeName(stageItem, t)} ·{' '}
                 {t('common.teamCount', { count: stageItem.team_count })}
               </p>
             </div>

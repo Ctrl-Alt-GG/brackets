@@ -15,27 +15,25 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputUpdateBodyTentative,
 )
 from bracket.models.enums import StageType
-from bracket.utils.id_types import PlayerId, TournamentId
+from bracket.sql.players import get_existing_player_ids
+from bracket.sql.teams import get_existing_team_ids
+from bracket.utils.i18n import gettext, gettext_noop
+from bracket.utils.id_types import PlayerId, TeamId, TournamentId
 
 
-def _missing_reference(kind: str, value: object) -> NoReturn:
-    raise HTTPException(400, f"Could not find {kind}(s) with ID {value}")
+def _missing_reference(message: str, ids: object) -> NoReturn:
+    """`message` names the missing record and `{ids}`, marked with `gettext_noop`."""
+    raise HTTPException(400, gettext(message, ids=ids))
 
 
-async def validate_player_ids(
-    session: AsyncSession, tournament_id: TournamentId, player_ids: set[PlayerId]
-) -> None:
-    if not player_ids:
-        return
-    found = set(
-        await session.scalars(
-            select(orm.Player.id).where(
-                orm.Player.tournament_id == tournament_id, orm.Player.id.in_(player_ids)
-            )
-        )
-    )
-    if found != player_ids:
-        _missing_reference("Player", player_ids)
+async def validate_player_ids(session: AsyncSession, player_ids: set[PlayerId]) -> None:
+    if missing := player_ids - await get_existing_player_ids(session, player_ids):
+        _missing_reference(gettext_noop("There is no player with the ID {ids}"), sorted(missing))
+
+
+async def validate_team_ids(session: AsyncSession, team_ids: set[TeamId]) -> None:
+    if missing := team_ids - await get_existing_team_ids(session, team_ids):
+        _missing_reference(gettext_noop("There is no team with the ID {ids}"), sorted(missing))
 
 
 async def validate_stage_item_create(
@@ -47,7 +45,9 @@ async def validate_stage_item_create(
         )
     )
     if stage_id is None:
-        _missing_reference("Stage", body.stage_id)
+        _missing_reference(
+            gettext_noop("This tournament has no stage with the ID {ids}"), body.stage_id
+        )
     if body.ranking_id is not None:
         ranking_id = await session.scalar(
             select(orm.Ranking.id).where(
@@ -55,7 +55,9 @@ async def validate_stage_item_create(
             )
         )
         if ranking_id is None:
-            _missing_reference("Ranking", body.ranking_id)
+            _missing_reference(
+                gettext_noop("This tournament has no ranking with the ID {ids}"), body.ranking_id
+            )
 
 
 async def validate_round_create(
@@ -67,7 +69,10 @@ async def validate_round_create(
         )
     )
     if item_id is None:
-        _missing_reference("StageItem", body.stage_item_id)
+        _missing_reference(
+            gettext_noop("This tournament has no stage item with the ID {ids}"),
+            body.stage_item_id,
+        )
 
 
 async def validate_match_create(
@@ -79,7 +84,9 @@ async def validate_match_create(
         .execution_options(populate_existing=True)
     )
     if round_ is None:
-        _missing_reference("Round", body.round_id)
+        _missing_reference(
+            gettext_noop("This tournament has no round with the ID {ids}"), body.round_id
+        )
     input_ids = [body.stage_item_input1_id, body.stage_item_input2_id]
     requested_inputs = {id_ for id_ in input_ids if id_ is not None}
     if requested_inputs:
@@ -93,7 +100,9 @@ async def validate_match_create(
         )
         for input_id in input_ids:
             if input_id is not None and input_id not in found_inputs:
-                _missing_reference("StageItemInput", input_id)
+                _missing_reference(
+                    gettext_noop("This tournament has no slot with the ID {ids}"), input_id
+                )
     winner_ids = [
         body.stage_item_input1_winner_from_match_id,
         body.stage_item_input2_winner_from_match_id,
@@ -109,7 +118,9 @@ async def validate_match_create(
         )
         for match_id in winner_ids:
             if match_id is not None and match_id not in found_winners:
-                _missing_reference("Match", match_id)
+                _missing_reference(
+                    gettext_noop("This tournament has no match with the ID {ids}"), match_id
+                )
     return Round.model_validate(round_)
 
 
@@ -121,7 +132,7 @@ async def validate_stage_item_input_update(
     target: StageItem,
 ) -> None:
     if current is None or current.stage_item_id != target.id:
-        raise HTTPException(404, "Could not find the stage item input")
+        raise HTTPException(404, gettext("Could not find the stage item input"))
     if isinstance(body, StageItemInputUpdateBodyTentative):
         source = await session.scalar(
             select(orm.StageItem).where(
@@ -131,17 +142,27 @@ async def validate_stage_item_input_update(
         )
         if source is None:
             raise HTTPException(
-                404, f"Could not find stage item with id {body.winner_from_stage_item_id}"
+                404,
+                gettext(
+                    "Could not find stage item with id {id}", id=body.winner_from_stage_item_id
+                ),
             )
         if source.stage_id >= target.stage_id or source.type is StageType.SINGLE_ELIMINATION:
-            raise HTTPException(400, "Choose a group or Swiss stage item from an earlier stage")
+            raise HTTPException(
+                400, gettext("Choose a group or Swiss stage item from an earlier stage")
+            )
         if body.winner_position > source.team_count:
-            raise HTTPException(400, "The source stage item doesn't have that many team slots")
+            raise HTTPException(
+                400, gettext("The source stage item doesn't have that many team slots")
+            )
     elif isinstance(body, StageItemInputUpdateBodyFinal):
         team_id = await session.scalar(
-            select(orm.Team.id).where(
-                orm.Team.id == body.team_id, orm.Team.tournament_id == tournament_id
+            select(orm.TournamentTeam.team_id).where(
+                orm.TournamentTeam.team_id == body.team_id,
+                orm.TournamentTeam.tournament_id == tournament_id,
             )
         )
         if team_id is None:
-            raise HTTPException(404, f"Could not find team with id {body.team_id}")
+            raise HTTPException(
+                404, gettext("No team with id {id} takes part in this tournament", id=body.team_id)
+            )

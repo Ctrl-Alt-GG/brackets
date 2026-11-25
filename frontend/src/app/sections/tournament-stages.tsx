@@ -1,6 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { useWatch } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
 import { useSavedForm } from '../saved-form';
 import * as OpenApi from '../../openapi';
@@ -22,12 +24,23 @@ import { useCreateForm } from '../create-form';
 import { confirm } from '../confirm';
 import { StageItemRounds, stageItemStatus } from './stage-item-rounds';
 import { StageItemSlots } from './stage-item-slots';
-import { StageItemVisualization } from './tournament-overview';
 import type { TournamentBundle } from '../types';
-import { formatPoints } from '../format';
-import { isScored } from '../matches';
+import { formatPoints, pointsPhrase } from '../format';
+import {
+  inputLabel,
+  isBracket,
+  isScored,
+  stageItemName,
+  stageItemStandings,
+  stageName,
+  stageTypeName,
+} from '../matches';
+import { toBracketViewerData } from '../bracket-adapter';
+import { BracketViewer } from '../components/bracket-viewer';
+import { TeamLink } from '../components/team-link';
+import { organizerT, useOrganizerTranslation } from '../organizer-locales';
 import { cx } from '../utils';
-import { Disclosure, Field, Surface, SurfaceHeading } from '../ui';
+import { Disclosure, Field, SaveButton, Surface, SurfaceHeading } from '../ui';
 
 function StageForm({
   stage,
@@ -36,55 +49,65 @@ function StageForm({
   stage: OpenApi.StageWithStageItems;
   tournament: OpenApi.Tournament;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
+  // A stage the site named is shown with that name in the page's language. It keeps its stored
+  // name unless the organizer types another one.
+  const shownName = stageName(stage, shared);
   const form = useSavedForm({
     resolver: zodResolver(zStageUpdateBody),
-    values: { custom_duration_minutes: stage.custom_duration_minutes, name: stage.name },
+    values: { custom_duration_minutes: stage.custom_duration_minutes, name: shownName },
   });
   const update = useMutation({
     ...form.saveCallbacks,
     ...updateStageApiTournamentsTournamentIdStagesStageIdPutMutation(),
-    meta: { successMessage: 'Stage saved.' },
+    meta: { successMessage: t('stages.saved') },
   });
   const remove = useMutation({
     ...deleteStageApiTournamentsTournamentIdStagesStageIdDeleteMutation(),
-    meta: { successMessage: 'Stage deleted.' },
+    meta: { successMessage: t('stages.deleted') },
   });
   const path = { stage_id: stage.id, tournament_id: tournament.id };
 
   return (
     <form
       className="grid items-end gap-x-4 md:grid-cols-[1fr_1fr_auto_auto]"
-      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
+      onSubmit={form.handleSubmit((body) =>
+        update.mutate({
+          body: { ...body, name: body.name === shownName ? stage.name : body.name },
+          path,
+        }),
+      )}
     >
-      <Field error={form.formState.errors.name?.message} label="Stage name">
+      <Field error={form.formState.errors.name?.message} label={t('stages.stageName')}>
         <input className="input w-full" {...form.register('name')} />
       </Field>
       <Field
         error={form.formState.errors.custom_duration_minutes?.message}
-        label="Match duration (minutes)"
+        label={t('common.matchDuration')}
       >
         <input
           className="input w-full"
           min={1}
-          placeholder={`Tournament default (${tournament.duration_minutes})`}
+          placeholder={t('stages.tournamentDefault', { minutes: tournament.duration_minutes })}
           type="number"
           {...form.register('custom_duration_minutes', {
             setValueAs: (value) => (value === '' || value == null ? null : Number(value)),
           })}
         />
       </Field>
-      <button className="btn btn-primary mb-1" disabled={update.isPending} type="submit">
-        Save stage
-      </button>
+      <SaveButton className="mb-1" dirty={form.formState.isDirty} disabled={update.isPending}>
+        {t('stages.save')}
+      </SaveButton>
       <button
         className="btn btn-error btn-soft mb-1"
         disabled={remove.isPending}
         onClick={async () => {
           if (
             await confirm({
-              confirmLabel: 'Delete stage',
+              confirmLabel: t('stages.delete'),
               destructive: true,
-              message: `Delete stage ${stage.name}?`,
+              message: t('stages.deleteQuestion', { name: shownName }),
             })
           ) {
             remove.mutate({ path });
@@ -92,7 +115,7 @@ function StageForm({
         }}
         type="button"
       >
-        Delete stage
+        {t('stages.delete')}
       </button>
     </form>
   );
@@ -105,7 +128,8 @@ const newStageItemSchema = zStageItemCreateBody.refine(
   (body) =>
     body.type !== 'SINGLE_ELIMINATION' || SINGLE_ELIMINATION_TEAM_COUNTS.includes(body.team_count),
   {
-    message: `A single elimination bracket has ${SINGLE_ELIMINATION_TEAM_COUNTS.join(', ')} teams`,
+    error: () =>
+      organizerT('validation.bracketSizes', { counts: SINGLE_ELIMINATION_TEAM_COUNTS.join(', ') }),
     path: ['team_count'],
   },
 );
@@ -126,6 +150,8 @@ function NewStageItemForm({
   stageId: number;
   tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const form = useCreateForm({
     defaultValues: {
       name: '',
@@ -138,13 +164,13 @@ function NewStageItemForm({
   });
   const create = useMutation({
     ...createStageItemApiTournamentsTournamentIdStageItemsPostMutation(),
-    meta: { successMessage: 'Stage item created.' },
+    meta: { successMessage: t('stages.itemCreated') },
   });
   const type = useWatch({ control: form.control, name: 'type' });
 
   return (
     <form
-      className="grid items-end gap-x-4 rounded-box border border-base-300 bg-base-100/40 p-4 md:grid-cols-4"
+      className="collapse-content grid items-end gap-x-4 md:grid-cols-4"
       onSubmit={form.submitWith((body) =>
         create.mutateAsync({
           body: { ...body, name: body.name?.trim() || null },
@@ -153,10 +179,14 @@ function NewStageItemForm({
       )}
     >
       <fieldset className="contents" disabled={form.locked}>
-        <Field label="Name">
-          <input className="input w-full" placeholder="Upper bracket" {...form.register('name')} />
+        <Field label={t('common.name')}>
+          <input
+            className="input w-full"
+            placeholder={t('stages.namePlaceholder')}
+            {...form.register('name')}
+          />
         </Field>
-        <Field label="Type">
+        <Field label={t('stages.type')}>
           <select
             className="select w-full"
             {...form.register('type', {
@@ -170,12 +200,14 @@ function NewStageItemForm({
               },
             })}
           >
-            <option value="ROUND_ROBIN">Round robin</option>
-            <option value="SINGLE_ELIMINATION">Single elimination</option>
-            <option value="SWISS">Swiss</option>
+            {(['ROUND_ROBIN', 'SINGLE_ELIMINATION', 'SWISS'] as const).map((stageType) => (
+              <option key={stageType} value={stageType}>
+                {stageTypeName({ type: stageType }, shared)}
+              </option>
+            ))}
           </select>
         </Field>
-        <Field error={form.formState.errors.team_count?.message} label="Team count">
+        <Field error={form.formState.errors.team_count?.message} label={t('stages.teamCount')}>
           {type === 'SINGLE_ELIMINATION' ? (
             <select
               className="select w-full"
@@ -199,15 +231,19 @@ function NewStageItemForm({
           )}
         </Field>
         {rankings.length > 1 ? (
-          <Field label="Ranking">
+          <Field label={t('stages.ranking')}>
             <select
               className="select w-full"
               {...form.register('ranking_id', { valueAsNumber: true })}
             >
               {rankings.map((ranking) => (
                 <option key={ranking.id} value={ranking.id}>
-                  #{ranking.position}: win {formatPoints(ranking.win_points)}, draw{' '}
-                  {formatPoints(ranking.draw_points)}, loss {formatPoints(ranking.loss_points)}
+                  {t('stages.rankingOption', {
+                    draw: formatPoints(ranking.draw_points),
+                    loss: formatPoints(ranking.loss_points),
+                    position: ranking.position + 1,
+                    win: formatPoints(ranking.win_points),
+                  })}
                 </option>
               ))}
             </select>
@@ -215,7 +251,7 @@ function NewStageItemForm({
         ) : null}
         <div className="md:col-span-4">
           <button className="btn btn-primary mt-3" type="submit">
-            Create stage item
+            {t('stages.createItem')}
           </button>
         </div>
       </fieldset>
@@ -233,48 +269,60 @@ function StageItemNameForm({
   stageItem: OpenApi.StageItemWithRounds;
   tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
+  // A stage item named after its format, as those created without a name are, is shown with
+  // the format's name in the page's language. It keeps its stored name unless another is typed.
+  const shownName = stageItemName(stageItem, shared);
   const form = useSavedForm({
     resolver: zodResolver(zStageItemUpdateBody),
-    values: { name: stageItem.name },
+    values: { name: shownName },
   });
   const update = useMutation({
     ...form.saveCallbacks,
     ...updateStageItemApiTournamentsTournamentIdStageItemsStageItemIdPutMutation(),
-    meta: { successMessage: 'Name saved.' },
+    meta: { successMessage: t('stages.nameSaved') },
   });
   const remove = useMutation({
     ...deleteStageItemApiTournamentsTournamentIdStageItemsStageItemIdDeleteMutation(),
-    meta: { successMessage: 'Stage item deleted.' },
+    meta: { successMessage: t('stages.itemDeleted') },
   });
   const path = { stage_item_id: stageItem.id, tournament_id: tournamentId };
 
   return (
     <form
       className="flex flex-col gap-2 md:flex-row"
-      onSubmit={form.handleSubmit((body) => update.mutate({ body, path }))}
+      onSubmit={form.handleSubmit((body) =>
+        update.mutate({
+          body: { name: body.name === shownName ? stageItem.name : body.name },
+          path,
+        }),
+      )}
     >
       <input
-        aria-label="Stage item name"
+        aria-label={t('stages.itemName')}
         className="input w-full"
-        placeholder="Stage item name"
+        placeholder={t('stages.itemName')}
         {...form.register('name')}
       />
-      <button className="btn btn-primary" disabled={update.isPending} type="submit">
-        Save name
-      </button>
+      <SaveButton dirty={form.formState.isDirty} disabled={update.isPending}>
+        {t('stages.saveName')}
+      </SaveButton>
       <button
         className="btn btn-error btn-soft"
         disabled={remove.isPending}
         onClick={async () => {
-          const fed = fedStageItems.map((item) => item.name || item.type_name).join(', ');
-          const consequence = fed
-            ? ` The slots of ${fed} that take a team from it become open.`
-            : '';
+          const fed = fedStageItems.map((item) => stageItemName(item, shared)).join(', ');
+          const question = t('stages.deleteItemQuestion', {
+            name: shownName,
+          });
           if (
             await confirm({
-              confirmLabel: 'Delete stage item',
+              confirmLabel: t('stages.deleteItemConfirm'),
               destructive: true,
-              message: `Delete stage item ${stageItem.name || stageItem.type_name} with its matches and results?${consequence}`,
+              message: fed
+                ? `${question} ${t('stages.deleteItemFeeds', { items: fed })}`
+                : question,
             })
           ) {
             remove.mutate({ path });
@@ -282,19 +330,83 @@ function StageItemNameForm({
         }}
         type="button"
       >
-        Delete item
+        {t('stages.deleteItem')}
       </button>
     </form>
   );
 }
 
-export function StagesSection({
-  bundle,
-  focusStageItem,
+/** What a stage item has come to so far, as the Details pages show it: its table or its bracket. */
+function StageItemOutcome({
+  stageItem,
+  stageItemsById,
+  standings,
+  teamMap,
+  tournamentId,
 }: {
-  bundle: TournamentBundle;
-  focusStageItem: OpenApi.StageItemWithRounds | null;
+  stageItem: OpenApi.StageItemWithRounds;
+  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+  standings: TournamentBundle['standings'];
+  teamMap: Map<number, OpenApi.TournamentTeamWithPlayers>;
+  tournamentId: number;
 }) {
+  const { t } = useTranslation();
+
+  if (isBracket(stageItem)) {
+    const bracketData = toBracketViewerData(stageItem, stageItemsById, tournamentId, t);
+    return (
+      <section className="space-y-4 rounded-box border border-base-300 bg-base-200/60 p-4">
+        <h5 className="font-semibold">{t('tournament.bracket')}</h5>
+        {bracketData ? (
+          <BracketViewer data={bracketData} />
+        ) : (
+          <p className="text-sm text-base-content/70">{t('overview.bracketPending')}</p>
+        )}
+      </section>
+    );
+  }
+
+  const entries = stageItemStandings(stageItem, standings);
+  return (
+    <section className="space-y-4 rounded-box border border-base-300 bg-base-200/60 p-4">
+      <h5 className="font-semibold">{t('overview.table')}</h5>
+      {entries.length === 0 ? (
+        <p className="text-sm text-base-content/70">{t('overview.noTeams')}</p>
+      ) : (
+        <ol className="space-y-2">
+          {entries.map(({ input, standing }, index) => (
+            <li
+              className="flex items-center justify-between gap-3 rounded-field border border-base-300 bg-base-100/60 px-3 py-2 text-sm"
+              key={input.id}
+            >
+              <span className="flex items-center gap-3">
+                <span className="w-5 text-base-content/70">{index + 1}</span>
+                <TeamLink className="font-medium" teamId={input.team_id}>
+                  {teamMap.get(input.team_id)?.name ?? inputLabel(input, stageItemsById, t)}
+                </TeamLink>
+              </span>
+              <span className="text-base-content/70">
+                {t('common.record', {
+                  draws: standing.draws,
+                  losses: standing.losses,
+                  wins: standing.wins,
+                })}{' '}
+                · {pointsPhrase(stageItem, standing.points, t)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+export function StagesSection({ bundle }: { bundle: TournamentBundle }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
+  // A link to a stage item, such as a card of the overview, opens the stage it is in.
+  const { hash } = useLocation();
+  const focusId = Number(/^#stage-item-(\d+)$/.exec(hash)?.[1]);
   const teamLookup = new Map(bundle.teams.map((team) => [team.id, team] as const));
   const rankings = bundle.rankings.toSorted((left, right) => left.position - right.position);
   const stageItemsById = new Map(
@@ -303,15 +415,15 @@ export function StagesSection({
   const path = { tournament_id: bundle.tournament.id };
   const createStage = useMutation({
     ...createStageApiTournamentsTournamentIdStagesPostMutation(),
-    meta: { successMessage: 'Stage created.' },
+    meta: { successMessage: t('stages.created') },
   });
   const activateNext = useMutation({
     ...activateNextStageApiTournamentsTournamentIdStagesActivatePostMutation(),
-    meta: { successMessage: 'Moved active stage forward.' },
+    meta: { successMessage: t('stages.movedForward') },
   });
   const activatePrevious = useMutation({
     ...activateNextStageApiTournamentsTournamentIdStagesActivatePostMutation(),
-    meta: { successMessage: 'Moved active stage backward.' },
+    meta: { successMessage: t('stages.movedBack') },
   });
 
   // Stages come in the order they were added, which is the order they are played in.
@@ -334,25 +446,22 @@ export function StagesSection({
     const reasons = [
       // Teams move on by the standings as they are, which an unplayed match would still change.
       ...(activeStage != null && withoutResult > 0
-        ? [
-            `${withoutResult} ${withoutResult === 1 ? 'match' : 'matches'} of ${activeStage.name} ${withoutResult === 1 ? 'has' : 'have'} no result yet. Teams move on by the standings as they are now.`,
-          ]
+        ? [t('stages.unplayed', { count: withoutResult, stage: stageName(activeStage, shared) })]
         : []),
-      ...seedingDecides.map(
-        ({ team, tiedTeam }) =>
-          `${team.name} and ${tiedTeam.name} are level on every criterion: only seeding puts ${team.name} ahead.`,
+      ...seedingDecides.map(({ team, tiedTeam }) =>
+        t('stages.seedingDecides', { team: team.name, tied: tiedTeam.name }),
       ),
     ];
     if (
       reasons.length > 0 &&
       !(await confirm({
-        confirmLabel: 'Activate next stage',
+        confirmLabel: t('stages.activateNext'),
         message: (
           <>
             {reasons.map((reason) => (
               <p key={reason}>{reason}</p>
             ))}
-            <p>Activate the next stage anyway?</p>
+            <p>{t('stages.activateNextAnyway')}</p>
           </>
         ),
       }))
@@ -368,9 +477,12 @@ export function StagesSection({
       activeStage != null &&
       results > 0 &&
       !(await confirm({
-        confirmLabel: 'Go back',
+        confirmLabel: t('stages.goBack'),
         destructive: true,
-        message: `Going back discards the ${results} ${results === 1 ? 'result' : 'results'} of ${activeStage.name}. This cannot be undone. Go back to the previous stage?`,
+        message: t('stages.goBackQuestion', {
+          count: results,
+          stage: stageName(activeStage, shared),
+        }),
       }))
     ) {
       return;
@@ -393,7 +505,7 @@ export function StagesSection({
                 onClick={() => createStage.mutate({ path })}
                 type="button"
               >
-                Add stage
+                {t('stages.add')}
               </button>
               <button
                 className="btn btn-soft btn-sm"
@@ -401,7 +513,7 @@ export function StagesSection({
                 onClick={() => void goForward()}
                 type="button"
               >
-                Activate next stage
+                {t('stages.activateNext')}
               </button>
               <button
                 className="btn btn-ghost btn-sm"
@@ -409,22 +521,19 @@ export function StagesSection({
                 onClick={() => void goBack()}
                 type="button"
               >
-                Activate previous stage
+                {t('stages.activatePrevious')}
               </button>
             </div>
           }
-          title="Bracket editor"
+          title={shared('workspace.stages')}
         />
-        <p className="text-sm text-base-content/70">
-          A tournament is played stage by stage. Activating the next stage moves the teams on by the
-          standings of the current one.
-        </p>
+        <p className="text-sm text-base-content/70">{t('stages.editorHelp')}</p>
       </Surface>
       {bundle.stages.map((stage) => (
         <Disclosure
           className="collapse collapse-arrow border border-base-300 bg-base-200/60"
           key={stage.id}
-          open={stage.is_active || stage.stage_items.some((item) => item.id === focusStageItem?.id)}
+          open={stage.is_active || stage.stage_items.some((item) => item.id === focusId)}
           summary={
             <>
               <span className="flex flex-wrap items-center gap-2">
@@ -434,36 +543,36 @@ export function StagesSection({
                     stage.is_active ? 'badge-accent' : null,
                   )}
                 >
-                  {stage.is_active ? 'Active' : 'Inactive'}
+                  {stage.is_active ? t('stages.active') : t('stages.inactive')}
                 </span>
                 <span className="text-sm text-base-content/70">
-                  {stage.stage_items.length} stage items
+                  {t('stages.itemCount', { count: stage.stage_items.length })}
                 </span>
               </span>
-              <span className="mt-2 block font-display text-2xl font-semibold">{stage.name}</span>
+              <span className="mt-2 block font-display text-2xl font-semibold">
+                {stageName(stage, shared)}
+              </span>
             </>
           }
         >
           <div className="collapse-content space-y-5">
             <StageForm stage={stage} tournament={bundle.tournament} />
-            <NewStageItemForm
-              rankings={rankings}
-              stageId={stage.id}
-              tournamentId={bundle.tournament.id}
-            />
             {stage.stage_items.map((stageItem) => (
               <details
-                className="collapse collapse-arrow border border-base-300 bg-base-100/50"
+                className="collapse collapse-arrow scroll-mt-6 border border-base-300 bg-base-100/50"
+                id={`stage-item-${stageItem.id}`}
                 key={stageItem.id}
                 open
               >
                 <summary className="collapse-title">
-                  <span className="badge badge-soft badge-sm">{stageItem.type_name}</span>
+                  <span className="badge badge-soft badge-sm">
+                    {stageTypeName(stageItem, shared)}
+                  </span>
                   <span className="mt-2 block text-xl font-semibold">
-                    {stageItem.name || stageItem.type_name}
+                    {stageItemName(stageItem, shared)}
                   </span>
                   <span className="mt-1 block text-sm text-base-content/70">
-                    {stageItemStatus(stageItem)}
+                    {stageItemStatus(stageItem, t, shared)}
                   </span>
                 </summary>
                 <div className="collapse-content space-y-5">
@@ -485,15 +594,14 @@ export function StagesSection({
                     tournamentId={bundle.tournament.id}
                   />
                   <section className="space-y-4 rounded-box border border-base-300 bg-base-200/60 p-4">
-                    <h5 className="font-semibold">Rounds</h5>
+                    <h5 className="font-semibold">{t('stages.rounds')}</h5>
                     <StageItemRounds
                       stageItem={stageItem}
                       stageItemsById={stageItemsById}
                       tournamentId={bundle.tournament.id}
                     />
                   </section>
-                  <StageItemVisualization
-                    showMatches={false}
+                  <StageItemOutcome
                     stageItem={stageItem}
                     stageItemsById={stageItemsById}
                     standings={bundle.standings}
@@ -503,6 +611,18 @@ export function StagesSection({
                 </div>
               </details>
             ))}
+            {/* Open while the stage has nothing else: adding a stage item is the next step. */}
+            <Disclosure
+              className="collapse collapse-arrow border border-base-300 bg-base-100/40"
+              open={stage.stage_items.length === 0}
+              summary={<span className="font-semibold">{t('stages.newItem')}</span>}
+            >
+              <NewStageItemForm
+                rankings={rankings}
+                stageId={stage.id}
+                tournamentId={bundle.tournament.id}
+              />
+            </Disclosure>
           </div>
         </Disclosure>
       ))}

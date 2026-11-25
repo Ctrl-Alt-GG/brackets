@@ -4,10 +4,10 @@ from heliclockter import datetime_utc, timedelta
 
 from bracket.logic.ranking.players import determine_player_statistics
 from bracket.models.db.match import MatchWithDetailsDefinitive
+from bracket.models.db.participation import TournamentTeamWithPlayers
 from bracket.models.db.player import Player
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds, StageWithStageItems
-from bracket.models.db.team import FullTeamWithPlayers, Team
 from bracket.models.enums import StageType
 from bracket.models.results import ResultTotals
 from bracket.utils.id_types import (
@@ -21,13 +21,13 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
-from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_PLAYER1, DUMMY_TEAM1, tournament_team
 
 
-def make_team(team_id: int, player_ids: list[int]) -> FullTeamWithPlayers:
-    return FullTeamWithPlayers(
-        **DUMMY_TEAM1.model_dump(),
-        id=TeamId(team_id),
+def make_team(team_id: int, player_ids: list[int]) -> TournamentTeamWithPlayers:
+    """A team with the players of its lineup."""
+    return TournamentTeamWithPlayers(
+        **tournament_team(DUMMY_TEAM1, team_id).model_dump(),
         players=[
             Player(**DUMMY_PLAYER1.model_dump(), id=PlayerId(player_id)) for player_id in player_ids
         ],
@@ -41,7 +41,7 @@ def make_input(team_id: int) -> StageItemInputFinal:
         team_id=TeamId(team_id),
         slot=team_id,
         tournament_id=TournamentId(1),
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(team_id)),
+        team=tournament_team(DUMMY_TEAM1, team_id),
     )
 
 
@@ -66,8 +66,6 @@ def make_round(
                 round_id=RoundId(round_id),
                 stage_item_input1_score=score1,
                 stage_item_input2_score=score2,
-                stage_item_input1_conflict=False,
-                stage_item_input2_conflict=False,
             )
             for index, (team1, team2, score1, score2) in enumerate(matches)
         ],

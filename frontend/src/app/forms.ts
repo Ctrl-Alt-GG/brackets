@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
+import { organizerT } from './organizer-locales';
+
 /** A `datetime-local` value, sent as the UTC timestamp the API expects. */
 export const zLocalDateTime = z
   .string()
-  .min(1, 'Pick a date and time')
+  .min(1, { error: () => organizerT('validation.pickDateTime') })
   .transform((value) => new Date(value).toISOString());
 
 /**
@@ -14,8 +16,7 @@ export const zDetailsLink = z
   .string()
   .trim()
   .toLowerCase()
-  .max(64, 'The Details link can be at most 64 characters long')
-  .regex(
-    /^([A-Za-z0-9_-]*[A-Za-z][A-Za-z0-9_-]*)?$/,
-    'Use only letters, numbers, "-" and "_", with at least one letter',
-  );
+  .max(64, { error: () => organizerT('validation.detailsLinkTooLong') })
+  .regex(/^([A-Za-z0-9_-]*[A-Za-z][A-Za-z0-9_-]*)?$/, {
+    error: () => organizerT('validation.detailsLinkCharacters'),
+  });

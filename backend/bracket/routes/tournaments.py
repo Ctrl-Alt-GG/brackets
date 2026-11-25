@@ -8,12 +8,11 @@ from starlette.responses import FileResponse, Response
 from bracket.config import config
 from bracket.database import DbSession, session_scope
 from bracket.logic import tournaments as tournament_logic
-from bracket.logic.tournaments import delete_tournament_completely, get_tournament_details
+from bracket.logic.tournaments import get_tournament_details
 from bracket.models.db.tournament import (
     Tournament,
     TournamentBody,
     TournamentChangeStatusBody,
-    TournamentUpdateBody,
     TournamentWithAccess,
 )
 from bracket.models.db.tournament_details import TournamentAccess
@@ -24,6 +23,7 @@ from bracket.routes.access import (
     user_authenticated_for_tournament,
     user_authenticated_or_public_dashboard,
     user_authenticated_or_visitor,
+    user_owns_tournament,
 )
 from bracket.routes.models import (
     SuccessResponse,
@@ -34,27 +34,27 @@ from bracket.routes.models import (
     TournamentWorkspaceResponse,
 )
 from bracket.routes.resources import disallow_archived_tournament
+from bracket.sql.organizers import get_organized_tournament_ids
 from bracket.sql.tournaments import (
     TournamentFilter,
     sql_get_tournament,
     sql_get_tournament_by_endpoint_name,
     sql_get_visible_tournaments,
     sql_update_tournament_logo,
-    sql_update_tournament_status,
 )
-from bracket.sql.users import get_which_clubs_has_user_access_to
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import TournamentId
 from bracket.utils.uploads import (
     UploadFolder,
     get_logo_response,
     remove_existing_upload,
-    remove_existing_uploads,
     store_validated_image_upload,
 )
 
 router = APIRouter(prefix=config.api_prefix)
 
 TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
+TournamentOwner = Annotated[UserPublic, Depends(user_owns_tournament)]
 OrganizerOrVisitor = Annotated[UserPublic | None, Depends(user_authenticated_or_public_dashboard)]
 
 # How long the Details pages of a tournament are served from memory. Every visitor's page asks
@@ -127,30 +127,30 @@ async def get_tournaments(
     endpoint_name: str | None = None,
 ) -> TournamentsResponse:
     """
-    The tournaments that everyone may see, and for an organizer also those of their events, with
-    whether the one who asks can manage each.
+    The tournaments that everyone may see, and for an organizer also those they run, with whether
+    the one who asks can manage each.
 
     With `endpoint_name`, only the tournament whose Details link that is.
     """
-    managed_club_ids = (
-        await get_which_clubs_has_user_access_to(session, user.id) if user is not None else set()
+    managed_ids = (
+        await get_organized_tournament_ids(session, user.id) if user is not None else set()
     )
     if endpoint_name is not None:
         tournament = await sql_get_tournament_by_endpoint_name(session, endpoint_name)
         if tournament is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f'No tournament has the Details link "{endpoint_name}"',
+                detail=gettext('No tournament has the Details link "{link}"', link=endpoint_name),
             )
         tournaments_ = [tournament]
     else:
-        tournaments_ = await sql_get_visible_tournaments(session, managed_club_ids, filter_)
+        tournaments_ = await sql_get_visible_tournaments(
+            session, user.id if user is not None else None, filter_
+        )
 
     return TournamentsResponse(
         data=[
-            TournamentWithAccess(
-                **tournament.model_dump(), can_manage=tournament.club_id in managed_club_ids
-            )
+            TournamentWithAccess(**tournament.model_dump(), can_manage=tournament.id in managed_ids)
             for tournament in tournaments_
         ]
     )
@@ -160,7 +160,7 @@ async def get_tournaments(
 async def update_tournament_by_id(
     session: DbSession,
     tournament_id: TournamentId,
-    tournament_body: TournamentUpdateBody,
+    tournament_body: TournamentBody,
     _: TournamentOrganizer,
     __: Annotated[Tournament, Depends(disallow_archived_tournament)],
 ) -> SuccessResponse:
@@ -173,14 +173,12 @@ async def delete_tournament(
     session: DbSession,
     tournament_id: TournamentId,
     background_tasks: BackgroundTasks,
-    _: TournamentOrganizer,
+    _: TournamentOwner,
 ) -> SuccessResponse:
-    uploads = await delete_tournament_completely(session, tournament_id)
+    """Delete the tournament with everything in it. Its teams and players stay."""
+    logo_path = await tournament_logic.delete_tournament(session, tournament_id)
     # Background tasks run after the response, so the deletion is committed by then.
-    background_tasks.add_task(
-        remove_existing_upload, UploadFolder.TOURNAMENT_LOGOS, uploads.tournament_logo
-    )
-    background_tasks.add_task(remove_existing_uploads, UploadFolder.TEAM_LOGOS, uploads.team_logos)
+    background_tasks.add_task(remove_existing_upload, UploadFolder.TOURNAMENT_LOGOS, logo_path)
     return SuccessResponse()
 
 
@@ -192,16 +190,12 @@ async def change_status(
     _: TournamentOrganizer,
 ) -> SuccessResponse:
     """
-    Make a tournament archived or non-archived.
+    Archive the tournament, which keeps its lineups as they are, or reopen it. A reopened
+    tournament's lineups follow its teams' rosters again.
     """
-    tournament = await sql_get_tournament(session, tournament_id)
-    if tournament.status == body.status:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tournament already has the requested status",
-        )
-
-    await sql_update_tournament_status(session, tournament_id, body)
+    await tournament_logic.change_tournament_status(
+        session, await sql_get_tournament(session, tournament_id), body.status
+    )
     return SuccessResponse()
 
 

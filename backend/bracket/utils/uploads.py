@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import FileResponse
 
 from bracket.config import config
+from bracket.utils.i18n import gettext, gettext_noop
 
 # Pillow registers formats lazily; this loads the common ones, including PNG and JPEG.
 Image.preinit()
@@ -34,7 +35,9 @@ MAX_LOGO_SIZE = (512, 512)
 # Bound memory before Pillow loads the full bitmap. Compressed byte size alone does not.
 MAX_LOGO_INPUT_DIMENSION = 4096
 MAX_LOGO_INPUT_PIXELS = 4_000_000
-IMAGE_TOO_LARGE_MESSAGE = "Image is too large. Use at most 4096 pixels per side and 4 megapixels."
+IMAGE_TOO_LARGE_MESSAGE = gettext_noop(
+    "Image is too large. Use at most 4096 pixels per side and 4 megapixels."
+)
 # Decoding and encoding an image takes a while and holds its bitmap in memory. Requests do it in
 # worker threads, so the server keeps answering everyone else, and only a few at a time.
 IMAGE_PROCESSING = CapacityLimiter(2)
@@ -74,7 +77,7 @@ def new_uploads(session: AsyncSession) -> list[StoredUpload]:
 def get_image_media_type(filename: str) -> str:
     media_type, _ = mimetypes.guess_type(filename)
     if media_type not in UPLOADABLE_MEDIA_TYPES:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unsupported logo type")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, gettext("Unsupported logo type"))
     return media_type
 
 
@@ -89,7 +92,7 @@ async def get_existing_upload_path(folder: UploadFolder, filename: str | None) -
 async def get_logo_response(folder: UploadFolder, filename: str | None) -> FileResponse:
     path = await get_existing_upload_path(folder, filename)
     if filename is None or path is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Logo not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, gettext("Logo not found"))
 
     return FileResponse(path, media_type=get_image_media_type(filename))
 
@@ -117,17 +120,17 @@ async def store_validated_image_upload(
     if len(content) > config.upload_max_bytes:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            f"Uploaded file exceeds the {config.upload_max_bytes}-byte limit",
+            gettext("Uploaded file exceeds the {limit}-byte limit", limit=config.upload_max_bytes),
         )
 
     if not content:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Uploaded file is empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, gettext("Uploaded file is empty"))
 
     normalized = await to_thread.run_sync(normalize_image, content, limiter=IMAGE_PROCESSING)
     if normalized is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Only PNG and JPEG image uploads are supported",
+            gettext("Only PNG and JPEG image uploads are supported"),
         )
 
     image_format, image_content = normalized
@@ -164,10 +167,7 @@ def normalize_image(content: bytes) -> tuple[str, bytes] | None:
                 max(image.size) > MAX_LOGO_INPUT_DIMENSION
                 or image.width * image.height > MAX_LOGO_INPUT_PIXELS
             ):
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    IMAGE_TOO_LARGE_MESSAGE,
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, gettext(IMAGE_TOO_LARGE_MESSAGE))
 
             # Decodes the image, which also fails for a file that only claims to be one.
             upright = ImageOps.exif_transpose(image)
@@ -179,7 +179,7 @@ def normalize_image(content: bytes) -> tuple[str, bytes] | None:
             else:
                 upright.save(output, format="PNG", optimize=True)
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, IMAGE_TOO_LARGE_MESSAGE) from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, gettext(IMAGE_TOO_LARGE_MESSAGE)) from exc
     except (UnidentifiedImageError, OSError, ValueError):
         return None
 

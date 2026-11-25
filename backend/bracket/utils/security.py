@@ -7,6 +7,8 @@ from pwdlib.hashers.argon2 import Argon2Hasher
 from pwdlib.hashers.bcrypt import BcryptHasher
 from zxcvbn import zxcvbn
 
+from bracket.utils.i18n import gettext
+
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 72
 
@@ -48,31 +50,38 @@ def normalize_email(email: str) -> str:
     try:
         validated_email = validate_email(email.strip(), check_deliverability=False)
     except EmailNotValidError as exc:
-        raise ValueError(str(exc)) from exc
+        # The library explains what is wrong in English only.
+        raise ValueError(gettext("Enter a valid email address")) from exc
 
     return validated_email.normalized.lower()
 
 
 def validate_password_strength(password: str, disallowed_values: Iterable[str] = ()) -> str:
     if password.strip() != password:
-        raise ValueError("Password must not start or end with whitespace")
+        raise ValueError(gettext("Password must not start or end with whitespace"))
 
     if len(password) < PASSWORD_MIN_LENGTH:
-        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters long")
+        raise ValueError(
+            gettext(
+                "Password must be at least {minimum} characters long", minimum=PASSWORD_MIN_LENGTH
+            )
+        )
 
     if len(password) > PASSWORD_MAX_LENGTH:
-        raise ValueError(f"Password must be at most {PASSWORD_MAX_LENGTH} characters long")
+        raise ValueError(
+            gettext(
+                "Password must be at most {maximum} characters long", maximum=PASSWORD_MAX_LENGTH
+            )
+        )
 
     # zxcvbn estimates how guessable the password is, also when it contains the user's details.
     strength = zxcvbn(password, user_inputs=[value for value in disallowed_values if value.strip()])
     if strength["score"] < 3:
+        # zxcvbn's advice is in English, and the catalog translates it.
+        feedback = [strength["feedback"]["warning"], *strength["feedback"]["suggestions"]]
         raise ValueError(
-            " ".join(
-                filter(
-                    None, [strength["feedback"]["warning"], *strength["feedback"]["suggestions"]]
-                )
-            )
-            or "Password is too easy to guess"
+            " ".join(gettext(advice) for advice in feedback if advice)
+            or gettext("Password is too easy to guess")
         )
 
     return password

@@ -17,7 +17,7 @@ from bracket.logic.authentication import (
     get_auth_hash,
 )
 from bracket.models.enums import UserAccountType
-from bracket.sql.clubs import sql_delete_club
+from bracket.sql.players import sql_delete_player
 from bracket.utils.rate_limit import (
     ACCOUNT_LOCKOUT_LIMIT,
     get_account_lockout_key,
@@ -26,7 +26,7 @@ from bracket.utils.rate_limit import (
     reset_account_failures,
 )
 from bracket.utils.types import JsonDict
-from tests.dummy_records import DUMMY_CLUB, DUMMY_TOURNAMENT
+from tests.dummy_records import DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import (
     get_root_uvicorn_url,
     send_auth_request,
@@ -34,7 +34,7 @@ from tests.integration_tests.api.shared import (
 )
 from tests.integration_tests.mocks import get_mock_token, get_mock_user
 from tests.integration_tests.models import AuthContext
-from tests.integration_tests.sql import inserted_club, inserted_tournament, inserted_user
+from tests.integration_tests.sql import inserted_tournament, inserted_user
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -166,21 +166,17 @@ async def test_signed_token_with_wrong_claims(
 async def test_not_authenticated_for_tournament(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    async with inserted_club(
-        DUMMY_CLUB.model_copy(update={"name": f"Another club {uuid4()}"})
-    ) as club_inserted:
-        async with inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": club_inserted.id, "dashboard_endpoint": "some-slug"}
+    # Nobody runs this tournament.
+    async with inserted_tournament(
+        DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": "some-slug"})
+    ) as tournament_inserted:
+        response = JsonDict(
+            await send_auth_request(
+                HTTPMethod.GET,
+                f"tournaments/{tournament_inserted.id}/available_inputs",
+                auth_context,
             )
-        ) as tournament_inserted:
-            response = JsonDict(
-                await send_auth_request(
-                    HTTPMethod.GET,
-                    f"tournaments/{tournament_inserted.id}/available_inputs",
-                    auth_context,
-                )
-            )
+        )
     # A valid session that may not do this is refused, not signed out.
     assert response == {"detail": "You don't have access to this tournament"}
 
@@ -202,15 +198,15 @@ async def test_session_cookie(startup_and_shutdown_uvicorn_server: None) -> None
         )
         set_cookie = login.headers["Set-Cookie"]
         me = await (await session.get(f"{url}users/me")).json()
-        without_csrf_header = await session.post(f"{url}clubs", json={"name": f"Club {uuid4()}"})
+        without_csrf_header = await session.post(f"{url}players", json={"name": "Without"})
         with_csrf_header = await session.post(
-            f"{url}clubs", json={"name": f"Club {uuid4()}"}, headers=csrf_headers
+            f"{url}players", json={"name": "With"}, headers=csrf_headers
         )
-        club = await with_csrf_header.json()
+        player = await with_csrf_header.json()
         logout = await session.post(f"{url}logout", headers=csrf_headers)
         after_logout = await session.get(f"{url}users/me")
         async with AsyncSession(engine) as db_session, db_session.begin():
-            await sql_delete_club(db_session, club["data"]["id"])
+            await sql_delete_player(db_session, player["data"]["id"])
 
     assert set_cookie.startswith(f"{SESSION_COOKIE}=")
     assert "HttpOnly" in set_cookie

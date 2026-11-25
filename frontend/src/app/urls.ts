@@ -23,10 +23,11 @@ export function tournamentLogoUrl(tournament: OpenApi.Tournament) {
   return `${getApiBaseUrl()}/api/tournaments/${tournament.id}/logo?v=${version}`;
 }
 
-export function teamLogoUrl(team: Pick<OpenApi.Team, 'id' | 'logo_path' | 'tournament_id'>) {
+/** A team's logo, which is the same in every tournament the team plays in. */
+export function teamLogoUrl(team: { id: number; logo_path: string | null }) {
   if (!team.logo_path) return null;
   const version = encodeURIComponent(team.logo_path);
-  return `${getApiBaseUrl()}/api/tournaments/${team.tournament_id}/teams/${team.id}/logo?v=${version}`;
+  return `${getApiBaseUrl()}/api/teams/${team.id}/logo?v=${version}`;
 }
 
 /** The login page, which brings the organizer back to `from` once they are signed in. */
@@ -43,11 +44,6 @@ export function safeNextPath(next: string | null) {
 export function normalizeDashboardEndpoint(value: unknown) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
-
-// Mirrors the backend: open tournaments are always public, archived ones only with this setting,
-// and the custom link only resolves with it.
-export const DETAILS_PAGE_DESCRIPTION =
-  'Tournaments are public until they are archived. With this on, the Details link works and the tournament stays public after it is archived.';
 
 /**
  * The tournament's Details page. Its custom link only resolves while the page is enabled, and the

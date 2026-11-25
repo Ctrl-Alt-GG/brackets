@@ -13,14 +13,15 @@ from bracket.models.db.match import (
     MatchWithDetails,
     MatchWithDetailsDefinitive,
 )
+from bracket.models.db.participation import TournamentPlayer, TournamentTeamWithPlayers
 from bracket.models.db.player import Player
 from bracket.models.db.ranking import Ranking, RankingCreateBody
 from bracket.models.db.round import RoundCreateBody
 from bracket.models.db.stage import StageActivateBody, StageUpdateBody
 from bracket.models.db.stage_item import StageItemCreateBody
 from bracket.models.db.stage_tree import StageItemWithRounds
-from bracket.models.db.team import FullTeamWithPlayers
-from bracket.models.db.tournament import Tournament, TournamentUpdateBody
+from bracket.models.db.team import TeamBody, TeamWithMembers
+from bracket.models.db.tournament import Tournament, TournamentBody
 from bracket.models.db.user import UserToUpdate
 
 
@@ -39,7 +40,8 @@ def component(model: type[BaseModel]) -> dict[str, Any]:
         StageActivateBody,
         StageItemCreateBody,
         StageUpdateBody,
-        TournamentUpdateBody,
+        TeamBody,
+        TournamentBody,
         UserToUpdate,
     ],
 )
@@ -51,13 +53,15 @@ def test_a_request_requires_the_fields_without_defaults(model: type[BaseModel]) 
 @pytest.mark.parametrize(
     "model",
     [
-        FullTeamWithPlayers,
         MatchWithDetails,
         MatchWithDetailsDefinitive,
         Player,
         Ranking,
         StageItemWithRounds,
+        TeamWithMembers,
         Tournament,
+        TournamentPlayer,
+        TournamentTeamWithPlayers,
     ],
 )
 def test_an_answer_contains_every_field(model: type[BaseModel]) -> None:

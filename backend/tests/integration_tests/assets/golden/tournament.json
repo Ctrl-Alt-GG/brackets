@@ -3,7 +3,6 @@
     "data": {
       "players": [
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1258",
@@ -11,11 +10,10 @@
           "losses": 0,
           "name": "Alice",
           "swiss_score": "4",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Alpha",
           "wins": 4
         },
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1171",
@@ -23,11 +21,10 @@
           "losses": 3,
           "name": "Bob",
           "swiss_score": "1",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Bravo",
           "wins": 1
         },
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1187",
@@ -35,7 +32,7 @@
           "losses": 2,
           "name": "Cara",
           "swiss_score": "1",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Charlie",
           "wins": 1
         }
       ],
@@ -212,7 +209,6 @@
                         "winner_position": null,
                         "wins": 3
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:1",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -242,7 +238,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:4",
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": null,
@@ -284,7 +279,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:2",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -314,7 +308,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:3",
                       "stage_item_input2_score": 1,
                       "stage_item_input2_winner_from_match_id": null,
@@ -365,7 +358,6 @@
                         "winner_position": null,
                         "wins": 3
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:1",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -395,7 +387,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:3",
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": null,
@@ -437,7 +428,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:4",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -467,7 +457,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:2",
                       "stage_item_input2_score": 1,
                       "stage_item_input2_winner_from_match_id": null,
@@ -518,7 +507,6 @@
                         "winner_position": null,
                         "wins": 3
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:1",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -548,7 +536,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:2",
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": null,
@@ -590,7 +577,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:0/item:Group/slot:3",
                       "stage_item_input1_score": 3,
                       "stage_item_input1_winner_from_match_id": null,
@@ -620,7 +606,6 @@
                         "winner_position": null,
                         "wins": 1
                       },
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": "stage:0/item:Group/slot:4",
                       "stage_item_input2_score": 1,
                       "stage_item_input2_winner_from_match_id": null,
@@ -799,7 +784,6 @@
                         "winner_position": 1,
                         "wins": 1
                       },
-                      "stage_item_input1_conflict": true,
                       "stage_item_input1_id": "stage:1/item:Playoffs/slot:1",
                       "stage_item_input1_score": 2,
                       "stage_item_input1_winner_from_match_id": null,
@@ -829,7 +813,6 @@
                         "winner_position": 2,
                         "wins": 0
                       },
-                      "stage_item_input2_conflict": true,
                       "stage_item_input2_id": "stage:1/item:Playoffs/slot:2",
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": null,
@@ -871,7 +854,6 @@
                         "winner_position": 3,
                         "wins": 0
                       },
-                      "stage_item_input1_conflict": true,
                       "stage_item_input1_id": "stage:1/item:Playoffs/slot:3",
                       "stage_item_input1_score": 0,
                       "stage_item_input1_winner_from_match_id": null,
@@ -901,7 +883,6 @@
                         "winner_position": 4,
                         "wins": 0
                       },
-                      "stage_item_input2_conflict": true,
                       "stage_item_input2_id": "stage:1/item:Playoffs/slot:4",
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": null,
@@ -952,12 +933,10 @@
                         "winner_position": 1,
                         "wins": 1
                       },
-                      "stage_item_input1_conflict": false,
                       "stage_item_input1_id": "stage:1/item:Playoffs/slot:1",
                       "stage_item_input1_score": 0,
                       "stage_item_input1_winner_from_match_id": "stage:1/item:Playoffs/round:0/match:0",
                       "stage_item_input2": null,
-                      "stage_item_input2_conflict": false,
                       "stage_item_input2_id": null,
                       "stage_item_input2_score": 0,
                       "stage_item_input2_winner_from_match_id": "stage:1/item:Playoffs/round:0/match:1",
@@ -1321,16 +1300,9 @@
           "name": "Alpha",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Alice",
-              "losses": 0,
-              "name": "Alice",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Alice"
             }
           ],
           "swiss_score": "4",
@@ -1348,16 +1320,9 @@
           "name": "Charlie",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Cara",
-              "losses": 0,
-              "name": "Cara",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Cara"
             }
           ],
           "swiss_score": "1",
@@ -1389,16 +1354,9 @@
           "name": "Bravo",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Bob",
-              "losses": 0,
-              "name": "Bob",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Bob"
             }
           ],
           "swiss_score": "1",
@@ -1407,7 +1365,6 @@
         }
       ],
       "tournament": {
-        "club_id": "event",
         "created": "<created>",
         "dashboard_endpoint": null,
         "dashboard_public": false,
@@ -1420,7 +1377,6 @@
         "matches_total": 9,
         "more_rounds_possible": true,
         "name": "ORM contract",
-        "players_can_be_in_multiple_teams": false,
         "start_time": "2030-06-01T10:00:00Z",
         "status": "OPEN"
       }
@@ -1431,7 +1387,6 @@
       "count": 3,
       "players": [
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1258",
@@ -1439,11 +1394,10 @@
           "losses": 0,
           "name": "Alice",
           "swiss_score": "4",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Alpha",
           "wins": 4
         },
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1171",
@@ -1451,11 +1405,10 @@
           "losses": 3,
           "name": "Bob",
           "swiss_score": "1",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Bravo",
           "wins": 1
         },
         {
-          "active": true,
           "created": "<created>",
           "draws": 0,
           "elo_score": "1187",
@@ -1463,7 +1416,7 @@
           "losses": 2,
           "name": "Cara",
           "swiss_score": "1",
-          "tournament_id": "tournament:ORM contract",
+          "team_id": "team:Charlie",
           "wins": 1
         }
       ]
@@ -1645,7 +1598,6 @@
                       "winner_position": null,
                       "wins": 3
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:1",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -1675,7 +1627,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:4",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -1717,7 +1668,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:2",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -1747,7 +1697,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:3",
                     "stage_item_input2_score": 1,
                     "stage_item_input2_winner_from_match_id": null,
@@ -1798,7 +1747,6 @@
                       "winner_position": null,
                       "wins": 3
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:1",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -1828,7 +1776,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:3",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -1870,7 +1817,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:4",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -1900,7 +1846,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:2",
                     "stage_item_input2_score": 1,
                     "stage_item_input2_winner_from_match_id": null,
@@ -1951,7 +1896,6 @@
                       "winner_position": null,
                       "wins": 3
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:1",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -1981,7 +1925,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:2",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2023,7 +1966,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:0/item:Group/slot:3",
                     "stage_item_input1_score": 3,
                     "stage_item_input1_winner_from_match_id": null,
@@ -2053,7 +1995,6 @@
                       "winner_position": null,
                       "wins": 1
                     },
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": "stage:0/item:Group/slot:4",
                     "stage_item_input2_score": 1,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2232,7 +2173,6 @@
                       "winner_position": 1,
                       "wins": 1
                     },
-                    "stage_item_input1_conflict": true,
                     "stage_item_input1_id": "stage:1/item:Playoffs/slot:1",
                     "stage_item_input1_score": 2,
                     "stage_item_input1_winner_from_match_id": null,
@@ -2262,7 +2202,6 @@
                       "winner_position": 2,
                       "wins": 0
                     },
-                    "stage_item_input2_conflict": true,
                     "stage_item_input2_id": "stage:1/item:Playoffs/slot:2",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2304,7 +2243,6 @@
                       "winner_position": 3,
                       "wins": 0
                     },
-                    "stage_item_input1_conflict": true,
                     "stage_item_input1_id": "stage:1/item:Playoffs/slot:3",
                     "stage_item_input1_score": 0,
                     "stage_item_input1_winner_from_match_id": null,
@@ -2334,7 +2272,6 @@
                       "winner_position": 4,
                       "wins": 0
                     },
-                    "stage_item_input2_conflict": true,
                     "stage_item_input2_id": "stage:1/item:Playoffs/slot:4",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2385,12 +2322,10 @@
                       "winner_position": 1,
                       "wins": 1
                     },
-                    "stage_item_input1_conflict": false,
                     "stage_item_input1_id": "stage:1/item:Playoffs/slot:1",
                     "stage_item_input1_score": 0,
                     "stage_item_input1_winner_from_match_id": "stage:1/item:Playoffs/round:0/match:0",
                     "stage_item_input2": null,
-                    "stage_item_input2_conflict": false,
                     "stage_item_input2_id": null,
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": "stage:1/item:Playoffs/round:0/match:1",
@@ -2559,7 +2494,6 @@
                       "winner_position": 3,
                       "wins": 0
                     },
-                    "stage_item_input1_conflict": true,
                     "stage_item_input1_id": "stage:1/item:Swiss/slot:3",
                     "stage_item_input1_score": 0,
                     "stage_item_input1_winner_from_match_id": null,
@@ -2589,7 +2523,6 @@
                       "winner_position": 4,
                       "wins": 0
                     },
-                    "stage_item_input2_conflict": true,
                     "stage_item_input2_id": "stage:1/item:Swiss/slot:4",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2631,7 +2564,6 @@
                       "winner_position": 1,
                       "wins": 0
                     },
-                    "stage_item_input1_conflict": true,
                     "stage_item_input1_id": "stage:1/item:Swiss/slot:1",
                     "stage_item_input1_score": 0,
                     "stage_item_input1_winner_from_match_id": null,
@@ -2661,7 +2593,6 @@
                       "winner_position": 2,
                       "wins": 0
                     },
-                    "stage_item_input2_conflict": true,
                     "stage_item_input2_id": "stage:1/item:Swiss/slot:2",
                     "stage_item_input2_score": 0,
                     "stage_item_input2_winner_from_match_id": null,
@@ -2914,16 +2845,9 @@
           "name": "Alpha",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Alice",
-              "losses": 0,
-              "name": "Alice",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Alice"
             }
           ],
           "swiss_score": "4",
@@ -2941,16 +2865,9 @@
           "name": "Bravo",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Bob",
-              "losses": 0,
-              "name": "Bob",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Bob"
             }
           ],
           "swiss_score": "1",
@@ -2968,16 +2885,9 @@
           "name": "Charlie",
           "players": [
             {
-              "active": true,
               "created": "<created>",
-              "draws": 0,
-              "elo_score": "1200",
               "id": "player:Cara",
-              "losses": 0,
-              "name": "Cara",
-              "swiss_score": "0",
-              "tournament_id": "tournament:ORM contract",
-              "wins": 0
+              "name": "Cara"
             }
           ],
           "swiss_score": "1",
@@ -3005,7 +2915,6 @@
     "data": [
       {
         "can_manage": true,
-        "club_id": "event",
         "created": "<created>",
         "dashboard_endpoint": null,
         "dashboard_public": false,
@@ -3018,7 +2927,6 @@
         "matches_total": 9,
         "more_rounds_possible": true,
         "name": "ORM contract",
-        "players_can_be_in_multiple_teams": false,
         "start_time": "2030-06-01T10:00:00Z",
         "status": "OPEN"
       }

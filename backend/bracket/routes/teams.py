@@ -1,35 +1,22 @@
+"""
+Teams, which every organizer shares. The teams of one tournament are in
+`bracket.routes.participation`.
+"""
+
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from starlette.responses import FileResponse
 
 from bracket.config import config
 from bracket.database import DbSession
 from bracket.logic import teams as team_logic
-from bracket.logic.teams import get_team_with_totals, get_teams_with_totals
-from bracket.models.db.team import FullTeamWithPlayers, Team, TeamBody, TeamMultiBody
-from bracket.models.db.tournament import Tournament
-from bracket.models.db.user import UserPublic
-from bracket.routes.access import (
-    user_authenticated_for_tournament,
-    user_authenticated_or_public_dashboard,
-    user_authenticated_or_rate_limited_visitor,
-)
-from bracket.routes.models import (
-    PaginatedTeams,
-    SingleTeamResponse,
-    SuccessResponse,
-    TeamsWithPlayersResponse,
-)
-from bracket.routes.resources import (
-    disallow_archived_tournament,
-    team_dependency,
-    team_with_players_dependency,
-)
-from bracket.sql.teams import get_team_count, sql_delete_team, sql_update_team_logo
-from bracket.utils.errors import ForeignKey, check_foreign_key_violation
-from bracket.utils.id_types import TournamentId
-from bracket.utils.pagination import ParticipantPagination
+from bracket.models.db.team import Team, TeamBody
+from bracket.routes.access import AuthenticatedUser
+from bracket.routes.models import SingleTeamResponse, SuccessResponse, TeamsResponse
+from bracket.routes.resources import team_dependency
+from bracket.sql.teams import get_teams_with_members, sql_update_team_logo
+from bracket.utils.id_types import TeamId
 from bracket.utils.uploads import (
     UploadFolder,
     get_logo_response,
@@ -39,46 +26,49 @@ from bracket.utils.uploads import (
 
 router = APIRouter(prefix=config.api_prefix)
 
-TournamentOrganizer = Annotated[UserPublic, Depends(user_authenticated_for_tournament)]
-OpenTournament = Annotated[Tournament, Depends(disallow_archived_tournament)]
 LoadedTeam = Annotated[Team, Depends(team_dependency)]
 
 
-@router.get("/tournaments/{tournament_id}/teams", response_model=TeamsWithPlayersResponse)
-async def get_teams(
-    session: DbSession,
-    tournament_id: TournamentId,
-    pagination: Annotated[ParticipantPagination, Query()],
-    _: Annotated[UserPublic | None, Depends(user_authenticated_or_rate_limited_visitor)],
-) -> TeamsWithPlayersResponse:
-    return TeamsWithPlayersResponse(
-        data=PaginatedTeams(
-            teams=await get_teams_with_totals(session, tournament_id, pagination=pagination),
-            count=await get_team_count(session, tournament_id),
-        )
-    )
+@router.get("/teams", response_model=TeamsResponse)
+async def get_teams(session: DbSession, _: AuthenticatedUser) -> TeamsResponse:
+    """Every team by name, with its roster and the tournaments it takes part in."""
+    return TeamsResponse(data=await get_teams_with_members(session))
 
 
-@router.put("/tournaments/{tournament_id}/teams/{team_id}", response_model=SingleTeamResponse)
-async def update_team_by_id(
-    session: DbSession,
-    team_body: TeamBody,
-    _: TournamentOrganizer,
-    tournament: OpenTournament,
-    team: LoadedTeam,
+@router.post("/teams", response_model=SingleTeamResponse)
+async def create_team(
+    session: DbSession, body: TeamBody, user: AuthenticatedUser
 ) -> SingleTeamResponse:
-    return SingleTeamResponse(
-        data=await team_logic.update_team(session, tournament, team.id, team_body)
-    )
+    return SingleTeamResponse(data=await team_logic.create_team(session, body, user))
 
 
-@router.post("/tournaments/{tournament_id}/teams/{team_id}/logo", response_model=SingleTeamResponse)
+@router.put("/teams/{team_id}", response_model=SingleTeamResponse)
+async def update_team(
+    session: DbSession, team_id: TeamId, body: TeamBody, user: AuthenticatedUser
+) -> SingleTeamResponse:
+    """
+    Rename the team and replace its roster. The lineups of its open tournaments follow the roster,
+    and their schedules make room for what the new players play elsewhere.
+    """
+    return SingleTeamResponse(data=await team_logic.update_team(session, team_id, body, user))
+
+
+@router.delete("/teams/{team_id}", response_model=SuccessResponse)
+async def delete_team(
+    session: DbSession, background_tasks: BackgroundTasks, _: AuthenticatedUser, team: LoadedTeam
+) -> SuccessResponse:
+    """Delete a team that takes part in no tournament."""
+    await team_logic.delete_team(session, team.id)
+    # Background tasks run after the response, so the deletion is committed by then.
+    background_tasks.add_task(remove_existing_upload, UploadFolder.TEAM_LOGOS, team.logo_path)
+    return SuccessResponse()
+
+
+@router.post("/teams/{team_id}/logo", response_model=SingleTeamResponse)
 async def update_team_logo(
     session: DbSession,
-    tournament_id: TournamentId,
     background_tasks: BackgroundTasks,
-    _: TournamentOrganizer,
-    __: OpenTournament,
+    _: AuthenticatedUser,
     team: LoadedTeam,
     file: UploadFile | None = None,
 ) -> SingleTeamResponse:
@@ -89,59 +79,10 @@ async def update_team_logo(
     # Background tasks run after the response, so the new logo is committed by then. When the
     # transaction fails, there is no response and the previous logo stays.
     background_tasks.add_task(remove_existing_upload, UploadFolder.TEAM_LOGOS, team.logo_path)
-    return SingleTeamResponse(data=await get_team_with_totals(session, tournament_id, team.id))
+    return SingleTeamResponse(data=await team_logic.get_team_with_members(session, team.id))
 
 
-@router.get("/tournaments/{tournament_id}/teams/{team_id}/logo")
-async def get_team_logo(
-    _: Annotated[UserPublic | None, Depends(user_authenticated_or_public_dashboard)],
-    team: LoadedTeam,
-) -> FileResponse:
+@router.get("/teams/{team_id}/logo")
+async def get_team_logo(team: LoadedTeam) -> FileResponse:
+    """Anyone can see a team's logo: the Details pages of its tournaments show it."""
     return await get_logo_response(UploadFolder.TEAM_LOGOS, team.logo_path)
-
-
-@router.delete("/tournaments/{tournament_id}/teams/{team_id}", response_model=SuccessResponse)
-async def delete_team(
-    session: DbSession,
-    tournament_id: TournamentId,
-    background_tasks: BackgroundTasks,
-    _: TournamentOrganizer,
-    __: OpenTournament,
-    team: Annotated[FullTeamWithPlayers, Depends(team_with_players_dependency)],
-) -> SuccessResponse:
-    with check_foreign_key_violation(
-        {
-            ForeignKey.stage_item_inputs_team_id_fkey,
-            ForeignKey.matches_stage_item_input1_id_fkey,
-            ForeignKey.matches_stage_item_input2_id_fkey,
-        }
-    ):
-        await sql_delete_team(session, tournament_id, team.id)
-
-    # Background tasks run after the response, so the deletion is committed by then.
-    background_tasks.add_task(remove_existing_upload, UploadFolder.TEAM_LOGOS, team.logo_path)
-    return SuccessResponse()
-
-
-@router.post("/tournaments/{tournament_id}/teams", response_model=SingleTeamResponse)
-async def create_team(
-    session: DbSession,
-    team_to_insert: TeamBody,
-    user: TournamentOrganizer,
-    tournament: OpenTournament,
-) -> SingleTeamResponse:
-    return SingleTeamResponse(
-        data=await team_logic.create_team(session, tournament, team_to_insert, user)
-    )
-
-
-@router.post("/tournaments/{tournament_id}/teams_multi", response_model=SuccessResponse)
-async def create_multiple_teams(
-    session: DbSession,
-    team_body: TeamMultiBody,
-    tournament_id: TournamentId,
-    user: TournamentOrganizer,
-    _: OpenTournament,
-) -> SuccessResponse:
-    await team_logic.create_teams_with_players(session, tournament_id, team_body, user)
-    return SuccessResponse()

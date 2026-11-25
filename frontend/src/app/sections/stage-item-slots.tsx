@@ -1,8 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import { updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
-import { isBracket, isEmptySlot } from '../matches';
+import { isBracket, isEmptySlot, stageItemName } from '../matches';
+import { useOrganizerTranslation } from '../organizer-locales';
 import { Disclosure } from '../ui';
 
 type StageItemInput =
@@ -56,9 +58,10 @@ export function StageItemSlots({
   options: SlotOption[];
   stageItem: OpenApi.StageItemWithRounds;
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  teamLookup: Map<number, OpenApi.FullTeamWithPlayers>;
+  teamLookup: Map<number, OpenApi.TournamentTeamWithPlayers>;
   tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
   const filled = stageItem.inputs.filter((input) => !isEmptySlot(input)).length;
   const slot = (input: StageItemInput) => (
     <SlotSelect
@@ -85,9 +88,9 @@ export function StageItemSlots({
       open={filled < stageItem.inputs.length}
       summary={
         <>
-          <span className="font-semibold">Teams</span>
+          <span className="font-semibold">{t('slots.teams')}</span>
           <span className="block text-sm text-base-content/70">
-            {filled} of {stageItem.inputs.length} slots filled
+            {t('slots.filled', { filled, total: stageItem.inputs.length })}
           </span>
         </>
       }
@@ -100,7 +103,7 @@ export function StageItemSlots({
                 key={pair[0].id}
               >
                 <legend className="px-1 text-sm font-semibold">
-                  Match {index + 1} of the first round
+                  {t('slots.firstRoundMatch', { number: index + 1 })}
                 </legend>
                 {pair.map(slot)}
               </fieldset>
@@ -108,7 +111,7 @@ export function StageItemSlots({
           : stageItem.inputs.map(slot)}
         {nextStageEntries ? (
           <div className="rounded-box border border-base-300 bg-base-100/50 p-4 md:col-span-2">
-            <p className="text-sm text-base-content/70">Teams moving in when this stage starts</p>
+            <p className="text-sm text-base-content/70">{t('slots.movingIn')}</p>
             <div className="mt-3 space-y-2 text-sm">
               {nextStageEntries.map((entry) => (
                 <div
@@ -119,13 +122,15 @@ export function StageItemSlots({
                     {entry.team.name}
                     {entry.tied_team ? (
                       <span className="block text-warning">
-                        Level with {entry.tied_team.name} on every criterion: only seeding puts{' '}
-                        {entry.team.name} ahead.
+                        {t('slots.levelWith', {
+                          team: entry.team.name,
+                          tied: entry.tied_team.name,
+                        })}
                       </span>
                     ) : null}
                   </span>
                   <span className="shrink-0 text-base-content/70">
-                    slot {entry.stage_item_input.slot}
+                    {t('slots.slotNumber', { slot: entry.stage_item_input.slot })}
                   </span>
                 </div>
               ))}
@@ -149,20 +154,22 @@ function SlotSelect({
   options: SlotOption[];
   stageItemId: number;
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  teamLookup: Map<number, OpenApi.FullTeamWithPlayers>;
+  teamLookup: Map<number, OpenApi.TournamentTeamWithPlayers>;
   tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const currentValue = slotValue(input);
   const assign = useMutation({
     ...updateStageItemInputApiTournamentsTournamentIdStageItemsStageItemIdInputsStageItemInputIdPutMutation(),
-    meta: { successMessage: `Slot ${input.slot} updated.` },
+    meta: { successMessage: t('slots.updated', { slot: input.slot }) },
   });
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100/50 px-3 py-2">
-      <span className="text-sm font-semibold">Slot {input.slot}</span>
+      <span className="text-sm font-semibold">{t('slots.slot', { slot: input.slot })}</span>
       <select
-        aria-label={`Slot ${input.slot}`}
+        aria-label={t('slots.slot', { slot: input.slot })}
         className="select w-auto min-w-44"
         disabled={assign.isPending}
         onChange={(event) =>
@@ -180,23 +187,24 @@ function SlotSelect({
           assign.isPending && assign.variables ? slotValue(assign.variables.body) : currentValue
         }
       >
-        <option value={EMPTY_SLOT}>Open slot</option>
+        <option value={EMPTY_SLOT}>{t('slots.open')}</option>
         {options.map((option) => {
           const value = optionValue(option);
-          const taken = option.already_taken && value !== currentValue ? ' (taken)' : '';
-          if ('team_id' in option) {
-            return (
-              <option key={value} value={value}>
-                {teamLookup.get(option.team_id)?.name ?? `Team #${option.team_id}`}
-                {taken}
-              </option>
-            );
-          }
-          const source = stageItemsById.get(option.winner_from_stage_item_id);
+          const source =
+            'team_id' in option ? undefined : stageItemsById.get(option.winner_from_stage_item_id);
+          const label =
+            'team_id' in option
+              ? (teamLookup.get(option.team_id)?.name ??
+                t('slots.unknownTeam', { id: option.team_id }))
+              : shared('common.place', {
+                  position: option.winner_position,
+                  source: source ? stageItemName(source, shared) : '',
+                });
           return (
             <option key={value} value={value}>
-              {source?.name || source?.type_name} #{option.winner_position}
-              {taken}
+              {option.already_taken && value !== currentValue
+                ? t('slots.taken', { option: label })
+                : label}
             </option>
           );
         })}

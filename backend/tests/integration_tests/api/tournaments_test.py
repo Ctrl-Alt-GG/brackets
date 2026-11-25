@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket import orm
-from bracket.logic.tournaments import delete_tournament_completely
+from bracket.logic.tournaments import delete_tournament
 from bracket.models.db.tournament import Tournament
 from bracket.models.enums import TournamentStatus
 from bracket.sql.tournaments import (
@@ -18,7 +18,7 @@ from bracket.sql.tournaments import (
 )
 from bracket.utils.types import assert_some
 from bracket.utils.uploads import UploadFolder, build_upload_path
-from tests.dummy_records import DUMMY_CLUB, DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
+from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TOURNAMENT
 from tests.integration_tests.api.shared import (
     SUCCESS_RESPONSE,
     send_auth_request,
@@ -26,7 +26,7 @@ from tests.integration_tests.api.shared import (
     send_tournament_request,
 )
 from tests.integration_tests.models import AuthContext
-from tests.integration_tests.sql import inserted_club, inserted_tournament
+from tests.integration_tests.sql import inserted_tournament
 from tests.integration_tests.uploads import wait_until_removed
 
 
@@ -38,14 +38,12 @@ async def test_tournaments_endpoint(
         "data": [
             {
                 "id": auth_context.tournament.id,
-                "club_id": auth_context.club.id,
                 "created": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
                 "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
                 "name": "Some Cool Tournament",
                 "logo_path": None,
                 "dashboard_public": True,
                 "dashboard_endpoint": "endpoint-test",
-                "players_can_be_in_multiple_teams": True,
                 "duration_minutes": 10,
                 "margin_minutes": 5,
                 "status": "OPEN",
@@ -68,14 +66,12 @@ async def test_tournament_endpoint(
     ) == {
         "data": {
             "id": auth_context.tournament.id,
-            "club_id": auth_context.club.id,
             "created": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
             "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
             "logo_path": None,
             "name": "Some Cool Tournament",
             "dashboard_public": True,
             "dashboard_endpoint": "endpoint-test",
-            "players_can_be_in_multiple_teams": True,
             "duration_minutes": 10,
             "margin_minutes": 5,
             "status": "OPEN",
@@ -95,10 +91,8 @@ async def test_create_tournament(
     body = {
         "name": "Some new name",
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
-        "club_id": auth_context.club.id,
         "dashboard_public": True,
         "dashboard_endpoint": dashboard_endpoint,
-        "players_can_be_in_multiple_teams": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -106,7 +100,7 @@ async def test_create_tournament(
 
     # Cleanup
     tournament = assert_some(await sql_get_tournament_by_endpoint_name(session, dashboard_endpoint))
-    await delete_tournament_completely(session, tournament.id)
+    await delete_tournament(session, tournament.id)
 
     # The answer is the new tournament, so that the frontend can open it.
     assert response["data"]["id"] == tournament.id
@@ -120,10 +114,8 @@ async def test_create_tournament_duplicate_dashboard_endpoint(
     body = {
         "name": "Some new name",
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
-        "club_id": auth_context.club.id,
         "dashboard_public": True,
         "dashboard_endpoint": "endpoint-test",
-        "players_can_be_in_multiple_teams": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -140,7 +132,6 @@ async def test_update_tournament(
         "name": "Some new name",
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
         "dashboard_public": False,
-        "players_can_be_in_multiple_teams": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -186,7 +177,6 @@ async def test_update_tournament_details_link(
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
         "dashboard_public": True,
         "dashboard_endpoint": dashboard_endpoint,
-        "players_can_be_in_multiple_teams": True,
         "duration_minutes": 12,
         "margin_minutes": 3,
     }
@@ -220,9 +210,8 @@ async def test_archive_and_unarchive_tournament(
 ) -> None:
     # A tournament of its own, because other tests change the shared one's dashboard setting.
     async with inserted_tournament(
-        DUMMY_TOURNAMENT.model_copy(
-            update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-        )
+        DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}),
+        auth_context.user.id,
     ) as tournament_inserted:
         tournament_context = auth_context.model_copy(update={"tournament": tournament_inserted})
         query = select(orm.Tournament).where(orm.Tournament.id == tournament_inserted.id)
@@ -265,9 +254,8 @@ async def test_delete_tournament(
     session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with inserted_tournament(
-        DUMMY_TOURNAMENT.model_copy(
-            update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-        )
+        DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}),
+        auth_context.user.id,
     ) as tournament_inserted:
         assert (
             await send_tournament_request(
@@ -330,12 +318,12 @@ async def test_non_public_tournament_endpoints_blocked_for_unauthenticated_users
     async with inserted_tournament(
         DUMMY_TOURNAMENT.model_copy(
             update={
-                "club_id": auth_context.club.id,
                 "dashboard_public": False,
                 "dashboard_endpoint": "non-public-endpoint",
                 "status": TournamentStatus.ARCHIVED,
             }
-        )
+        ),
+        auth_context.user.id,
     ) as private_tournament:
         tournament_id = private_tournament.id
         for endpoint in (
@@ -359,21 +347,21 @@ async def test_archived_public_tournament_stays_public(
         inserted_tournament(
             DUMMY_TOURNAMENT.model_copy(
                 update={
-                    "club_id": auth_context.club.id,
                     "dashboard_endpoint": "archived-public-endpoint",
                     "status": TournamentStatus.ARCHIVED,
                 }
-            )
+            ),
+            auth_context.user.id,
         ) as public_tournament,
         inserted_tournament(
             DUMMY_TOURNAMENT.model_copy(
                 update={
-                    "club_id": auth_context.club.id,
                     "dashboard_public": False,
                     "dashboard_endpoint": None,
                     "status": TournamentStatus.ARCHIVED,
                 }
-            )
+            ),
+            auth_context.user.id,
         ) as private_tournament,
     ):
         for filter_, expected in (("ALL", True), ("ARCHIVED", True), ("OPEN", False)):
@@ -406,10 +394,8 @@ async def test_details_links_are_found_in_any_case(
     body = {
         "name": "Cup",
         "start_time": DUMMY_MOCK_TIME.isoformat().replace("+00:00", "Z"),
-        "club_id": auth_context.club.id,
         "dashboard_public": True,
         "dashboard_endpoint": "Summer-Cup",
-        "players_can_be_in_multiple_teams": False,
         "duration_minutes": 10,
         "margin_minutes": 5,
     }
@@ -431,21 +417,17 @@ async def test_details_links_are_found_in_any_case(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_organizers_also_see_the_public_tournaments_of_other_events(
+async def test_organizers_also_see_the_public_tournaments_of_others(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     """At a LAN party, the organizer of one game follows another game's tournament too."""
     async with (
-        inserted_club(DUMMY_CLUB.model_copy(update={"name": "Another event"})) as other_club,
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": other_club.id, "dashboard_endpoint": None}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None})
         ) as public_tournament,
         inserted_tournament(
             DUMMY_TOURNAMENT.model_copy(
                 update={
-                    "club_id": other_club.id,
                     "dashboard_endpoint": None,
                     "dashboard_public": False,
                     "status": TournamentStatus.ARCHIVED,

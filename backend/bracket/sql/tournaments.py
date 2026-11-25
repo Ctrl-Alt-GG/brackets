@@ -1,20 +1,14 @@
-from collections.abc import Collection
 from typing import Literal
 
-from sqlalchemy import Select, delete, exists, func, or_, select, update
+from sqlalchemy import Select, String, cast, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, with_expression
 from sqlalchemy.sql.elements import ColumnElement
 
 from bracket import orm
-from bracket.models.db.tournament import (
-    Tournament,
-    TournamentBody,
-    TournamentChangeStatusBody,
-    TournamentUpdateBody,
-)
+from bracket.models.db.tournament import Tournament, TournamentBody
 from bracket.models.enums import StageType, TournamentStatus
-from bracket.utils.id_types import ClubId, TournamentId
+from bracket.utils.id_types import TournamentId, UserId
 
 TournamentFilter = Literal["ALL", "OPEN", "ARCHIVED"]
 # The records a tournament has, which limits count.
@@ -22,8 +16,8 @@ TournamentRecord = (
     type[orm.Stage]
     | type[orm.StageItem]
     | type[orm.Round]
-    | type[orm.Team]
-    | type[orm.Player]
+    | type[orm.TournamentTeam]
+    | type[orm.TournamentPlayer]
     | type[orm.Ranking]
 )
 
@@ -114,17 +108,6 @@ async def count_tournament_records(
     )
 
 
-async def count_tournaments_of_club(session: AsyncSession, club_id: ClubId) -> int:
-    return int(
-        await session.scalar(
-            select(func.count())
-            .select_from(orm.Tournament)
-            .where(orm.Tournament.club_id == club_id)
-        )
-        or 0
-    )
-
-
 async def sql_get_tournament(session: AsyncSession, tournament_id: TournamentId) -> Tournament:
     entity = (
         await session.scalars(
@@ -162,27 +145,41 @@ async def _get_tournaments_where(
     return [Tournament.model_validate(entity) for entity in await session.scalars(stmt)]
 
 
-async def sql_get_tournaments(
-    session: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "ALL"
-) -> list[Tournament]:
-    return await _get_tournaments_where(session, orm.Tournament.club_id.in_(club_ids), filter_)
-
-
 async def sql_get_visible_tournaments(
-    session: AsyncSession, club_ids: Collection[ClubId], filter_: TournamentFilter = "OPEN"
+    session: AsyncSession, user_id: UserId | None, filter_: TournamentFilter = "OPEN"
 ) -> list[Tournament]:
+    """The tournaments that everyone may see, and those that the user runs."""
+    visible = or_(orm.Tournament.status == TournamentStatus.OPEN, orm.Tournament.dashboard_public)
+    if user_id is not None:
+        visible = or_(
+            visible,
+            orm.Tournament.id.in_(
+                select(orm.TournamentOrganizer.tournament_id).where(
+                    orm.TournamentOrganizer.user_id == user_id
+                )
+            ),
+        )
+    return await _get_tournaments_where(session, visible, filter_)
+
+
+async def get_tournaments_by_name_or_id(session: AsyncSession, name_or_id: str) -> list[Tournament]:
+    """The tournaments with this id or, regardless of case, this name. Names can repeat."""
+    name = name_or_id.strip()
     return await _get_tournaments_where(
         session,
         or_(
-            orm.Tournament.status == TournamentStatus.OPEN,
-            orm.Tournament.dashboard_public.is_(True),
-            orm.Tournament.club_id.in_(club_ids),
+            func.lower(orm.Tournament.name) == func.lower(name),
+            cast(orm.Tournament.id, String) == name,
         ),
-        filter_,
+        "ALL",
     )
 
 
 async def sql_delete_tournament(session: AsyncSession, tournament_id: TournamentId) -> None:
+    """
+    Delete the tournament with everything in it. Its teams and players stay: they only stop
+    taking part in it.
+    """
     # Match-to-slot and slot-to-team foreign keys deliberately refuse destructive deletions.
     # Remove matches before stages, then let the database cascade the remaining descendants.
     await session.execute(delete(orm.Match).where(orm.Match.tournament_id == tournament_id))
@@ -190,21 +187,8 @@ async def sql_delete_tournament(session: AsyncSession, tournament_id: Tournament
     await session.execute(delete(orm.Tournament).where(orm.Tournament.id == tournament_id))
 
 
-async def get_tournament_logo_paths(
-    session: AsyncSession, tournament_id: TournamentId
-) -> tuple[str | None, list[str | None]]:
-    """The logo of the tournament and those of its teams."""
-    tournament_logo = await session.scalar(
-        select(orm.Tournament.logo_path).where(orm.Tournament.id == tournament_id)
-    )
-    team_logos = await session.scalars(
-        select(orm.Team.logo_path).where(orm.Team.tournament_id == tournament_id)
-    )
-    return tournament_logo, list(team_logos)
-
-
 async def sql_update_tournament(
-    session: AsyncSession, tournament_id: TournamentId, tournament: TournamentUpdateBody
+    session: AsyncSession, tournament_id: TournamentId, tournament: TournamentBody
 ) -> None:
     entity = await session.get(orm.Tournament, tournament_id)
     if entity is not None:
@@ -212,7 +196,6 @@ async def sql_update_tournament(
         entity.start_time = tournament.start_time
         entity.dashboard_public = tournament.dashboard_public
         entity.dashboard_endpoint = tournament.dashboard_endpoint
-        entity.players_can_be_in_multiple_teams = tournament.players_can_be_in_multiple_teams
         entity.duration_minutes = tournament.duration_minutes
         entity.margin_minutes = tournament.margin_minutes
         await session.flush()
@@ -239,11 +222,11 @@ async def sql_move_tournament_start(
 
 
 async def sql_update_tournament_status(
-    session: AsyncSession, tournament_id: TournamentId, body: TournamentChangeStatusBody
+    session: AsyncSession, tournament_id: TournamentId, status: TournamentStatus
 ) -> None:
     entity = await session.get(orm.Tournament, tournament_id)
     if entity is not None:
-        entity.status = body.status
+        entity.status = status
         await session.flush()
 
 

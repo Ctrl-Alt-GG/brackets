@@ -17,6 +17,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from bracket.config import config
+from bracket.utils.i18n import gettext
 
 
 def _async_storage_uri(uri: str) -> str:
@@ -80,7 +81,8 @@ async def enforce_account_lockout(identifier: str) -> None:
     """The same password-guessing budget applies to login and sensitive account changes."""
     if (retry_after := await get_retry_after(ACCOUNT_LOCKOUT_LIMIT, identifier)) is not None:
         raise too_many_requests(
-            "Too many failed password attempts. Try again in a few minutes.", retry_after
+            gettext("Too many failed password attempts. Try again in a few minutes."),
+            retry_after,
         )
 
 
@@ -99,7 +101,7 @@ async def enforce_visitor_read_limit(request: Request) -> None:
     address = get_remote_address(request)
     if not await rate_limiter.hit(VISITOR_READ_LIMIT, address):
         raise too_many_requests(
-            "Too many requests. Try again in a minute.",
+            gettext("Too many requests. Try again in a minute."),
             await get_retry_after(VISITOR_READ_LIMIT, address) or 60,
         )
 
@@ -117,7 +119,9 @@ def rate_limit(limit: str) -> Callable[[Request, Response], Awaitable[None]]:
         stats = await rate_limiter.get_window_stats(item, identifier)
         reset_after = max(1, ceil(stats.reset_time - time()))
         if not allowed:
-            raise too_many_requests(f"Rate limit exceeded: {limit}", reset_after)
+            raise too_many_requests(
+                gettext("Too many requests. Try again in a few minutes."), reset_after
+            )
         response.headers["X-RateLimit-Limit"] = str(item.amount)
         response.headers["X-RateLimit-Remaining"] = str(stats.remaining)
         response.headers["X-RateLimit-Reset"] = str(ceil(stats.reset_time))

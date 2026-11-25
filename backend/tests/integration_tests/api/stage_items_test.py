@@ -38,12 +38,8 @@ async def test_create_stage_item(
         inserted_stage(
             DUMMY_STAGE2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_1,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_2,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_1,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_2,
     ):
         assert team_inserted_1.id and team_inserted_2.id
         inputs = [
@@ -75,7 +71,7 @@ async def test_delete_stage_item(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_1,
@@ -131,12 +127,9 @@ async def test_stage_items_of_archived_tournament_are_read_only(
     async with (
         inserted_tournament(
             DUMMY_TOURNAMENT.model_copy(
-                update={
-                    "club_id": auth_context.club.id,
-                    "dashboard_endpoint": None,
-                    "status": TournamentStatus.ARCHIVED,
-                }
-            )
+                update={"dashboard_endpoint": None, "status": TournamentStatus.ARCHIVED}
+            ),
+            auth_context.user.id,
         ) as archived_tournament,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": archived_tournament.id})
@@ -179,9 +172,7 @@ async def test_create_stage_item_with_ranking_of_other_tournament(
     """
     async with (
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}), auth_context.user.id
         ) as other_tournament,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})
@@ -203,4 +194,4 @@ async def test_create_stage_item_with_ranking_of_other_tournament(
         )
         await assert_row_count_and_clear(orm.StageItem, 0)
 
-    assert response == {"detail": f"Could not find Ranking(s) with ID {other_ranking.id}"}
+    assert response == {"detail": f"This tournament has no ranking with the ID {other_ranking.id}"}

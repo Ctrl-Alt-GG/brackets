@@ -16,7 +16,7 @@ from sqlalchemy.orm import SessionTransaction
 from bracket import database
 from bracket.database import session_scope
 from bracket.models.db.team import Team
-from bracket.sql.teams import get_team_by_id, sql_update_team_logo
+from bracket.sql.teams import get_team, sql_update_team_logo
 from bracket.utils.uploads import (
     StoredUpload,
     UploadFolder,
@@ -24,7 +24,6 @@ from bracket.utils.uploads import (
     store_validated_image_upload,
 )
 from tests.dummy_records import DUMMY_TEAM1
-from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_team
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -33,10 +32,8 @@ LOGO = Path("tests/integration_tests/assets/test_logo.png").read_bytes()
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def team(auth_context: AuthContext) -> AsyncIterator[Team]:
-    async with inserted_team(
-        DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-    ) as inserted:
+async def team() -> AsyncIterator[Team]:
+    async with inserted_team(DUMMY_TEAM1) as inserted:
         yield inserted
 
 
@@ -79,7 +76,7 @@ async def replace_logo(
 
 async def logo_of(team: Team) -> str | None:
     async with session_scope(read_only=True) as session:
-        loaded = await get_team_by_id(session, team.id, team.tournament_id)
+        loaded = await get_team(session, team.id)
     assert loaded is not None
     return loaded.logo_path
 

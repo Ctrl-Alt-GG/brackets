@@ -22,8 +22,6 @@ _FIELDS_THAT_KEEP_SLOTS = frozenset(
         "stage_item_input1_score",
         "stage_item_input2_score",
         "scoreless_result",
-        "stage_item_input1_conflict",
-        "stage_item_input2_conflict",
     }
 )
 
@@ -35,7 +33,7 @@ class TournamentGraph:
 
     A slot appears in its stage item's inputs and again inside every match it plays, as separate
     objects. Changes made through this class update every copy, so a command can reuse the tree
-    for rankings, scheduling and conflict checks after changing it, instead of loading it again.
+    for rankings and scheduling after changing it, instead of loading it again.
     It holds no session: whoever changes the tree writes the same change to the database.
     """
 

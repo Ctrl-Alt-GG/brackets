@@ -1,19 +1,14 @@
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Larger than any tournament's players or teams can get (see `bracket.logic.subscriptions`), so the
-# frontend can load all of them with one request.
+# More than the teams a tournament can have (see `bracket.logic.subscriptions`), so one page holds
+# all of them. A lineup can be longer than a page.
 MAX_PAGE_SIZE = 500
 
-# What teams and players can be sorted by.
-ParticipantSortField = Literal[
-    "name", "elo_score", "swiss_score", "wins", "draws", "losses", "active", "created"
-]
 # Worked out from the matches on every request, so these sorts happen after loading every row.
-RESULT_SORT_FIELDS: frozenset[ParticipantSortField] = frozenset(
-    {"elo_score", "swiss_score", "wins", "draws", "losses"}
-)
+ResultSortField = Literal["elo_score", "swiss_score", "wins", "draws", "losses"]
+RESULT_SORT_FIELDS: frozenset[str] = frozenset(get_args(ResultSortField))
 
 
 class Pagination(BaseModel):
@@ -29,8 +24,22 @@ class Pagination(BaseModel):
 
 
 class ParticipantPagination(Pagination):
-    sort_by: ParticipantSortField = "name"
+    """
+    A page of a tournament's teams or players, which can be sorted by their results there. The
+    subclasses say what else each can be sorted by.
+    """
+
+    sort_by: str
 
     @property
     def sorts_by_results(self) -> bool:
         return self.sort_by in RESULT_SORT_FIELDS
+
+
+class TeamPagination(ParticipantPagination):
+    # `active` is whether the team plays the rounds still to come.
+    sort_by: Literal["name", "active", "created", ResultSortField] = "name"
+
+
+class PlayerPagination(ParticipantPagination):
+    sort_by: Literal["name", "created", ResultSortField] = "name"

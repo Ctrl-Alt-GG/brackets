@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from starlette import status
 
+from bracket.utils.i18n import gettext, gettext_noop
 from bracket.utils.types import EnumAutoStr
 
 
@@ -16,9 +17,10 @@ class UniqueIndex(EnumAutoStr):
     ix_users_email_lower = auto()
     stage_item_inputs_stage_item_id_team_id_key = auto()
     stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key = auto()
-    users_x_clubs_club_id_user_id_key = auto()
-    uq_users_x_clubs_owner = auto()
-    uq_players_x_teams_membership = auto()
+    tournament_organizers_pkey = auto()
+    uq_tournament_organizers_owner = auto()
+    tournament_players_pkey = auto()
+    tournament_teams_pkey = auto()
     uq_stage_item_inputs_slot = auto()
 
 
@@ -26,43 +28,63 @@ class ForeignKey(EnumAutoStr):
     matches_stage_item_input1_id_fkey = auto()
     matches_stage_item_input2_id_fkey = auto()
     stage_item_inputs_team_id_fkey = auto()
-    tournaments_club_id_fkey = auto()
+    tournament_teams_team_id_fkey = auto()
 
 
 unique_index_violation_error_lookup = {
-    UniqueIndex.ix_tournaments_dashboard_endpoint_lower: "This Details link is already taken",
-    UniqueIndex.ix_users_email: "This email is already taken",
-    UniqueIndex.ix_users_email_lower: "This email is already taken",
+    UniqueIndex.ix_tournaments_dashboard_endpoint_lower: gettext_noop(
+        "This Details link is already taken"
+    ),
+    UniqueIndex.ix_users_email: gettext_noop("This email is already taken"),
+    UniqueIndex.ix_users_email_lower: gettext_noop("This email is already taken"),
     # Both are unique per stage item: a team, or a place of an earlier stage item, takes one of
     # its slots at most.
     UniqueIndex.stage_item_inputs_stage_item_id_team_id_key: (
-        "This team already has another slot in this stage item"
+        gettext_noop("This team already has another slot in this stage item")
     ),
     UniqueIndex.stage_item_inputs_stage_item_id_winner_from_stage_item_id_w_key: (
-        "This place is already taken by another slot of this stage item"
+        gettext_noop("This place is already taken by another slot of this stage item")
     ),
-    UniqueIndex.users_x_clubs_club_id_user_id_key: "This account already helps run this event",
-    UniqueIndex.uq_users_x_clubs_owner: "This event already has an owner",
-    UniqueIndex.uq_players_x_teams_membership: "This player is already in this team",
-    UniqueIndex.uq_stage_item_inputs_slot: "This slot is already part of this stage item",
+    UniqueIndex.tournament_organizers_pkey: gettext_noop(
+        "This account already helps run this tournament"
+    ),
+    UniqueIndex.uq_tournament_organizers_owner: gettext_noop(
+        "This tournament already has an owner"
+    ),
+    # A player is an active member of one team at most among the teams of a tournament.
+    UniqueIndex.tournament_players_pkey: gettext_noop(
+        "A player in these teams already plays for another team of the tournament"
+    ),
+    UniqueIndex.tournament_teams_pkey: gettext_noop(
+        "This team already takes part in this tournament"
+    ),
+    UniqueIndex.uq_stage_item_inputs_slot: gettext_noop(
+        "This slot is already part of this stage item"
+    ),
 }
 
 
 foreign_key_violation_error_lookup = {
-    ForeignKey.matches_stage_item_input1_id_fkey: "This team is still part of matches",
-    ForeignKey.matches_stage_item_input2_id_fkey: "This team is still part of matches",
-    ForeignKey.stage_item_inputs_team_id_fkey: (
-        "This team still has a slot in a stage. Open that slot in Stages first."
+    ForeignKey.matches_stage_item_input1_id_fkey: gettext_noop(
+        "This team is still part of matches"
     ),
-    ForeignKey.tournaments_club_id_fkey: "This event still has tournaments, delete those first",
+    ForeignKey.matches_stage_item_input2_id_fkey: gettext_noop(
+        "This team is still part of matches"
+    ),
+    ForeignKey.stage_item_inputs_team_id_fkey: (
+        gettext_noop("This team still has a slot in a stage. Open that slot in Stages first.")
+    ),
+    ForeignKey.tournament_teams_team_id_fkey: gettext_noop(
+        "This team takes part in a tournament. Remove it from the tournament first."
+    ),
 }
 
 
-def unauthorized(detail: str = "Could not validate credentials") -> HTTPException:
+def unauthorized(detail: str | None = None) -> HTTPException:
     """For missing or invalid credentials. The frontend signs out when it gets this."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=detail,
+        detail=detail or gettext("Could not validate credentials"),
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -102,7 +124,7 @@ def check_unique_constraint_violation(expected_violations: set[UniqueIndex]) -> 
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=unique_index_violation_error_lookup[constraint],
+            detail=gettext(unique_index_violation_error_lookup[constraint]),
         ) from exc
 
 
@@ -128,5 +150,5 @@ def check_foreign_key_violation(expected_violations: set[ForeignKey]) -> Iterato
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=foreign_key_violation_error_lookup[constraint],
+            detail=gettext(foreign_key_violation_error_lookup[constraint]),
         ) from exc

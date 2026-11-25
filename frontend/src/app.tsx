@@ -33,8 +33,8 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('./app/pages/auth-pages').then((module) => ({ default: module.RegisterPage })),
 );
-const ClubsPage = lazy(() =>
-  import('./app/pages/clubs-page').then((module) => ({ default: module.ClubsPage })),
+const RosterPage = lazy(() =>
+  import('./app/pages/roster-page').then((module) => ({ default: module.RosterPage })),
 );
 const UserPage = lazy(() =>
   import('./app/pages/user-page').then((module) => ({ default: module.UserPage })),
@@ -48,7 +48,6 @@ const TOURNAMENT_ROUTES: Array<[path: string, section: TournamentSection]> = [
   ['/rankings', 'rankings'],
   ['/settings', 'settings'],
   ['/stages', 'stages'],
-  ['/stages/swiss/:stageItemId', 'stages'],
   ['/dashboard', 'dashboard'],
   ['/dashboard/schedule', 'dashboard-schedule'],
   ['/dashboard/standings', 'dashboard-standings'],
@@ -60,6 +59,7 @@ const TOURNAMENT_ROUTES: Array<[path: string, section: TournamentSection]> = [
 ];
 
 function RootLayout() {
+  const { t } = useTranslation();
   const [session, setSession] = useSession();
   const location = useLocation();
   // A big screen at the venue shows the tournament only, without the site's navigation.
@@ -67,7 +67,7 @@ function RootLayout() {
   // Only the API can remove the HttpOnly cookie. A failed request leaves the browser signed in.
   const logout = useMutation({
     ...logoutApiLogoutPostMutation(),
-    meta: { invalidates: [], successMessage: 'Logged out successfully.' },
+    meta: { invalidates: [], successMessage: t('session.loggedOut') },
     onSuccess: () => setSession(null),
   });
 
@@ -75,12 +75,12 @@ function RootLayout() {
     () =>
       setUnauthorizedHandler(() => {
         setSession(null);
-        toast.error('Your session expired. Please log in again.');
+        toast.error(t('session.expired'));
         // The browser would keep sending the session cookie, which the page can't remove, until
         // it expires. Logging out needs no valid session and always removes it.
         OpenApi.logoutApiLogoutPost().catch(() => {});
       }),
-    [setSession],
+    [setSession, t],
   );
 
   // The page only remembers who signed in. The session itself is a cookie, which can end without
@@ -136,14 +136,14 @@ function RootLayout() {
                 onClick={() => logout.mutate({})}
                 type="button"
               >
-                Try logging out again
+                {t('session.retryLogout')}
               </button>
             }
-            error="You are still signed in on this browser. Check your connection and try again before leaving this device."
-            title="Log out failed"
+            error={t('session.logoutFailedText')}
+            title={t('session.logoutFailedTitle')}
           />
         ) : null}
-        <Suspense fallback={<LoadingState title="Loading…" />}>
+        <Suspense fallback={<LoadingState title={t('common.loading')} />}>
           <Outlet />
         </Suspense>
       </main>
@@ -186,7 +186,7 @@ export const router = createBrowserRouter([
           { element: <HomePage />, path: '/' },
           { element: <LoginPage />, path: '/login' },
           { element: <RegisterPage />, path: '/create-account' },
-          { element: <ClubsPage />, path: '/events' },
+          { element: <RosterPage />, path: '/roster' },
           { element: <UserPage />, path: '/user' },
           ...TOURNAMENT_ROUTES.map(([path, section]) => ({
             element: <TournamentPage section={section} />,

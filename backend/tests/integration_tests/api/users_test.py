@@ -203,6 +203,29 @@ async def test_update_user_password(
 
 
 @pytest.mark.asyncio(loop_scope="session")
+async def test_password_advice_is_in_the_language_of_the_request(
+    startup_and_shutdown_uvicorn_server: None,
+) -> None:
+    """The strength is checked in a worker thread, which answers in the request's language too."""
+    async with temporary_user() as (user_created, headers):
+        response = await send_request(
+            HTTPMethod.PUT,
+            f"users/{user_created.id}/password",
+            None,
+            {"current_password": "some password", "password": "aaaaaaaaaaaa"},
+            {**headers, "Accept-Language": "hu"},
+        )
+
+    assert response == {
+        "detail": (
+            "Az olyan ismétléseket, mint az „aaa”, könnyű kitalálni. "
+            "Adj hozzá még egy-két szót. A ritka szavak jobbak. "
+            "Kerüld az ismétlődő szavakat és karaktereket."
+        )
+    }
+
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_update_user_password_needs_current_password(
     session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:

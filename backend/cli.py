@@ -18,7 +18,8 @@ from bracket.config import config
 from bracket.database import engine, session_scope
 from bracket.models.db.user import UserInsertable
 from bracket.models.enums import UserAccountType
-from bracket.sql.clubs import get_clubs_by_name_or_id, sql_make_club_owner
+from bracket.sql.organizers import sql_make_owner
+from bracket.sql.tournaments import get_tournaments_by_name_or_id, lock_tournament
 from bracket.sql.users import (
     check_whether_email_is_in_use,
     create_user,
@@ -177,30 +178,38 @@ async def set_password(session: AsyncSession, email: str, password: str) -> None
 
 
 @cli.command()
-@click.option("--event", prompt="Event (its name or id)", help="The event to hand over.")
+@click.option(
+    "--tournament", prompt="Tournament (its name or id)", help="The tournament to hand over."
+)
 @click.option("--email", prompt="Email of the new owner", help="The account that will own it.")
 @run_async
-async def set_event_owner(session: AsyncSession, event: str, email: str) -> None:
+async def set_tournament_owner(session: AsyncSession, tournament: str, email: str) -> None:
     """
-    Make an account the owner of an event, for an event whose owner can't hand it over: their
-    account is gone, or they can't sign in any more. The previous owner stays on as an organizer.
+    Make an account the owner of a tournament, for a tournament whose owner can't hand it over:
+    their account is gone, or they can't sign in any more. The previous owner stays on as an
+    organizer.
     """
     user = await get_user(session, email)
     if user is None:
         logger.error("No account has this email address")
         raise SystemExit(1)
 
-    clubs = await get_clubs_by_name_or_id(session, event)
-    if not clubs:
-        logger.error("No event has this name or id")
+    tournaments = await get_tournaments_by_name_or_id(session, tournament)
+    if not tournaments:
+        logger.error("No tournament has this name or id")
         raise SystemExit(1)
-    if len(clubs) > 1:
-        ids = ", ".join(str(club.id) for club in clubs)
-        logger.error(f"Several events are called {event} (ids {ids}). Give the id instead.")
+    if len(tournaments) > 1:
+        ids = ", ".join(str(found.id) for found in tournaments)
+        logger.error(
+            f"Several tournaments are called {tournament} (ids {ids}). Give the id instead."
+        )
         raise SystemExit(1)
 
-    await sql_make_club_owner(session, clubs[0].id, user.id)
-    logger.info(f"{user.email} now owns {clubs[0].name} (id {clubs[0].id})")
+    [found] = tournaments
+    # Like a command of the API, so that organizers can't change meanwhile.
+    await lock_tournament(session, found.id)
+    await sql_make_owner(session, found.id, user.id)
+    logger.info(f"{user.email} now owns {found.name} (id {found.id})")
 
 
 if __name__ == "__main__":

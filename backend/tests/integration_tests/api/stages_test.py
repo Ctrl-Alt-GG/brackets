@@ -34,7 +34,7 @@ async def test_stages_endpoint(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext, with_auth: bool
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,
@@ -95,9 +95,7 @@ async def test_stages_endpoint(
 async def test_create_stage(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    async with inserted_team(
-        DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-    ):
+    async with inserted_team(DUMMY_TEAM1, auth_context.tournament.id):
         assert (
             await send_tournament_request(
                 HTTPMethod.POST,
@@ -117,7 +115,7 @@ async def test_delete_stage(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,
@@ -141,7 +139,7 @@ async def test_update_stage(
 ) -> None:
     body = {"name": "Optimus", "custom_duration_minutes": custom_duration_minutes}
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(
                 update={"tournament_id": auth_context.tournament.id, "custom_duration_minutes": 40}
@@ -173,7 +171,7 @@ async def test_activate_stage(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ),
@@ -197,7 +195,7 @@ async def test_get_next_stage_rankings(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,

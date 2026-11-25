@@ -4,10 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import * as OpenApi from '../../openapi';
-import {
-  getClubsApiClubsGetOptions,
-  getTournamentsApiTournamentsGetOptions,
-} from '../../openapi/@tanstack/react-query.gen';
+import { getTournamentsApiTournamentsGetOptions } from '../../openapi/@tanstack/react-query.gen';
 import { useServerNow } from '../clock';
 import { TournamentStatusBadge } from '../components/tournament-status-badge';
 import { useSession } from '../hooks';
@@ -59,11 +56,11 @@ function TournamentCard({
             className="btn btn-primary btn-sm after:absolute after:inset-0 after:rounded-box active:translate-none"
             to={canManage ? `/tournaments/${tournament.id}` : detailsPath}
           >
-            {canManage ? t('common.manage') : t('common.details')}
+            {canManage ? t('common.organizerView') : t('common.details')}
           </Link>
           {canManage && tournament.dashboard_public ? (
             <Link className="btn btn-ghost btn-sm relative z-10" to={detailsPath}>
-              {t('common.details')}
+              {t('common.publicView')}
             </Link>
           ) : null}
         </div>
@@ -151,11 +148,10 @@ export function HomePage() {
   // The page stays open at the venue: a tournament that starts meanwhile moves on to running.
   const now = useServerNow();
   // Everyone sees the public tournaments: the running ones, and finished ones with the Details
-  // page enabled. Organizers also see all tournaments of their events, and which they manage.
+  // page enabled. Organizers also see every tournament they run, and which ones those are.
   const tournaments = useQuery(
     getTournamentsApiTournamentsGetOptions({ query: { filter_: 'ALL' } }),
   );
-  const clubs = useQuery({ ...getClubsApiClubsGetOptions(), enabled: canManage });
 
   const all = tournaments.data?.data ?? [];
   const mine = all.filter((tournament) => tournament.can_manage);
@@ -208,31 +204,10 @@ export function HomePage() {
         <div className="grid items-start gap-6 xl:grid-cols-[1.6fr_1fr]">
           {tournamentList}
           <Surface>
-            <SurfaceHeading title="New tournament" />
-            {clubs.isPending ? (
-              <LoadingState title="Loading events…" />
-            ) : clubs.error ? (
-              <ErrorState
-                action={
-                  <button className="btn btn-sm" onClick={() => void clubs.refetch()} type="button">
-                    Retry loading events
-                  </button>
-                }
-                error={getErrorMessage(clubs.error)}
-                title="Unable to load events"
-              />
-            ) : clubs.data && clubs.data.data.length > 0 ? (
-              <Suspense fallback={<LoadingState title="Loading…" />}>
-                <NewTournamentForm clubs={clubs.data.data} />
-              </Suspense>
-            ) : (
-              <div className="space-y-3 text-sm text-base-content/80">
-                <p>You need an event before you can create a tournament.</p>
-                <Link className="link font-semibold" to="/events">
-                  Create an event
-                </Link>
-              </div>
-            )}
+            <SurfaceHeading title={t('workspace.newTournament')} />
+            <Suspense fallback={<LoadingState title={t('common.loading')} />}>
+              <NewTournamentForm />
+            </Suspense>
           </Surface>
         </div>
       )}

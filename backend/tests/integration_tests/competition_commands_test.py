@@ -59,12 +59,8 @@ class Scope:
 
 
 async def create_scope(session: AsyncSession, name: str) -> Scope:
-    club = orm.Club(name=name)
-    session.add(club)
-    await session.flush()
-    tournament = orm.Tournament(
-        name=name, club_id=club.id, start_time=DUMMY_MOCK_TIME, dashboard_public=False
-    )
+    """A tournament with a team that takes part, and a player of no team."""
+    tournament = orm.Tournament(name=name, start_time=DUMMY_MOCK_TIME, dashboard_public=False)
     session.add(tournament)
     await session.flush()
     stage = orm.Stage(name="Groups", tournament_id=tournament.id)
@@ -76,18 +72,11 @@ async def create_scope(session: AsyncSession, name: str) -> Scope:
         loss_points=Decimal(0),
         add_score_points=False,
     )
-    team = orm.Team(name="Team", tournament_id=tournament.id)
-    player = orm.Player(
-        name="Player",
-        tournament_id=tournament.id,
-        active=True,
-        elo_score=1200,
-        swiss_score=0,
-        wins=0,
-        draws=0,
-        losses=0,
-    )
+    team = orm.Team(name="Team")
+    player = orm.Player(name="Player")
     session.add_all([stage, ranking, team, player])
+    await session.flush()
+    session.add(orm.TournamentTeam(tournament_id=tournament.id, team_id=team.id))
     await session.flush()
     item = orm.StageItem(
         name="Swiss",
@@ -120,8 +109,6 @@ async def create_scope(session: AsyncSession, name: str) -> Scope:
         stage_item_input2_id=inputs[1].id,
         duration_minutes=10,
         margin_minutes=5,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
         stage_item_input1_score=0,
         stage_item_input2_score=0,
     )
@@ -154,15 +141,15 @@ async def test_stage_item_creation_scopes_stage_and_ranking(
     )
     await validate_stage_item_create(session, local.tournament_id, body)
     for field, foreign_id, kind in (
-        ("stage_id", foreign.stage.id, "Stage"),
-        ("ranking_id", foreign.ranking.id, "Ranking"),
+        ("stage_id", foreign.stage.id, "stage"),
+        ("ranking_id", foreign.ranking.id, "ranking"),
     ):
         with pytest.raises(HTTPException) as error:
             await validate_stage_item_create(
                 session, local.tournament_id, body.model_copy(update={field: foreign_id})
             )
         assert error.value.status_code == 400
-        assert error.value.detail == f"Could not find {kind}(s) with ID {foreign_id}"
+        assert error.value.detail == f"This tournament has no {kind} with the ID {foreign_id}"
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -213,9 +200,10 @@ async def test_match_creation_scopes_every_reference(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_player_validation_is_scoped_and_skips_empty_sets(
+async def test_player_validation_refuses_unknown_players_and_skips_empty_sets(
     command_scopes: tuple[AsyncSession, Scope, Scope],
 ) -> None:
+    """Players are shared by every tournament, so a player of no team is valid anywhere."""
     session, local, foreign = command_scopes
     statements: list[str] = []
 
@@ -225,17 +213,13 @@ async def test_player_validation_is_scoped_and_skips_empty_sets(
     connection = (await session.connection()).sync_connection
     event.listen(connection, "before_cursor_execute", record)
     try:
-        await validate_player_ids(session, local.tournament_id, set())
+        await validate_player_ids(session, set())
         assert statements == []
-        await validate_player_ids(session, local.tournament_id, {PlayerId(local.player.id)})
+        await validate_player_ids(session, {PlayerId(local.player.id), PlayerId(foreign.player.id)})
         assert len(statements) == 1
         assert "matches" not in statements[0].lower()
         with pytest.raises(HTTPException) as error:
-            await validate_player_ids(
-                session,
-                local.tournament_id,
-                {PlayerId(local.player.id), PlayerId(foreign.player.id)},
-            )
+            await validate_player_ids(session, {PlayerId(local.player.id), PlayerId(-1)})
         assert error.value.status_code == 400
     finally:
         event.remove(connection, "before_cursor_execute", record)

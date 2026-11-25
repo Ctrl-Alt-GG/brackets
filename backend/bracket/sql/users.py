@@ -7,50 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bracket import orm
 from bracket.models.db.user import User, UserInDB, UserInsertable, UserPublic, UserToUpdate
 from bracket.models.enums import UserAccountType
-from bracket.utils.id_types import ClubId, TournamentId, UserId
+from bracket.utils.id_types import UserId
 from bracket.utils.security import normalize_email
 
 
 async def lock_user(session: AsyncSession, user_id: UserId) -> bool:
     """
-    Serialize the commands whose rules cover all events of an account, such as their names and
-    how many there are. Take it after the lock of an event the command changes.
+    Serialize the commands whose rules cover every tournament an account owns, such as how many
+    there are. Take it after the lock of a tournament the command changes.
     """
     return (
         await session.scalar(
             select(orm.User.id).where(orm.User.id == user_id).with_for_update(key_share=True)
         )
     ) is not None
-
-
-async def get_user_access_to_tournament(
-    session: AsyncSession, tournament_id: TournamentId, user_id: UserId
-) -> bool:
-    query = (
-        select(orm.UserXClub.id)
-        .join(orm.Tournament, orm.Tournament.club_id == orm.UserXClub.club_id)
-        .where(orm.UserXClub.user_id == user_id, orm.Tournament.id == tournament_id)
-    )
-    return bool(await session.scalar(select(query.exists())))
-
-
-async def get_which_clubs_has_user_access_to(session: AsyncSession, user_id: UserId) -> set[ClubId]:
-    return {
-        ClubId(club_id)
-        for club_id in await session.scalars(
-            select(orm.UserXClub.club_id).where(orm.UserXClub.user_id == user_id)
-        )
-    }
-
-
-async def get_user_access_to_club(session: AsyncSession, club_id: ClubId, user_id: UserId) -> bool:
-    return bool(
-        await session.scalar(
-            select(
-                exists().where(orm.UserXClub.user_id == user_id, orm.UserXClub.club_id == club_id)
-            )
-        )
-    )
 
 
 async def update_user(session: AsyncSession, user_id: UserId, user: UserToUpdate) -> None:

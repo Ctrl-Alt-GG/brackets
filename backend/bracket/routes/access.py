@@ -19,14 +19,14 @@ from bracket.logic.authentication import (
     Credentials,
     get_session_user,
 )
-from bracket.logic.clubs import check_user_owns_club
+from bracket.logic.organizers import check_user_owns_tournament
 from bracket.models.db.user import UserPublic
 from bracket.models.enums import TournamentStatus
-from bracket.sql.clubs import lock_club, lock_club_of_tournament
+from bracket.sql.organizers import is_organizer
 from bracket.sql.tournaments import lock_tournament
-from bracket.sql.users import get_user_access_to_club, get_user_access_to_tournament
 from bracket.utils.errors import forbidden, unauthorized
-from bracket.utils.id_types import ClubId, TournamentId
+from bracket.utils.i18n import gettext
+from bracket.utils.id_types import TournamentId
 from bracket.utils.rate_limit import enforce_visitor_read_limit
 
 # API clients send the token as a bearer token instead.
@@ -60,7 +60,10 @@ async def protect_session_from_csrf(request: Request) -> None:
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Requests signed in with the session cookie need the {CSRF_HEADER} header",
+            detail=gettext(
+                "Requests signed in with the session cookie need the {header} header",
+                header=CSRF_HEADER,
+            ),
         )
 
 
@@ -92,7 +95,7 @@ async def reject_cross_site_request(request: Request) -> None:
     if fetch_site == "cross-site" or (origin is not None and not is_own_origin(origin, request)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This request can't be made from another site",
+            detail=gettext("This request can't be made from another site"),
         )
 
 
@@ -115,45 +118,33 @@ async def user_authenticated_for_tournament(
     tournament_id: TournamentId, session: DbSession, request: Request, user: AuthenticatedUser
 ) -> UserPublic:
     """
-    An organizer of the tournament's event. A command then holds the tournament's lock, so
-    competitor checks and score writes can't interleave.
+    An organizer of the tournament. A command locks the tournament before it checks access, and
+    holds the lock until it ends, so that competitor checks and score writes can't interleave.
 
-    A command locks the event before it checks access: someone who loses access to the event
-    loses it once the commands that were let in finish, and a command that waits for the change
-    sees the event's organizers after it (see `bracket.sql.clubs`).
+    Changing who runs a tournament is a command on it as well: someone who loses access loses it
+    once the commands that were let in have finished, and a command that waits for the
+    tournament sees its organizers as they are after the change.
     """
     is_command = request.method not in READ_METHODS
     # Also for a tournament that doesn't exist, so that the answer doesn't tell which ids do.
-    if (
-        is_command and not await lock_club_of_tournament(session, tournament_id)
-    ) or not await get_user_access_to_tournament(session, tournament_id, user.id):
-        raise forbidden("You don't have access to this tournament")
-
-    if is_command and not await lock_tournament(session, tournament_id):
-        raise forbidden("This tournament is no longer available")
+    if (is_command and not await lock_tournament(session, tournament_id)) or not await is_organizer(
+        session, tournament_id, user.id
+    ):
+        raise forbidden(gettext("You don't have access to this tournament"))
 
     return user
 
 
-async def user_authenticated_for_club(
-    club_id: ClubId, session: DbSession, request: Request, user: AuthenticatedUser
-) -> UserPublic:
-    """An organizer of the event. A command locks it first, so that its organizers can't change."""
-    if request.method not in READ_METHODS and not await lock_club(session, club_id):
-        raise forbidden("You don't have access to this event")
-    if not await get_user_access_to_club(session, club_id, user.id):
-        raise forbidden("You don't have access to this event")
-
-    return user
-
-
-async def user_owns_club(
-    club_id: ClubId,
+async def user_owns_tournament(
+    tournament_id: TournamentId,
     session: DbSession,
-    user: Annotated[UserPublic, Depends(user_authenticated_for_club)],
+    user: Annotated[UserPublic, Depends(user_authenticated_for_tournament)],
 ) -> UserPublic:
-    """The event's owner. Organizers who were added to help can't rename it or manage who helps."""
-    await check_user_owns_club(session, club_id, user.id)
+    """
+    The tournament's owner. Organizers who were added to help can't decide who helps, hand the
+    tournament over or delete it.
+    """
+    await check_user_owns_tournament(session, tournament_id, user.id)
     return user
 
 
@@ -167,7 +158,7 @@ async def authenticate_tournament_or_public(
     The organizer of the tournament, or `None` for anyone else while the tournament is public.
     """
     user = await get_session_user(session, credentials, response)
-    if user is not None and await get_user_access_to_tournament(session, tournament_id, user.id):
+    if user is not None and await is_organizer(session, tournament_id, user.id):
         return user
 
     tournament = await session.get(orm.Tournament, tournament_id)
@@ -177,8 +168,8 @@ async def authenticate_tournament_or_public(
         return None
 
     if user is not None:
-        raise forbidden("You don't have access to this tournament")
-    raise unauthorized("Could not validate credentials or page is not publicly available")
+        raise forbidden(gettext("You don't have access to this tournament"))
+    raise unauthorized(gettext("Could not validate credentials or page is not publicly available"))
 
 
 async def user_authenticated_or_public_dashboard(

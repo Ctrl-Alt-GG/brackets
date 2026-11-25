@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { Trans, useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import {
@@ -14,12 +15,15 @@ import {
   zUserToRegister,
 } from '../../openapi/zod.gen';
 import { useSession } from '../hooks';
+import { useOrganizerTranslation } from '../organizer-locales';
 import { EmptyState, Field, PageShell, Surface } from '../ui';
 import { safeNextPath } from '../urls';
 
 const loginSchema = zBodyLoginForAccessTokenApiTokenPost.pick({ password: true, username: true });
 
+/** In the visitor's language: players who follow the login link learn here that they need none. */
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [, setSession] = useSession();
@@ -30,7 +34,7 @@ export function LoginPage() {
   });
   const login = useMutation({
     ...loginForAccessTokenApiTokenPostMutation(),
-    meta: { successMessage: 'Logged in successfully.' },
+    meta: { successMessage: t('login.loggedIn') },
     onSuccess: ({ name, user_id }) => {
       setSession({ name, started: Date.now(), user_id });
       // Back to where the organizer was, such as the tournament their session ended on.
@@ -39,14 +43,13 @@ export function LoginPage() {
   });
 
   return (
-    <PageShell title="Organizer login">
+    <PageShell title={t('nav.organizerLogin')}>
       <Surface className="mx-auto w-full max-w-xl">
         <p className="text-sm text-base-content/80">
-          Players don't need an account:{' '}
-          <Link className="link font-semibold" to="/">
-            open a tournament
-          </Link>{' '}
-          to see its schedule, teams and standings.
+          <Trans
+            components={{ tournaments: <Link className="link font-semibold" to="/" /> }}
+            i18nKey="login.playersNeedNoAccount"
+          />
         </p>
         <form
           onSubmit={form.handleSubmit((credentials) =>
@@ -61,7 +64,7 @@ export function LoginPage() {
             }),
           )}
         >
-          <Field label="Email">
+          <Field label={t('login.email')}>
             <input
               autoComplete="username"
               className="input w-full"
@@ -71,7 +74,7 @@ export function LoginPage() {
               {...form.register('username')}
             />
           </Field>
-          <Field label="Password">
+          <Field label={t('login.password')}>
             <input
               autoComplete="current-password"
               className="input w-full"
@@ -82,18 +85,16 @@ export function LoginPage() {
           </Field>
           <div className="mt-4 flex flex-wrap items-center gap-4">
             <button className="btn btn-primary" disabled={login.isPending} type="submit">
-              {login.isPending ? 'Logging in…' : 'Log in'}
+              {login.isPending ? t('login.loggingIn') : t('login.logIn')}
             </button>
             {authFeatures.data?.data.user_registration_enabled ? (
               <Link className="link text-sm" to="/create-account">
-                Create account
+                {t('login.createAccount')}
               </Link>
             ) : null}
           </div>
-          {/* The site sends no email, so a forgotten password is set again on the server. */}
-          <p className="mt-4 text-sm text-base-content/70">
-            Forgot your password? Ask whoever runs this site to set a new one for you.
-          </p>
+          {/* The site sends no email: the administrator sets a new password on the server. */}
+          <p className="mt-4 text-sm text-base-content/70">{t('login.forgotPassword')}</p>
         </form>
       </Surface>
     </PageShell>
@@ -104,6 +105,7 @@ export function LoginPage() {
 const registerSchema = zUserToRegister.extend({ password: zUserPasswordToUpdate.shape.password });
 
 export function RegisterPage() {
+  const { t } = useOrganizerTranslation();
   const navigate = useNavigate();
   const [, setSession] = useSession();
   const authFeatures = useQuery(getAuthFeaturesApiAuthFeaturesGetOptions());
@@ -113,7 +115,7 @@ export function RegisterPage() {
   });
   const register = useMutation({
     ...registerUserApiUsersRegisterPostMutation(),
-    meta: { successMessage: 'Account created successfully.' },
+    meta: { successMessage: t('register.created') },
     onSuccess: ({ data: { name, user_id } }) => {
       setSession({ name, started: Date.now(), user_id });
       navigate('/');
@@ -123,34 +125,34 @@ export function RegisterPage() {
 
   if (authFeatures.data && !authFeatures.data.data.user_registration_enabled) {
     return (
-      <PageShell title="Create an organizer account">
+      <PageShell title={t('register.title')}>
         <EmptyState
           action={
             <Link className="btn btn-ghost btn-sm" to="/login">
-              Go to login
+              {t('register.goToLogin')}
             </Link>
           }
-          text="Account creation is currently disabled by the server configuration."
-          title="Registration unavailable"
+          text={t('register.unavailableText')}
+          title={t('register.unavailableTitle')}
         />
       </PageShell>
     );
   }
 
   return (
-    <PageShell title="Create an organizer account">
+    <PageShell title={t('register.title')}>
       <Surface className="mx-auto w-full max-w-2xl">
         <form onSubmit={form.handleSubmit((body) => register.mutate({ body }))}>
           <div className="grid gap-x-4 md:grid-cols-2">
-            <Field error={errors.name?.message} label="Display name">
+            <Field error={errors.name?.message} label={t('common.displayName')}>
               <input
                 className="input w-full"
-                placeholder="Tournament director"
+                placeholder={t('register.displayNamePlaceholder')}
                 required
                 {...form.register('name')}
               />
             </Field>
-            <Field error={errors.email?.message} label="Email">
+            <Field error={errors.email?.message} label={t('common.email')}>
               <input
                 autoComplete="email"
                 className="input w-full"
@@ -160,11 +162,15 @@ export function RegisterPage() {
                 {...form.register('email')}
               />
             </Field>
-            <Field className="md:col-span-2" error={errors.password?.message} label="Password">
+            <Field
+              className="md:col-span-2"
+              error={errors.password?.message}
+              label={t('account.password')}
+            >
               <input
                 autoComplete="new-password"
                 className="input w-full"
-                placeholder="Use at least twelve characters"
+                placeholder={t('register.passwordPlaceholder')}
                 required
                 type="password"
                 {...form.register('password')}
@@ -173,10 +179,10 @@ export function RegisterPage() {
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
             <button className="btn btn-primary" disabled={register.isPending} type="submit">
-              {register.isPending ? 'Creating…' : 'Create account'}
+              {register.isPending ? t('common.creating') : t('register.create')}
             </button>
             <Link className="link text-sm" to="/login">
-              I already have an account
+              {t('register.haveAccount')}
             </Link>
           </div>
         </form>

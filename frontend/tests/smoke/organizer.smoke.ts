@@ -26,36 +26,31 @@ async function workspace(page: Page, tournamentId: number) {
 
 /** A tournament of two teams in a round robin, which is being played. */
 async function seedTournament(page: Page) {
-  // Event names are unique per organizer, and the database outlives a run.
-  const { data: club } = await call<OpenApi.ClubResponse>(page, 'POST', '/clubs', {
-    name: `Smoke test event ${Date.now()}`,
-  } satisfies OpenApi.ClubCreateBody);
-  if (!club) throw new Error('The API created no event.');
   const { data: tournament } = await call<OpenApi.TournamentResponse>(
     page,
     'POST',
     '/tournaments',
     {
-      club_id: club.id,
       dashboard_public: true,
       duration_minutes: 20,
       margin_minutes: 5,
       name: 'Smoke Cup',
-      players_can_be_in_multiple_teams: false,
       start_time: new Date().toISOString(),
     } satisfies OpenApi.TournamentBody,
   );
   const path = `/tournaments/${tournament.id}`;
+  // Teams are shared by every tournament: they are created first, and then take part.
   const teams = await Promise.all(
     ['Red', 'Blue'].map(async (name) => {
-      const team = await call<OpenApi.SingleTeamResponse>(page, 'POST', `${path}/teams`, {
-        active: true,
+      const team = await call<OpenApi.SingleTeamResponse>(page, 'POST', '/teams', {
         name,
-        player_ids: [],
       } satisfies OpenApi.TeamBody);
       return team.data;
     }),
   );
+  await call(page, 'POST', `${path}/teams`, {
+    team_ids: teams.map((team) => team.id),
+  } satisfies OpenApi.TournamentTeamsBody);
 
   await call(page, 'POST', `${path}/stages`);
   const { rankings, stages } = await workspace(page, tournament.id);
@@ -93,11 +88,11 @@ test('an organizer logs in, edits a ranking, enters a score and logs out', async
 
   // The API keeps points as decimals, and sends them back in its own notation.
   await page.goto(`/tournaments/${tournamentId}/rankings`);
-  const ranking = page.locator('details').filter({ hasText: 'Ranking #0' });
+  const ranking = page.locator('details').filter({ hasText: 'Points rule 1' });
   await ranking.locator('summary').click();
   await ranking.getByLabel('Win points').fill('3');
-  await ranking.getByRole('button', { name: 'Save ranking' }).click();
-  await expect(page.getByText('Ranking saved.')).toBeVisible();
+  await ranking.getByRole('button', { name: 'Save rule' }).click();
+  await expect(page.getByText('Points rule saved.')).toBeVisible();
   await expect(ranking.locator('summary')).toContainText('Win 3 · Draw 0.5 · Loss 0');
   await page.reload();
   await ranking.locator('summary').click();

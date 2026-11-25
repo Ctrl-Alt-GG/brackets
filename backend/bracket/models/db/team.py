@@ -1,50 +1,71 @@
 import csv
-from decimal import Decimal
 
 from heliclockter import datetime_utc
-from pydantic import Field, field_validator
+from pydantic import AliasPath, ConfigDict, Field, field_validator
 
 from bracket.models.db.player import Player
-from bracket.models.db.shared import BaseModelORM
-from bracket.models.results import START_ELO
+from bracket.models.db.shared import ApiModel, BaseModelORM
+from bracket.models.enums import TournamentStatus
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import PlayerId, TeamId, TournamentId
 from bracket.utils.pydantic import ParticipantName, check_participant_names
 
 
 class TeamInsertable(BaseModelORM):
-    created: datetime_utc
     name: str
-    tournament_id: TournamentId
-    active: bool
-    # The team's results over the tournament. Repositories read the unmaintained columns of the
-    # teams table here; answers that show results replace them with the replayed totals
-    # (`bracket.logic.ranking.team_totals`).
-    elo_score: Decimal = START_ELO
-    swiss_score: Decimal = Decimal("0.0")
-    wins: int = 0
-    draws: int = 0
-    losses: int = 0
+    created: datetime_utc
     logo_path: str | None = None
 
 
 class Team(TeamInsertable):
+    """A team. Teams are shared by every tournament, and can take part in several at once."""
+
     id: TeamId
 
 
-class FullTeamWithPlayers(Team):
-    """A team with its roster."""
+class TeamMember(BaseModelORM):
+    """A player in a team's roster."""
 
-    players: list[Player]
+    player: Player
+    # Only active members play for the team. A player is an active member of one team at most
+    # among the teams of a tournament.
+    active: bool
 
-    @property
-    def player_ids(self) -> list[PlayerId]:
-        return [player.id for player in self.players]
+
+class TeamParticipation(BaseModelORM):
+    """A tournament that a team takes part in."""
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
+
+    tournament_id: TournamentId
+    tournament_name: str = Field(validation_alias=AliasPath("tournament", "name"))
+    tournament_status: TournamentStatus = Field(validation_alias=AliasPath("tournament", "status"))
+    # Whether the team takes part in the tournament's rounds that are still to come.
+    active: bool
+
+
+class TeamWithMembers(Team):
+    """A team with its roster and the tournaments it takes part in."""
+
+    members: list[TeamMember]
+    participations: list[TeamParticipation]
+
+
+class TeamMemberBody(ApiModel):
+    player_id: PlayerId
+    active: bool = True
 
 
 class TeamBody(BaseModelORM):
     name: ParticipantName
-    active: bool
-    player_ids: set[PlayerId]
+    members: list[TeamMemberBody] = Field(default_factory=list)
+
+    @field_validator("members")
+    @classmethod
+    def players_are_members_once(cls, members: list[TeamMemberBody]) -> list[TeamMemberBody]:
+        if len({member.player_id for member in members}) < len(members):
+            raise ValueError(gettext("A player can be in a team's roster once"))
+        return members
 
 
 def parse_teams_with_players(names: str) -> list[tuple[str, list[str]]]:
@@ -58,16 +79,15 @@ def parse_teams_with_players(names: str) -> list[tuple[str, list[str]]]:
 
 class TeamMultiBody(BaseModelORM):
     names: str = Field(..., min_length=1)
-    active: bool
 
     @field_validator("names")
     @classmethod
     def validate_names(cls, value: str) -> str:
         teams = parse_teams_with_players(value)
         if not teams:
-            raise ValueError("Enter at least one team")
+            raise ValueError(gettext("Enter at least one team"))
         if any(not team_name for team_name, _ in teams):
-            raise ValueError("Every line needs a team name before its players")
+            raise ValueError(gettext("Every line needs a team name before its players"))
         check_participant_names([name for team in teams for name in (team[0], *team[1])])
         return value
 

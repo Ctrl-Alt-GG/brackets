@@ -8,6 +8,9 @@ from bracket.models.db.stage import Stage, StageUpdateBody
 from bracket.models.db.stage_tree import StageWithStageItems
 from bracket.utils.id_types import RoundId, StageId, StageItemId, TournamentId
 
+# Loads a slot's team: its participation in the tournament, with the team itself.
+SLOT_TEAM = joinedload(orm.StageItemInput.team).joinedload(orm.TournamentTeam.team)
+
 
 async def get_full_tournament_details(
     session: AsyncSession,
@@ -19,7 +22,7 @@ async def get_full_tournament_details(
     no_draft_rounds: bool = False,
 ) -> list[StageWithStageItems]:
     """
-    Load a tournament's stage tree. Its teams carry their stored, unmaintained results:
+    Load a tournament's stage tree. Its teams carry the results of a team that hasn't played:
     `bracket.logic.ranking.team_totals` replaces them for answers that show them.
     """
     item_loader = selectinload(orm.Stage.stage_items)
@@ -41,10 +44,10 @@ async def get_full_tournament_details(
         .order_by(orm.Stage.id)
         .options(
             item_loader.options(
-                selectinload(orm.StageItem.inputs).joinedload(orm.StageItemInput.team),
+                selectinload(orm.StageItem.inputs).options(SLOT_TEAM),
                 round_loader.selectinload(orm.Round.matches).options(
-                    joinedload(orm.Match.stage_item_input1).joinedload(orm.StageItemInput.team),
-                    joinedload(orm.Match.stage_item_input2).joinedload(orm.StageItemInput.team),
+                    joinedload(orm.Match.stage_item_input1).options(SLOT_TEAM),
+                    joinedload(orm.Match.stage_item_input2).options(SLOT_TEAM),
                 ),
             )
         )

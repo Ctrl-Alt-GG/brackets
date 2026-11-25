@@ -22,9 +22,7 @@ from tests.integration_tests.sql import inserted_ranking, inserted_team, inserte
 async def test_rankings_endpoint(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    async with inserted_team(
-        DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-    ):
+    async with inserted_team(DUMMY_TEAM1, auth_context.tournament.id):
         response = await send_tournament_request(HTTPMethod.GET, "rankings", auth_context, {})
         for ranking in response["data"]:
             for field in ("win_points", "draw_points", "loss_points"):
@@ -63,9 +61,7 @@ async def test_create_ranking(
 async def test_delete_ranking(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    async with inserted_team(
-        DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-    ):
+    async with inserted_team(DUMMY_TEAM1, auth_context.tournament.id):
         async with inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as ranking_inserted:
@@ -88,9 +84,7 @@ async def test_update_ranking(
         "add_score_points": True,
         "position": 42,
     }
-    async with inserted_team(
-        DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-    ):
+    async with inserted_team(DUMMY_TEAM1, auth_context.tournament.id):
         async with inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as ranking_inserted:
@@ -114,9 +108,7 @@ async def test_ranking_of_other_tournament_is_not_found(
 ) -> None:
     async with (
         inserted_tournament(
-            DUMMY_TOURNAMENT.model_copy(
-                update={"club_id": auth_context.club.id, "dashboard_endpoint": None}
-            )
+            DUMMY_TOURNAMENT.model_copy(update={"dashboard_endpoint": None}), auth_context.user.id
         ) as other_tournament,
         inserted_ranking(
             DUMMY_RANKING1.model_copy(update={"tournament_id": other_tournament.id})

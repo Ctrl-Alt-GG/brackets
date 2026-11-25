@@ -1,14 +1,19 @@
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, or_, select, update
+from heliclockter import datetime_utc
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload
 
 from bracket import orm
 from bracket.models.db.match import Match, MatchBody, MatchCreateBody, MatchInsertable, MatchTiming
+from bracket.models.enums import TournamentStatus
 from bracket.models.results import TeamMatchResult
+from bracket.models.schedule import MatchElsewhere
+from bracket.sql.stages import SLOT_TEAM
 from bracket.utils.id_types import (
     MatchId,
+    PlayerId,
     RoundId,
     StageItemId,
     StageItemInputId,
@@ -31,8 +36,8 @@ async def get_match_with_slots(
         select(orm.Match)
         .where(orm.Match.id == match_id, orm.Match.tournament_id == tournament_id)
         .options(
-            joinedload(orm.Match.stage_item_input1).joinedload(orm.StageItemInput.team),
-            joinedload(orm.Match.stage_item_input2).joinedload(orm.StageItemInput.team),
+            joinedload(orm.Match.stage_item_input1).options(SLOT_TEAM),
+            joinedload(orm.Match.stage_item_input2).options(SLOT_TEAM),
         )
         .execution_options(populate_existing=True)
     )
@@ -89,6 +94,84 @@ async def get_played_team_results(
     ]
 
 
+async def get_matches_elsewhere(
+    session: AsyncSession, tournament_id: TournamentId
+) -> list[MatchElsewhere]:
+    """
+    The published matches of other open tournaments that a team of this tournament plays there
+    too, or that a player of its lineup plays for some team. A match has a row for each such team
+    of it, and one more for each such player.
+    """
+    our_teams = select(orm.TournamentTeam.team_id).where(
+        orm.TournamentTeam.tournament_id == tournament_id
+    )
+    our_players = select(orm.TournamentPlayer.player_id).where(
+        orm.TournamentPlayer.tournament_id == tournament_id
+    )
+    slot = aliased(orm.StageItemInput)
+    their_lineup = aliased(orm.TournamentPlayer)
+    rows = await session.execute(
+        select(
+            orm.Match.id,
+            orm.Match.tournament_id,
+            orm.Tournament.name,
+            orm.Match.start_time,
+            orm.Match.duration_minutes + orm.Match.margin_minutes,
+            slot.team_id,
+            slot.team_id.in_(our_teams),
+            their_lineup.player_id,
+        )
+        .join(orm.Tournament, orm.Tournament.id == orm.Match.tournament_id)
+        .join(orm.Round, orm.Round.id == orm.Match.round_id)
+        .join(
+            slot,
+            and_(
+                slot.tournament_id == orm.Match.tournament_id,
+                slot.id.in_([orm.Match.stage_item_input1_id, orm.Match.stage_item_input2_id]),
+            ),
+        )
+        .outerjoin(
+            their_lineup,
+            and_(
+                their_lineup.tournament_id == orm.Match.tournament_id,
+                their_lineup.team_id == slot.team_id,
+                their_lineup.player_id.in_(our_players),
+            ),
+        )
+        .where(
+            orm.Match.tournament_id != tournament_id,
+            orm.Tournament.status == TournamentStatus.OPEN,
+            orm.Round.is_draft.is_(False),
+            orm.Match.start_time.is_not(None),
+            or_(slot.team_id.in_(our_teams), their_lineup.player_id.is_not(None)),
+        )
+    )
+    return [
+        MatchElsewhere(
+            match_id=MatchId(match_id),
+            tournament_id=TournamentId(other_tournament_id),
+            tournament_name=tournament_name,
+            start_time=datetime_utc.from_datetime(start_time),
+            minutes=minutes,
+            team_id=TeamId(team_id),
+            team_takes_part=team_takes_part,
+            player_id=PlayerId(player_id) if player_id is not None else None,
+        )
+        for (
+            match_id,
+            other_tournament_id,
+            tournament_name,
+            start_time,
+            minutes,
+            team_id,
+            team_takes_part,
+            player_id,
+        ) in rows
+        # The query only selects planned matches, and slots with teams.
+        if start_time is not None and team_id is not None
+    ]
+
+
 async def sql_delete_match(session: AsyncSession, match_id: MatchId) -> None:
     await session.execute(delete(orm.Match).where(orm.Match.id == match_id))
 
@@ -128,8 +211,6 @@ async def sql_create_matches(
             custom_margin_minutes=match.custom_margin_minutes,
             stage_item_input1_score=0,
             stage_item_input2_score=0,
-            stage_item_input1_conflict=False,
-            stage_item_input2_conflict=False,
         )
         for match in matches
     ]
@@ -196,24 +277,6 @@ async def sql_update_match_timings(session: AsyncSession, timings: Sequence[Matc
                 "margin_minutes": timing.margin_minutes,
             }
             for timing in timings
-        ],
-    )
-
-
-async def sql_update_match_conflicts(
-    session: AsyncSession, conflicts: Sequence[tuple[MatchId, bool, bool]]
-) -> None:
-    if not conflicts:
-        return
-    await session.execute(
-        update(orm.Match),
-        [
-            {
-                "id": match_id,
-                "stage_item_input1_conflict": conflict1,
-                "stage_item_input2_conflict": conflict2,
-            }
-            for match_id, conflict1, conflict2 in conflicts
         ],
     )
 

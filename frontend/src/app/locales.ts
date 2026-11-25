@@ -1,27 +1,85 @@
-import { createInstance, type InitOptions } from 'i18next';
+import type { InitOptions } from 'i18next';
+
+import type { organizerEnglish } from './organizer-locales';
 
 /*
- * The pages players open, the home page and a tournament's Details pages, are in Hungarian and
- * English. The organizer workspace and the account pages are English only: the API's messages
- * are English, and organizers know it.
+ * Every page is in Hungarian and English, in the language chosen with the switch or else the
+ * browser's. These are the texts of the pages players open and of what every page shares. The
+ * organizer pages' own texts are in `organizer-locales.ts`, which loads with those pages.
  */
 
 const en = {
   nav: {
     main: 'Main',
     tournaments: 'Tournaments',
-    events: 'Events',
+    roster: 'Teams and players',
     account: 'Account',
     logOut: 'Log out',
     loggingOut: 'Logging out…',
     organizerLogin: 'Organizer login',
     language: 'Language',
   },
+  login: {
+    playersNeedNoAccount:
+      "Players don't need an account: <tournaments>open a tournament</tournaments> to see its schedule, teams and standings.",
+    email: 'Email',
+    password: 'Password',
+    logIn: 'Log in',
+    loggingIn: 'Logging in…',
+    createAccount: 'Create account',
+    forgotPassword: 'Forgot your password? Contact the site administrator.',
+    loggedIn: 'Logged in successfully.',
+  },
+  session: {
+    loggedOut: 'Logged out successfully.',
+    expired: 'Your session expired. Please log in again.',
+    logoutFailedTitle: 'Log out failed',
+    logoutFailedText:
+      'You are still signed in on this browser. Check your connection and try again before leaving this device.',
+    retryLogout: 'Try logging out again',
+  },
+  // The parts of the organizer pages that load with every page.
+  workspace: {
+    overview: 'Overview',
+    players: 'Players',
+    teams: 'Teams',
+    stages: 'Stages',
+    schedule: 'Schedule',
+    standings: 'Standings',
+    settings: 'Settings',
+    waitingForResults: 'Waiting for results',
+    setupTitle: 'Get the tournament ready',
+    setupTeams: 'Add the teams that take part.',
+    setupStages: 'Set up the stages, such as groups and a bracket, and put the teams in them.',
+    setupShare: 'Share the Details link with the players. Settings has it, with a QR code.',
+    setupDone: 'Done',
+    enterResults:
+      'These matches have started. Enter each result as soon as the match is over: the standings, the bracket and the next matches follow from it.',
+    recalculateTimes: 'Recalculate times',
+    timesRecalculated: 'Match times recalculated.',
+    scheduleHelp:
+      'Match times are planned automatically: a round starts when the previous one has finished, and its matches start together, unless a team or one of its players plays in another tournament then. Such a match waits until they are free. Enter results right here on the matches. The planned times follow from the start time, match duration and break in Settings, and the match duration of a stage in Stages.',
+    conflictsHelp:
+      'Some teams or players would have to be in two places at once. Recalculate the times to move their matches.',
+    conflictHere: '{{team}} has another match at this time.',
+    conflictElsewhere: '{{team}} plays in {{tournament}} at this time too.',
+    conflictPlayers_one: '{{players}} of {{team}} plays in {{tournament}} at this time too.',
+    conflictPlayers_other: '{{players}} of {{team}} play in {{tournament}} at this time too.',
+    runningLate: 'Running late?',
+    moveBy: 'Move the rounds that are still to come by <minutes/> minutes',
+    minutesToMove: 'Minutes to move the schedule by',
+    later: 'Later',
+    earlier: 'Earlier',
+    scheduleMoved: 'Schedule moved.',
+    newTournament: 'New tournament',
+  },
   common: {
     retry: 'Retry',
     loading: 'Loading…',
     details: 'Details',
-    manage: 'Manage',
+    // The two sides of a tournament an organizer switches between.
+    organizerView: 'Organizer view',
+    publicView: 'Public view',
     bigScreen: 'Big screen',
     yourTeam: 'Your team',
     undecided: 'TBD',
@@ -77,6 +135,9 @@ const en = {
     roundOf16: 'Round of 16',
     roundOf32: 'Round of 32',
     roundOf: 'Round of {{count}}',
+    // The names the site gives rounds and stages until the organizers name them.
+    generated: 'Round {{padded}}',
+    defaultStage: 'Stage',
   },
   home: {
     title: 'Tournaments',
@@ -127,6 +188,8 @@ const en = {
     noUpcoming: 'No upcoming matches for {{team}} right now.',
     playingNow: 'Playing now',
     comingUpNext: 'Coming up next',
+    fullSchedule: 'Full schedule',
+    allResults: 'All results',
     nothingScheduled: 'No matches are running or scheduled at the moment.',
     stagesAndGroups: 'Stages and groups',
     notSetUp: 'The tournament format has not been set up yet.',
@@ -199,29 +262,96 @@ const en = {
     renderFailed: 'This page failed to render',
     reload: 'Reload the page',
     unexpected: 'An unexpected error occurred.',
+    requestFailed: 'The request failed. Check your connection and try again.',
+    tooManyAttemptsIn_one: 'Too many attempts. Try again in a minute.',
+    tooManyAttemptsIn_other: 'Too many attempts. Try again in {{count}} minutes.',
+    tooManyAttempts: 'Too many attempts. Try again in a few minutes.',
+    timeout: 'The server took too long to answer. Reload to see what was saved.',
+    noTournamentWithLink: 'No tournament has the Details link "{{link}}".',
+    organizerViewNeedsId:
+      "The organizer view opens with the tournament's number in the address, not its Details link.",
   },
 };
 
-type Translation = { [Key in keyof typeof en]: { [Text in keyof (typeof en)[Key]]: string } };
+/** Texts with the same keys as `texts`, in another language. */
+export type Translated<Texts> = { [Key in keyof Texts]: { [Text in keyof Texts[Key]]: string } };
 
 // Informal, second person, like the rest of the community's Hungarian copy. Hungarian puts no
 // plural on a noun after a number, so both plural forms are the same.
-const hu: Translation = {
+const hu: Translated<typeof en> = {
   nav: {
     main: 'Fő navigáció',
     tournaments: 'Versenyek',
-    events: 'Események',
+    roster: 'Csapatok és játékosok',
     account: 'Fiók',
     logOut: 'Kijelentkezés',
     loggingOut: 'Kijelentkezés…',
     organizerLogin: 'Szervezői belépés',
     language: 'Nyelv',
   },
+  login: {
+    playersNeedNoAccount:
+      'Játékosként nincs szükséged fiókra: <tournaments>nyisd meg a versenyedet</tournaments>, és látod a menetrendjét, a csapatait és a tabelláját.',
+    email: 'E-mail-cím',
+    password: 'Jelszó',
+    logIn: 'Belépés',
+    loggingIn: 'Belépés…',
+    createAccount: 'Fiók létrehozása',
+    forgotPassword: 'Elfelejtetted a jelszavad? Fordulj az oldal adminisztrátorához.',
+    loggedIn: 'Sikeres belépés.',
+  },
+  session: {
+    loggedOut: 'Sikeres kijelentkezés.',
+    expired: 'A munkameneted lejárt. Lépj be újra.',
+    logoutFailedTitle: 'A kijelentkezés nem sikerült',
+    logoutFailedText:
+      'Ebben a böngészőben még be vagy jelentkezve. Ellenőrizd a kapcsolatot, és próbáld újra, mielőtt otthagyod az eszközt.',
+    retryLogout: 'Kijelentkezés újra',
+  },
+  workspace: {
+    overview: 'Áttekintés',
+    players: 'Játékosok',
+    teams: 'Csapatok',
+    stages: 'Szakaszok',
+    schedule: 'Menetrend',
+    standings: 'Tabella',
+    settings: 'Beállítások',
+    waitingForResults: 'Eredményre váró meccsek',
+    setupTitle: 'Készítsd elő a versenyt',
+    setupTeams: 'Add hozzá a résztvevő csapatokat.',
+    setupStages:
+      'Állítsd be a szakaszokat, például csoportokat és ágrajzot, és tedd bele a csapatokat.',
+    setupShare:
+      'Oszd meg a Részletek-linket a játékosokkal. A Beállítások között megtalálod, QR-kóddal együtt.',
+    setupDone: 'Kész',
+    enterResults:
+      'Ezek a meccsek elkezdődtek. Minden eredményt vigyél fel, amint a meccs véget ért: ebből áll össze a tabella, az ágrajz és a következő meccsek.',
+    recalculateTimes: 'Időpontok újraszámolása',
+    timesRecalculated: 'A meccsek időpontjai újraszámolva.',
+    scheduleHelp:
+      'A meccsek időpontjai maguktól alakulnak: egy forduló akkor indul, amikor az előző véget ért, és a meccsei egyszerre kezdődnek, hacsak egy csapat vagy egy játékosa nem játszik épp egy másik versenyen. Az ilyen meccs megvárja, amíg mindannyian szabadok. Az eredményeket itt, a meccseknél viheted fel. A tervezett időpontok a Beállításokban megadott kezdésből, meccsidőből és szünetből, valamint a Szakaszoknál megadott szakaszonkénti meccsidőből adódnak.',
+    conflictsHelp:
+      'Néhány csapatnak vagy játékosnak egyszerre két helyen kellene lennie. Számold újra az időpontokat, hogy a meccseik máskorra kerüljenek.',
+    conflictHere: '{{team}} ugyanekkor egy másik meccset is játszik.',
+    conflictElsewhere: '{{team}} ugyanekkor ezen a versenyen is játszik: {{tournament}}.',
+    conflictPlayers_one:
+      '{{players}} ({{team}}) ugyanekkor ezen a versenyen is játszik: {{tournament}}.',
+    conflictPlayers_other:
+      '{{players}} ({{team}}) ugyanekkor ezen a versenyen is játszanak: {{tournament}}.',
+    runningLate: 'Csúszásban vagytok?',
+    moveBy: 'A még hátralévő fordulók eltolása <minutes/> perccel',
+    minutesToMove: 'Hány perccel tolódjon el a menetrend',
+    later: 'Később',
+    earlier: 'Korábban',
+    scheduleMoved: 'A menetrend eltolva.',
+    newTournament: 'Új verseny',
+  },
   common: {
     retry: 'Újra',
     loading: 'Betöltés…',
     details: 'Részletek',
-    manage: 'Kezelés',
+    organizerView: 'Szervezői nézet',
+    publicView: 'Nyilvános nézet',
     bigScreen: 'Kivetítő',
     yourTeam: 'A csapatod',
     undecided: 'Még nem dőlt el',
@@ -276,6 +406,8 @@ const hu: Translation = {
     roundOf16: 'Nyolcaddöntő',
     roundOf32: 'Tizenhatoddöntő',
     roundOf: 'Legjobb {{count}}',
+    generated: '{{number}}. forduló',
+    defaultStage: 'Szakasz',
   },
   home: {
     title: 'Versenyek',
@@ -326,6 +458,8 @@ const hu: Translation = {
     noUpcoming: '{{team}}: most nincs következő meccs.',
     playingNow: 'Most zajlik',
     comingUpNext: 'Következő meccsek',
+    fullSchedule: 'Teljes menetrend',
+    allResults: 'Összes eredmény',
     nothingScheduled: 'Most nincs folyamatban lévő vagy ütemezett meccs.',
     stagesAndGroups: 'Szakaszok és csoportok',
     notSetUp: 'A verseny lebonyolítása még nincs beállítva.',
@@ -399,12 +533,20 @@ const hu: Translation = {
     renderFailed: 'Az oldalt nem sikerült megjeleníteni',
     reload: 'Oldal újratöltése',
     unexpected: 'Váratlan hiba történt.',
+    requestFailed: 'A kérés nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.',
+    tooManyAttemptsIn_one: 'Túl sok próbálkozás. Próbáld újra egy perc múlva.',
+    tooManyAttemptsIn_other: 'Túl sok próbálkozás. Próbáld újra {{count}} perc múlva.',
+    tooManyAttempts: 'Túl sok próbálkozás. Próbáld újra néhány perc múlva.',
+    timeout: 'A szerver túl lassan válaszolt. Töltsd újra az oldalt, és nézd meg, mi mentődött el.',
+    noTournamentWithLink: 'Nincs verseny ezzel a Részletek-linkkel: „{{link}}”.',
+    organizerViewNeedsId:
+      'A szervezői nézet a verseny számával nyílik meg a címben, nem a Részletek-linkjével.',
   },
 };
 
 declare module 'i18next' {
   interface CustomTypeOptions {
-    resources: { translation: typeof en };
+    resources: { organizer: typeof organizerEnglish; translation: typeof en };
   }
 }
 
@@ -422,11 +564,3 @@ export const i18nOptions: InitOptions = {
   // The texts are part of the bundle, so the first render already has them.
   initAsync: false,
 };
-
-/**
- * For the organizer workspace, which is English only, through an `I18nextProvider`. A separate
- * instance, so that rendering the workspace doesn't change the language a visitor chose. Not
- * passed to `initReactI18next`, which would make it the default of every page.
- */
-export const englishI18n = createInstance({ ...i18nOptions, lng: 'en' });
-void englishI18n.init();

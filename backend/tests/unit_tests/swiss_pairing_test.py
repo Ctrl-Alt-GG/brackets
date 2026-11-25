@@ -5,7 +5,6 @@ from bracket.logic.scheduling.swiss import get_swiss_pairing
 from bracket.models.db.match import MatchWithDetailsDefinitive
 from bracket.models.db.stage_item_inputs import StageItemInput, StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
-from bracket.models.db.team import Team
 from bracket.models.enums import StageType
 from bracket.utils.id_types import (
     MatchId,
@@ -17,7 +16,7 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
-from tests.dummy_records import DUMMY_MATCH1, DUMMY_MOCK_TIME, DUMMY_TEAM1
+from tests.dummy_records import DUMMY_MATCH1, DUMMY_MOCK_TIME, DUMMY_TEAM1, tournament_team
 
 
 def get_team(team_id: int, points: int = 1200, active: bool = True) -> StageItemInputFinal:
@@ -28,9 +27,7 @@ def get_team(team_id: int, points: int = 1200, active: bool = True) -> StageItem
         tournament_id=TournamentId(-1),
         team_id=TeamId(team_id),
         points=Decimal(points),
-        team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(team_id)).model_copy(
-            update={"active": active}
-        ),
+        team=tournament_team(DUMMY_TEAM1, team_id, active=active),
     )
 
 

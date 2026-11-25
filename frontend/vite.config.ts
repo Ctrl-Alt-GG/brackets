@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 
@@ -22,6 +23,7 @@ export default defineConfig({
     },
   },
   plugins: [react(), tailwindcss()],
+  test: { setupFiles: ['./src/test-setup.ts'] },
   server: {
     // The API answers on the page's own origin, as in production, so its session cookie works
     // without cross-origin requests.

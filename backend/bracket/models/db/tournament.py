@@ -4,12 +4,11 @@ from pydantic import Field
 from bracket.models.db.match import MAX_MINUTES
 from bracket.models.db.shared import BaseModelORM
 from bracket.models.enums import TournamentStatus
-from bracket.utils.id_types import ClubId, TournamentId
+from bracket.utils.id_types import TournamentId
 from bracket.utils.pydantic import DashboardEndpoint, Name
 
 
 class TournamentInsertable(BaseModelORM):
-    club_id: ClubId
     name: str
     created: datetime_utc
     start_time: datetime_utc
@@ -18,7 +17,6 @@ class TournamentInsertable(BaseModelORM):
     dashboard_public: bool
     dashboard_endpoint: str | None = None
     logo_path: str | None = None
-    players_can_be_in_multiple_teams: bool
     status: TournamentStatus = TournamentStatus.OPEN
 
 
@@ -39,19 +37,16 @@ class TournamentWithAccess(Tournament):
     can_manage: bool
 
 
-class TournamentUpdateBody(BaseModelORM):
+class TournamentBody(BaseModelORM):
+    """A tournament's settings, when it is created and when they change."""
+
     start_time: datetime_utc
     name: Name
     dashboard_public: bool
     dashboard_endpoint: DashboardEndpoint = None
-    players_can_be_in_multiple_teams: bool
     duration_minutes: int = Field(..., ge=1, le=MAX_MINUTES)
     margin_minutes: int = Field(..., ge=0, le=MAX_MINUTES)
 
 
 class TournamentChangeStatusBody(BaseModelORM):
     status: TournamentStatus
-
-
-class TournamentBody(TournamentUpdateBody):
-    club_id: ClubId

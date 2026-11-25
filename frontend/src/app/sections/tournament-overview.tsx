@@ -3,23 +3,15 @@ import { Link } from 'react-router';
 
 import type { FlattenedMatch, TournamentBundle } from '../types';
 import * as OpenApi from '../../openapi';
-import { toBracketViewerData } from '../bracket-adapter';
-import { BracketViewer } from '../components/bracket-viewer';
 import { MatchCard } from '../components/match-card';
 import { MatchScoreEditor } from '../components/match-score-editor';
-import { TeamLink } from '../components/team-link';
 import { teamPath, useTournamentContext } from '../tournament-context';
-import { pointsPhrase } from '../format';
 import {
-  inputLabel,
-  inputTeamId,
   involvesTeam,
   isBracket,
   isScored,
-  type MatchOutcome,
-  matchWinner,
   stageItemName,
-  stageItemStandings,
+  stageName,
   stageTypeName,
 } from '../matches';
 import { isInProgress, isStageHappeningNow, matchStatus, nextMatch } from '../tournament-rules';
@@ -30,10 +22,16 @@ function MyTeamPanel({
   matches,
   stageItemsById,
   teams,
+  workspace,
 }: {
   matches: FlattenedMatch[];
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  teams: OpenApi.FullTeamWithPlayers[];
+  teams: OpenApi.TournamentTeamWithPlayers[];
+  /**
+   * The organizer's overview. It keeps showing the team picked on the public view, for organizers
+   * who play, but doesn't ask the others to pick one: picking and changing stay on the public view.
+   */
+  workspace: boolean;
 }) {
   const { t } = useTranslation();
   const { myTeamId, publicPath, setMyTeamId } = useTournamentContext();
@@ -42,6 +40,7 @@ function MyTeamPanel({
   if (teams.length === 0) return null;
 
   if (!myTeam) {
+    if (workspace) return null;
     return (
       <Surface>
         <SurfaceHeading title={t('overview.findYourTeam')} />
@@ -85,9 +84,15 @@ function MyTeamPanel({
           <Link className="btn btn-soft btn-sm" to={teamPath(publicPath, myTeam.id)}>
             {t('overview.allMatchesAndPlayers')}
           </Link>
-          <button className="btn btn-ghost btn-sm" onClick={() => setMyTeamId(null)} type="button">
-            {t('overview.changeTeam')}
-          </button>
+          {workspace ? null : (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMyTeamId(null)}
+              type="button"
+            >
+              {t('overview.changeTeam')}
+            </button>
+          )}
         </div>
       </div>
       {next ? (
@@ -108,10 +113,83 @@ function MyTeamPanel({
   );
 }
 
+/**
+ * The steps from a new tournament to one that can be played, for its organizers, each with a link
+ * to the page where it is done.
+ */
+function SetupChecklist({
+  hasTeams,
+  stagesHaveTeams,
+  tournamentId,
+}: {
+  hasTeams: boolean;
+  stagesHaveTeams: boolean;
+  tournamentId: number;
+}) {
+  const { t } = useTranslation();
+  const base = `/tournaments/${tournamentId}`;
+  const steps = [
+    {
+      done: hasTeams,
+      label: t('workspace.teams'),
+      text: t('workspace.setupTeams'),
+      to: `${base}/teams`,
+    },
+    {
+      done: stagesHaveTeams,
+      label: t('workspace.stages'),
+      text: t('workspace.setupStages'),
+      to: `${base}/stages`,
+    },
+    // Nothing tells whether it was shared, so it stays a reminder.
+    {
+      done: false,
+      label: t('workspace.settings'),
+      text: t('workspace.setupShare'),
+      to: `${base}/settings`,
+    },
+  ];
+
+  return (
+    <Surface>
+      <SurfaceHeading title={t('workspace.setupTitle')} />
+      <ol className="steps steps-vertical">
+        {steps.map((step) => (
+          <li
+            className={cx('step', step.done && 'step-primary')}
+            data-content={step.done ? '✓' : undefined}
+            key={step.to}
+          >
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-start">
+              <span className={cx(step.done && 'text-base-content/70')}>{step.text}</span>
+              {step.done ? (
+                <span className="sr-only">{t('workspace.setupDone')}</span>
+              ) : (
+                <Link className="btn btn-soft btn-sm" to={step.to}>
+                  {step.label}
+                </Link>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Surface>
+  );
+}
+
 /** Where the table or bracket of a stage item is shown. */
 export function stageItemPath(publicPath: string, stageItem: OpenApi.StageItemWithRounds) {
   return `${publicPath}/${isBracket(stageItem) ? 'bracket' : 'standings'}#stage-item-${stageItem.id}`;
 }
+
+/** Where organizers find a stage item: a group in the standings, a bracket in the stage editor. */
+function workspaceStageItemPath(tournamentId: number, stageItem: OpenApi.StageItemWithRounds) {
+  const page = isBracket(stageItem) ? 'stages' : 'rankings';
+  return `/tournaments/${tournamentId}/${page}#stage-item-${stageItem.id}`;
+}
+
+/** The results the overview shows. The schedule has all of them. */
+const LATEST_RESULTS = 4;
 
 export function OverviewSection({
   bundle,
@@ -127,52 +205,72 @@ export function OverviewSection({
 }) {
   const { t } = useTranslation();
   const { publicPath } = useTournamentContext();
+  const tournamentId = bundle.tournament.id;
+  const schedulePath = workspace
+    ? `/tournaments/${tournamentId}/schedule`
+    : `${publicPath}/schedule`;
   // A match that has started is in progress until its result is in, however long it runs over.
   const inProgress = matches.filter((entry) => isInProgress(matchStatus(entry.match)));
-  // What is planned next, including matches that say who will play them ("Group A #1") before
-  // the teams are known. A match with nothing to show yet, such as a final, is left out.
-  const upcoming = matches
-    .filter(({ match }) => {
-      const status = matchStatus(match);
-      return (
-        status === 'scheduled' ||
-        (status === 'waiting' &&
-          (match.stage_item_input1 != null || match.stage_item_input2 != null))
-      );
-    })
-    .slice(0, 6);
-  const finished = matches.filter((entry) => matchStatus(entry.match) === 'finished').slice(-6);
+  // What is planned, including matches that say who will play them ("Group A #1") before the
+  // teams are known. A match with nothing to show yet, such as a final, is left out.
+  const planned = matches.filter(({ match }) => {
+    const status = matchStatus(match);
+    return (
+      status === 'scheduled' ||
+      (status === 'waiting' && (match.stage_item_input1 != null || match.stage_item_input2 != null))
+    );
+  });
+  // The matches that start next. The rounds after them are on the schedule.
+  const upcoming = planned.filter(({ match }) => match.start_time === planned[0]?.match.start_time);
+  const allFinished = matches.filter((entry) => matchStatus(entry.match) === 'finished');
+  const finished = allFinished.slice(-LATEST_RESULTS);
+  const hasTeams = bundle.teams.length > 0;
+  const stagesHaveTeams = bundle.stages.some((stage) =>
+    stage.stage_items.some((stageItem) => stageItem.inputs.some((input) => input.team_id != null)),
+  );
+  const scheduleLink = (label: string) => (
+    <Link className="btn btn-ghost btn-sm" to={schedulePath}>
+      {label}
+    </Link>
+  );
   const editor = (entry: FlattenedMatch) =>
     workspace ? (
-      <MatchScoreEditor
-        entry={entry}
-        stageItemsById={stageItemsById}
-        tournamentId={bundle.tournament.id}
-      />
+      <MatchScoreEditor entry={entry} stageItemsById={stageItemsById} tournamentId={tournamentId} />
     ) : undefined;
+
+  // Until teams play in its stages, organizers see what is left to set up, and nothing else.
+  if (workspace && !(hasTeams && stagesHaveTeams)) {
+    return (
+      <SetupChecklist
+        hasTeams={hasTeams}
+        stagesHaveTeams={stagesHaveTeams}
+        tournamentId={tournamentId}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Organizers aren't looking for their own team. */}
-      {workspace ? null : (
-        <MyTeamPanel matches={matches} stageItemsById={stageItemsById} teams={bundle.teams} />
-      )}
+      <MyTeamPanel
+        matches={matches}
+        stageItemsById={stageItemsById}
+        teams={bundle.teams}
+        workspace={workspace}
+      />
 
       <Surface>
         <SurfaceHeading
+          actions={matches.length > 0 ? scheduleLink(t('overview.fullSchedule')) : null}
           title={
             inProgress.length === 0
               ? t('overview.comingUpNext')
               : workspace
-                ? 'Waiting for results'
+                ? t('workspace.waitingForResults')
                 : t('overview.playingNow')
           }
         />
         {workspace && inProgress.length > 0 ? (
-          <p className="text-sm text-base-content/70">
-            These matches have started. Enter each result as soon as the match is over: the
-            standings, the bracket and the next matches follow from it.
-          </p>
+          <p className="text-sm text-base-content/70">{t('workspace.enterResults')}</p>
         ) : null}
         {inProgress.length === 0 && upcoming.length === 0 ? (
           <p className="text-sm text-base-content/70">{t('overview.nothingScheduled')}</p>
@@ -211,7 +309,7 @@ export function OverviewSection({
             {bundle.stages.map((stage) => (
               <div className="space-y-3" key={stage.id}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-lg font-semibold">{stage.name}</h3>
+                  <h3 className="text-lg font-semibold">{stageName(stage, t)}</h3>
                   {isStageHappeningNow(stage, bundle.tournament) ? (
                     <span className="badge badge-soft badge-error badge-sm">
                       <span
@@ -234,7 +332,11 @@ export function OverviewSection({
                       <Link
                         className="card border border-base-300 bg-base-100/50 p-4 transition hover:border-primary/50 hover:bg-base-100/80"
                         key={stageItem.id}
-                        to={stageItemPath(publicPath, stageItem)}
+                        to={
+                          workspace
+                            ? workspaceStageItemPath(tournamentId, stageItem)
+                            : stageItemPath(publicPath, stageItem)
+                        }
                       >
                         <p className="text-xs text-base-content/70">
                           {stageTypeName(stageItem, t)}
@@ -257,7 +359,12 @@ export function OverviewSection({
         </Surface>
 
         <Surface>
-          <SurfaceHeading title={t('overview.latestResults')} />
+          <SurfaceHeading
+            actions={
+              allFinished.length > finished.length ? scheduleLink(t('overview.allResults')) : null
+            }
+            title={t('overview.latestResults')}
+          />
           {finished.length === 0 ? (
             <p className="text-sm text-base-content/70">{t('overview.noResults')}</p>
           ) : (
@@ -269,135 +376,6 @@ export function OverviewSection({
           )}
         </Surface>
       </div>
-    </div>
-  );
-}
-
-/** Same emphasis as the match cards: the winner stands out, the loser recedes. */
-function sideClass(winner: MatchOutcome, side: 1 | 2) {
-  if (winner === side) return 'font-semibold text-base-content';
-  if (winner === 1 || winner === 2) return 'text-base-content/60';
-  return 'text-base-content/90';
-}
-
-export function StageItemVisualization({
-  showMatches = true,
-  stageItem,
-  stageItemsById,
-  standings,
-  teamMap,
-  tournamentId,
-}: {
-  showMatches?: boolean;
-  stageItem: OpenApi.StageItemWithRounds;
-  stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
-  standings: TournamentBundle['standings'];
-  teamMap: Map<number, OpenApi.FullTeamWithPlayers>;
-  tournamentId: number;
-}) {
-  const { t } = useTranslation();
-  const entries = stageItemStandings(stageItem, standings);
-  const bracketData = isBracket(stageItem)
-    ? toBracketViewerData(stageItem, stageItemsById, tournamentId, t)
-    : null;
-  // Drafts are only shown in the stage editor, until they are published.
-  const publishedRounds = stageItem.rounds.filter((round) => !round.is_draft);
-
-  return (
-    <div className="card border border-base-300 bg-base-100/50 p-4">
-      <h4 className="text-lg font-semibold">{stageItemName(stageItem, t)}</h4>
-      <p className="mt-1 text-sm text-base-content/70">
-        {stageTypeName(stageItem, t)} · {t('common.teamCount', { count: stageItem.team_count })}
-      </p>
-
-      {isBracket(stageItem) ? (
-        <div className="mt-4">
-          {bracketData ? (
-            <BracketViewer data={bracketData} />
-          ) : (
-            <p className="text-sm text-base-content/70">{t('overview.bracketPending')}</p>
-          )}
-        </div>
-      ) : (
-        <div className={cx('mt-4 grid gap-4', showMatches && 'lg:grid-cols-[0.9fr_1.1fr]')}>
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-base-content/80">{t('overview.table')}</p>
-            <div className="space-y-2">
-              {entries.length === 0 ? (
-                <p className="text-sm text-base-content/70">{t('overview.noTeams')}</p>
-              ) : null}
-              {entries.map(({ input, standing }, index) => {
-                const team = teamMap.get(input.team_id);
-                return (
-                  <div
-                    className="flex items-center justify-between gap-3 rounded-field border border-base-300 bg-base-200/60 px-3 py-2 text-sm"
-                    key={input.id}
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="w-5 text-base-content/70">{index + 1}</span>
-                      <TeamLink className="font-medium" teamId={input.team_id}>
-                        {team?.name ?? inputLabel(input, stageItemsById, t)}
-                      </TeamLink>
-                    </span>
-                    <span className="text-base-content/70">
-                      {t('common.record', {
-                        draws: standing.draws,
-                        losses: standing.losses,
-                        wins: standing.wins,
-                      })}{' '}
-                      · {pointsPhrase(stageItem, standing.points, t)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {showMatches ? (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-base-content/80">{t('overview.matches')}</p>
-              {/* Equal team columns keep "vs" in the middle of every row, and sharing one grid
-                  between all rounds keeps it in a straight line even next to wider scores. */}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3">
-                {publishedRounds.map((round) => (
-                  <div
-                    className="col-span-3 grid grid-cols-subgrid gap-y-2 rounded-box border border-base-300 bg-base-200/60 p-3"
-                    key={round.id}
-                  >
-                    <p className="col-span-3 text-sm font-semibold">{round.name}</p>
-                    {round.matches.map((match) => {
-                      const winner = matchWinner(match);
-                      return (
-                        <div
-                          className="col-span-3 grid grid-cols-subgrid items-center rounded-field bg-base-100/60 px-3 py-2 text-sm"
-                          key={match.id}
-                        >
-                          <TeamLink
-                            className={cx('break-words text-right', sideClass(winner, 1))}
-                            teamId={inputTeamId(match.stage_item_input1)}
-                          >
-                            {inputLabel(match.stage_item_input1, stageItemsById, t)}
-                          </TeamLink>
-                          <span className="text-center font-semibold tabular-nums">
-                            {isScored(match)
-                              ? `${match.stage_item_input1_score} – ${match.stage_item_input2_score}`
-                              : t('common.vs')}
-                          </span>
-                          <TeamLink
-                            className={cx('break-words', sideClass(winner, 2))}
-                            teamId={inputTeamId(match.stage_item_input2)}
-                          >
-                            {inputLabel(match.stage_item_input2, stageItemsById, t)}
-                          </TeamLink>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }

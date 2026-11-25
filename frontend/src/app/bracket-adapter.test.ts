@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type * as OpenApi from '../openapi';
-import { roundLabel, toBracketViewerData } from './bracket-adapter';
-import { englishI18n } from './locales';
+import { getI18n } from 'react-i18next';
 
-const { t } = englishI18n;
+import { roundLabel, toBracketViewerData } from './bracket-adapter';
+
+const { t } = getI18n();
 
 type Match = OpenApi.MatchWithDetailsDefinitive;
 

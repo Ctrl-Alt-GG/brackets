@@ -6,7 +6,7 @@ from tests.integration_tests.snapshots import canonical_tournament
 
 def snapshot() -> dict[str, Any]:
     return {
-        "tournaments?filter_=ALL": {"data": [{"id": 1, "club_id": 1, "name": "Cup"}]},
+        "tournaments?filter_=ALL": {"data": [{"id": 1, "name": "Cup", "dashboard_endpoint": None}]},
         "teams": {
             "data": {
                 "teams": [
@@ -62,24 +62,24 @@ def test_snapshot_retains_team_and_winner_identity() -> None:
     changed = deepcopy(original)
     item = changed["stages?no_draft_rounds=false"]["data"][0]["stage_items"][0]
     item["inputs"][0]["team_id"] = 12
-    assert canonical_tournament(original, club_id=1) != canonical_tournament(changed, club_id=1)
+    assert canonical_tournament(original) != canonical_tournament(changed)
     changed = deepcopy(original)
     item = changed["stages?no_draft_rounds=false"]["data"][0]["stage_items"][0]
     item["rounds"][0]["matches"][1]["stage_item_input1_winner_from_match_id"] = 72
-    assert canonical_tournament(original, club_id=1) != canonical_tournament(changed, club_id=1)
+    assert canonical_tournament(original) != canonical_tournament(changed)
 
 
 def test_snapshot_preserves_json_types_but_ignores_decimal_scale() -> None:
     original = snapshot()
     changed = deepcopy(original)
     changed["rankings"]["data"][0]["win_points"] = "1.000000"
-    assert canonical_tournament(original, club_id=1) == canonical_tournament(changed, club_id=1)
+    assert canonical_tournament(original) == canonical_tournament(changed)
     changed["rankings"]["data"][0]["win_points"] = 1
-    assert canonical_tournament(original, club_id=1) != canonical_tournament(changed, club_id=1)
+    assert canonical_tournament(original) != canonical_tournament(changed)
 
 
 def test_snapshot_retains_standings_keys() -> None:
-    result = canonical_tournament(snapshot(), club_id=1)
+    result = canonical_tournament(snapshot())
     assert list(result["standings"]["data"]) == ["stage:0/item:Final"]
     assert result["standings"]["data"]["stage:0/item:Final"] == [
         {"stage_item_input_id": "stage:0/item:Final/slot:1"}

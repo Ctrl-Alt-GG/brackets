@@ -1,8 +1,9 @@
 """
-When someone loses access to an event, while their commands on its tournaments are in progress.
+When someone loses access to a tournament, while their commands on it are in progress.
 
-A command that was let in finishes first, and the removal waits for it. A command that waits for
-the removal sees the event's organizers as they are after it, and is refused.
+Removing an organizer is a command on the tournament, so it holds the tournament's lock. A command
+that was let in finishes first, and the removal waits for it. A command that waits for the removal
+sees the tournament's organizers as they are after it, and is refused.
 """
 
 import asyncio
@@ -19,14 +20,13 @@ from starlette.requests import Request
 from bracket import orm
 from bracket.database import engine, session_scope
 from bracket.logic.authentication import Credentials
-from bracket.logic.tournaments import create_tournament
-from bracket.models.db.tournament import TournamentBody
 from bracket.models.db.user import UserInDB
-from bracket.models.enums import UserXClubRelation
+from bracket.models.enums import TournamentRole
 from bracket.routes import access
-from bracket.sql.clubs import sql_give_user_access_to_club, sql_remove_user_from_club
+from bracket.sql.organizers import sql_add_organizer, sql_remove_organizer
+from bracket.sql.tournaments import lock_tournament
 from bracket.utils.id_types import TournamentId
-from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_USER
+from tests.dummy_records import DUMMY_USER
 from tests.integration_tests.mocks import get_mock_token
 from tests.integration_tests.models import AuthContext
 from tests.integration_tests.sql import inserted_auth_context, inserted_user
@@ -42,8 +42,8 @@ async def collaborator_of(context: AuthContext) -> AsyncIterator[UserInDB]:
         DUMMY_USER.model_copy(update={"email": "helper@example.org", "name": "Helper"})
     ) as helper:
         async with session_scope() as session:
-            await sql_give_user_access_to_club(
-                session, helper.id, context.club.id, UserXClubRelation.COLLABORATOR
+            await sql_add_organizer(
+                session, context.tournament.id, helper.id, TournamentRole.COLLABORATOR
             )
         yield helper
 
@@ -66,6 +66,12 @@ async def statement_seen(matches: Callable[[str], bool]) -> AsyncIterator[asynci
 
 def locks(table: str, strength: str) -> Callable[[str], bool]:
     return lambda statement: f"FOR {strength}" in statement and table in statement
+
+
+async def remove_organizer(session: AsyncSession, context: AuthContext, user: UserInDB) -> None:
+    """What the route that removes an organizer does: lock the tournament, then remove them."""
+    await lock_tournament(session, context.tournament.id)
+    await sql_remove_organizer(session, context.tournament.id, user.id)
 
 
 async def authorize_command(
@@ -100,7 +106,7 @@ async def test_a_command_that_was_let_in_finishes_before_its_user_loses_access()
 
         async def removal() -> None:
             async with session_scope() as session:
-                await sql_remove_user_from_club(session, helper.id, context.club.id)
+                await remove_organizer(session, context, helper)
             order.append("access removed")
 
         edit = asyncio.create_task(long_edit())
@@ -108,10 +114,10 @@ async def test_a_command_that_was_let_in_finishes_before_its_user_loses_access()
         async with statement_seen(locks("tournaments", "UPDATE")) as command_waits:
             waiting_command = asyncio.create_task(command())
             await asyncio.wait_for(command_waits.wait(), timeout=2)
-        async with statement_seen(locks("clubs", "UPDATE")) as removal_waits:
+        async with statement_seen(locks("tournaments", "UPDATE")) as removal_waits:
             waiting_removal = asyncio.create_task(removal())
             await asyncio.wait_for(removal_waits.wait(), timeout=2)
-        # The removal can't start while the command holds the event.
+        # The removal can't start while the command holds the tournament.
         await asyncio.sleep(0.2)
         assert order == []
 
@@ -126,7 +132,7 @@ async def test_a_command_that_waits_for_the_removal_is_refused() -> None:
 
         async def removal() -> None:
             async with session_scope() as session:
-                await sql_remove_user_from_club(session, helper.id, context.club.id)
+                await remove_organizer(session, context, helper)
                 removing.set()
                 await finish_removal.wait()
 
@@ -136,7 +142,7 @@ async def test_a_command_that_waits_for_the_removal_is_refused() -> None:
 
         waiting_removal = asyncio.create_task(removal())
         await removing.wait()
-        async with statement_seen(locks("clubs", "KEY SHARE")) as command_waits:
+        async with statement_seen(locks("tournaments", "UPDATE")) as command_waits:
             waiting_command = asyncio.create_task(command())
             await asyncio.wait_for(command_waits.wait(), timeout=2)
         finish_removal.set()
@@ -144,46 +150,4 @@ async def test_a_command_that_waits_for_the_removal_is_refused() -> None:
 
         with pytest.raises(HTTPException) as refused:
             await waiting_command
-        assert refused.value.status_code == 403
-
-
-async def test_a_tournament_created_while_access_ends_is_refused() -> None:
-    async with inserted_auth_context() as context, collaborator_of(context) as helper:
-        removing, finish_removal = asyncio.Event(), asyncio.Event()
-
-        async def removal() -> None:
-            async with session_scope() as session:
-                await sql_remove_user_from_club(session, helper.id, context.club.id)
-                removing.set()
-                await finish_removal.wait()
-
-        async def creation() -> None:
-            async with session_scope() as session:
-                user = await access.user_authenticated(
-                    session, Response(), Credentials(get_mock_token(helper), from_cookie=False)
-                )
-                await create_tournament(
-                    session,
-                    TournamentBody(
-                        club_id=context.club.id,
-                        name="Too late",
-                        start_time=DUMMY_MOCK_TIME,
-                        dashboard_public=False,
-                        players_can_be_in_multiple_teams=False,
-                        duration_minutes=10,
-                        margin_minutes=5,
-                    ),
-                    user,
-                )
-
-        waiting_removal = asyncio.create_task(removal())
-        await removing.wait()
-        async with statement_seen(locks("clubs", "NO KEY UPDATE")) as creation_waits:
-            waiting_creation = asyncio.create_task(creation())
-            await asyncio.wait_for(creation_waits.wait(), timeout=2)
-        finish_removal.set()
-        await waiting_removal
-
-        with pytest.raises(HTTPException) as refused:
-            await waiting_creation
         assert refused.value.status_code == 403

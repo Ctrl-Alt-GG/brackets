@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bracket.logic.ranking.elo import K, expected_result
 from bracket.logic.tournament_graph import TournamentGraph
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
-from bracket.models.db.team import Team
 from bracket.models.results import START_ELO, ResultTotals, TeamMatchResult
 from bracket.sql.matches import get_played_team_results
 from bracket.utils.id_types import TeamId, TournamentId
@@ -53,8 +53,8 @@ async def get_team_totals(
     return determine_team_totals(await get_played_team_results(session, tournament_id))
 
 
-def with_totals[TeamT: Team](team: TeamT, totals: Mapping[TeamId, ResultTotals]) -> TeamT:
-    """The team with its replayed results in place of the stored ones, which aren't maintained."""
+def with_totals[TeamT: TournamentTeam](team: TeamT, totals: Mapping[TeamId, ResultTotals]) -> TeamT:
+    """The team with its results in the tournament, replayed from the matches."""
     return team.model_copy(update=totals.get(team.id, NO_RESULTS).model_dump())
 
 

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Trans, useTranslation } from 'react-i18next';
 
 import * as OpenApi from '../../openapi';
 import {
   delayScheduleApiTournamentsTournamentIdDelaySchedulePostMutation,
   scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation,
 } from '../../openapi/@tanstack/react-query.gen';
+import { BigScreenLink } from '../components/big-screen';
 import { MatchCard } from '../components/match-card';
 import { MatchScoreEditor } from '../components/match-score-editor';
 import type { FlattenedMatch } from '../types';
@@ -16,16 +16,65 @@ import { matchStatus } from '../tournament-rules';
 import { cx, groupBy } from '../utils';
 import { Surface, SurfaceHeading } from '../ui';
 
+/** Names of a tournament's teams and players, for the notices about its conflicts. */
+type Participants = {
+  players: Map<number, string>;
+  teams: Map<number, string>;
+};
+
+/** Why a match's team, or players of it, would have to be in two places at once. */
+function ConflictNotice({
+  conflicts,
+  participants,
+  tournamentId,
+}: {
+  conflicts: OpenApi.ScheduleConflict[];
+  participants: Participants;
+  tournamentId: number;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <ul className="mt-3 space-y-1 text-xs text-warning">
+      {conflicts.map((conflict) => {
+        const team = participants.teams.get(conflict.team_id) ?? '';
+        const tournament = conflict.other_tournament_name;
+        return (
+          <li key={`${conflict.team_id}:${conflict.other_match_id}`}>
+            {conflict.player_ids.length > 0
+              ? t('workspace.conflictPlayers', {
+                  count: conflict.player_ids.length,
+                  players: conflict.player_ids
+                    .map((playerId) => participants.players.get(playerId))
+                    .join(', '),
+                  team,
+                  tournament,
+                })
+              : conflict.other_tournament_id === tournamentId
+                ? t('workspace.conflictHere', { team })
+                : t('workspace.conflictElsewhere', { team, tournament })}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /** Matches sorted by time, grouped under the time they start. */
 function TimeSlots({
+  conflicts,
   entries,
   maxSlots,
+  participants,
   size = 'md',
   stageItemsById,
   tournamentId,
 }: {
+  /** The conflicts of each match, by match id, for organizers. */
+  conflicts?: Map<number, OpenApi.ScheduleConflict[]>;
   entries: FlattenedMatch[];
   maxSlots?: number;
+  participants?: Participants;
   size?: 'lg' | 'md';
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
   /** Set for organizers, who enter the results on the matches. */
@@ -47,25 +96,37 @@ function TimeSlots({
               size === 'lg' ? 'xl:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-3',
             )}
           >
-            {slotEntries.map((entry) => (
-              <MatchCard
-                editor={
-                  // A match is played once both teams are known.
-                  tournamentId != null && matchStatus(entry.match) !== 'waiting' ? (
-                    <MatchScoreEditor
-                      entry={entry}
-                      stageItemsById={stageItemsById}
-                      tournamentId={tournamentId}
-                    />
-                  ) : undefined
-                }
-                entry={entry}
-                key={entry.match.id}
-                showTime={false}
-                size={size}
-                stageItemsById={stageItemsById}
-              />
-            ))}
+            {slotEntries.map((entry) => {
+              const matchConflicts = conflicts?.get(entry.match.id);
+              return (
+                <MatchCard
+                  editor={
+                    // A match is played once both teams are known.
+                    tournamentId != null && matchStatus(entry.match) !== 'waiting' ? (
+                      <MatchScoreEditor
+                        entry={entry}
+                        stageItemsById={stageItemsById}
+                        tournamentId={tournamentId}
+                      />
+                    ) : undefined
+                  }
+                  entry={entry}
+                  key={entry.match.id}
+                  notice={
+                    matchConflicts && participants && tournamentId != null ? (
+                      <ConflictNotice
+                        conflicts={matchConflicts}
+                        participants={participants}
+                        tournamentId={tournamentId}
+                      />
+                    ) : undefined
+                  }
+                  showTime={false}
+                  size={size}
+                  stageItemsById={stageItemsById}
+                />
+              );
+            })}
           </div>
         </section>
       ))}
@@ -78,10 +139,11 @@ function TimeSlots({
  * being played, which is the latest one with a result, stays where it is.
  */
 function DelayForm({ tournamentId }: { tournamentId: number }) {
+  const { t } = useTranslation();
   const [minutes, setMinutes] = useState(15);
   const delay = useMutation({
     ...delayScheduleApiTournamentsTournamentIdDelaySchedulePostMutation(),
-    meta: { successMessage: 'Schedule moved.' },
+    meta: { successMessage: t('workspace.scheduleMoved') },
   });
   const move = (sign: 1 | -1) =>
     delay.mutate({ body: { minutes: sign * minutes }, path: { tournament_id: tournamentId } });
@@ -89,19 +151,24 @@ function DelayForm({ tournamentId }: { tournamentId: number }) {
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-box border border-base-300 bg-base-100/40 p-4">
       <label className="fieldset p-0">
-        <span className="fieldset-legend">Running late?</span>
-        <span className="flex items-center gap-2 text-sm">
-          Move the rounds that are still to come by
-          <input
-            aria-label="Minutes to move the schedule by"
-            className="input input-sm w-20 text-center"
-            max={1440}
-            min={1}
-            onChange={(event) => setMinutes(event.target.valueAsNumber)}
-            type="number"
-            value={Number.isNaN(minutes) ? '' : minutes}
+        <span className="fieldset-legend">{t('workspace.runningLate')}</span>
+        <span className="flex flex-wrap items-center gap-2 text-sm">
+          <Trans
+            components={{
+              minutes: (
+                <input
+                  aria-label={t('workspace.minutesToMove')}
+                  className="input input-sm w-20 text-center"
+                  max={1440}
+                  min={1}
+                  onChange={(event) => setMinutes(event.target.valueAsNumber)}
+                  type="number"
+                  value={Number.isNaN(minutes) ? '' : minutes}
+                />
+              ),
+            }}
+            i18nKey="workspace.moveBy"
           />
-          minutes
         </span>
       </label>
       <button
@@ -110,7 +177,7 @@ function DelayForm({ tournamentId }: { tournamentId: number }) {
         onClick={() => move(1)}
         type="button"
       >
-        Later
+        {t('workspace.later')}
       </button>
       <button
         className="btn btn-ghost btn-sm"
@@ -118,7 +185,7 @@ function DelayForm({ tournamentId }: { tournamentId: number }) {
         onClick={() => move(-1)}
         type="button"
       >
-        Earlier
+        {t('workspace.earlier')}
       </button>
     </div>
   );
@@ -127,20 +194,32 @@ function DelayForm({ tournamentId }: { tournamentId: number }) {
 export function ScheduleSection({
   bigScreenPath,
   canManage,
+  conflicts,
   matches,
+  players,
   stageItemsById,
+  teams,
   tournamentId,
 }: {
   bigScreenPath: string;
   canManage: boolean;
+  /** The matches whose teams or players play elsewhere at the same time. */
+  conflicts: OpenApi.ScheduleConflict[];
   matches: FlattenedMatch[];
+  players: OpenApi.TournamentPlayer[];
   stageItemsById: Map<number, OpenApi.StageItemWithRounds>;
+  teams: OpenApi.TournamentTeamWithPlayers[];
   tournamentId: number;
 }) {
   const { t } = useTranslation();
+  const conflictsByMatch = groupBy(conflicts, (conflict) => conflict.match_id);
+  const participants = {
+    players: new Map(players.map((player) => [player.id, player.name])),
+    teams: new Map(teams.map((team) => [team.id, team.name])),
+  };
   const recalculate = useMutation({
     ...scheduleMatchesApiTournamentsTournamentIdScheduleMatchesPostMutation(),
-    meta: { successMessage: 'Match times recalculated.' },
+    meta: { successMessage: t('workspace.timesRecalculated') },
   });
   const upcoming = matches.filter(({ match }) => matchStatus(match) !== 'finished');
   // The latest results are the interesting ones, so finished matches run backwards.
@@ -159,24 +238,22 @@ export function ScheduleSection({
                 onClick={() => recalculate.mutate({ path: { tournament_id: tournamentId } })}
                 type="button"
               >
-                Recalculate times
+                {t('workspace.recalculateTimes')}
               </button>
             ) : null}
-            <Link className="btn btn-ghost btn-sm" to={bigScreenPath}>
-              {t('common.bigScreen')}
-            </Link>
+            <BigScreenLink to={bigScreenPath} />
           </div>
         }
         title={t('tournament.schedule')}
       />
       {canManage ? (
         <>
-          <p className="text-sm text-base-content/70">
-            Match times are planned automatically: all matches of a round start together, and a
-            round starts when the previous one has finished. Enter results right here on the
-            matches. The planned times follow from the start time, match duration and break in
-            Settings, and the match duration of a stage in Stages.
-          </p>
+          <p className="text-sm text-base-content/70">{t('workspace.scheduleHelp')}</p>
+          {conflicts.length > 0 ? (
+            <p className="alert alert-warning alert-soft text-sm" role="status">
+              {t('workspace.conflictsHelp')}
+            </p>
+          ) : null}
           {upcoming.length > 0 ? <DelayForm tournamentId={tournamentId} /> : null}
         </>
       ) : null}
@@ -185,7 +262,13 @@ export function ScheduleSection({
       ) : upcoming.length === 0 ? (
         <p className="text-sm text-base-content/70">{t('schedule.allFinished')}</p>
       ) : (
-        <TimeSlots entries={upcoming} stageItemsById={stageItemsById} tournamentId={editable} />
+        <TimeSlots
+          conflicts={conflictsByMatch}
+          entries={upcoming}
+          participants={participants}
+          stageItemsById={stageItemsById}
+          tournamentId={editable}
+        />
       )}
       {finished.length > 0 ? (
         <details
@@ -196,7 +279,13 @@ export function ScheduleSection({
             {t('schedule.finishedMatches', { count: finished.length })}
           </summary>
           <div className="collapse-content">
-            <TimeSlots entries={finished} stageItemsById={stageItemsById} tournamentId={editable} />
+            <TimeSlots
+              conflicts={conflictsByMatch}
+              entries={finished}
+              participants={participants}
+              stageItemsById={stageItemsById}
+              tournamentId={editable}
+            />
           </div>
         </details>
       ) : null}

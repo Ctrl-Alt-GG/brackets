@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from alembic import command
 from bracket import orm
 from bracket.bootstrap import init_db_when_empty
+from bracket.models.enums import TournamentRole
 from bracket.utils.alembic import get_alembic_config
 
 BASELINE = "b2e5c8d1f4a7"
@@ -56,8 +57,14 @@ async def test_upgrade_preserves_data_and_matches_metadata(migration_engine: Asy
     async with migration_engine.begin() as connection:
         await connection.run_sync(lambda conn: command.upgrade(get_alembic_config(conn), "head"))
         await connection.run_sync(lambda conn: command.check(get_alembic_config(conn)))
-        for entity in (orm.StageItem, orm.Round, orm.Match, orm.PlayerXTeam):
+        for entity in (orm.StageItem, orm.Round, orm.Match, orm.TournamentPlayer):
             assert list(await connection.scalars(select(entity.tournament_id))) == [1]
+        assert (
+            await connection.execute(
+                select(orm.TournamentOrganizer.user_id, orm.TournamentOrganizer.role)
+            )
+        ).all() == [(1, TournamentRole.OWNER)]
+        assert sorted(await connection.scalars(select(orm.TournamentTeam.team_id))) == [1, 2]
         assert await connection.scalar(select(orm.Ranking.win_points)) == Decimal("0.125")
         assert await connection.scalar(
             select(orm.StageItemInput.points).where(orm.StageItemInput.id == 1)
@@ -69,6 +76,12 @@ async def test_upgrade_preserves_data_and_matches_metadata(migration_engine: Asy
         for table in ("stage_items", "rounds", "matches", "players_x_teams"):
             columns = await connection.run_sync(lambda conn: inspect(conn).get_columns(table))
             assert "tournament_id" not in {column["name"] for column in columns}
+        assert (
+            await connection.exec_driver_sql(
+                "SELECT t.club_id, c.name, m.relation FROM tournaments t "
+                "JOIN clubs c ON c.id = t.club_id JOIN users_x_clubs m ON m.club_id = c.id"
+            )
+        ).all() == [(1, "Legacy tournament", "OWNER")]
         await connection.run_sync(lambda conn: command.upgrade(get_alembic_config(conn), "head"))
         await connection.run_sync(lambda conn: command.check(get_alembic_config(conn)))
 

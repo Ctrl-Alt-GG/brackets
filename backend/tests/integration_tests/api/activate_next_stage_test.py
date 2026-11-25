@@ -40,18 +40,10 @@ async def test_activate_next_stage(
         inserted_stage(
             DUMMY_STAGE2.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted_2,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_1,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_2,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_3,
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team_inserted_4,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_1,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_2,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_3,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team_inserted_4,
     ):
         tournament_id = auth_context.tournament.id
         stage_item_1 = await sql_create_stage_item_with_inputs(

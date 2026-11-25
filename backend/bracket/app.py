@@ -2,6 +2,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from secure import (
     ContentSecurityPolicy,
     PermissionsPolicy,
@@ -22,9 +24,10 @@ from bracket.database import engine
 from bracket.routes import (
     access,
     auth,
-    clubs,
     internals,
     matches,
+    organizers,
+    participation,
     players,
     rankings,
     rounds,
@@ -36,8 +39,10 @@ from bracket.routes import (
     users,
 )
 from bracket.utils.alembic import alembic_run_migrations
+from bracket.utils.i18n import LanguageMiddleware, gettext
 from bracket.utils.logging import logger
 from bracket.utils.proxy_headers import UntrustedProxyWarning
+from bracket.utils.validation_errors import explain_validation_errors
 
 # Taken while the database is set up and migrated. Every worker process does that when it starts,
 # and they start together: one of them does the work while the others wait for the lock, and then
@@ -65,9 +70,10 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 
 routers = {
     "Auth": auth.router,
-    "Clubs": clubs.router,
     "Internals": internals.router,
     "Matches": matches.router,
+    "Organizers": organizers.router,
+    "Participation": participation.router,
     "Players": players.router,
     "Rankings": rankings.router,
     "Rounds": rounds.router,
@@ -99,6 +105,9 @@ app = FastAPI(
 
 
 app.add_middleware(UntrustedProxyWarning)
+
+# Outside the routes' error handling, so that their messages are in the language of the request.
+app.add_middleware(LanguageMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -138,7 +147,17 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     logger.exception(
         "Unhandled request error for %s %s", request.method, request.url.path, exc_info=exc
     )
-    return JSONResponse({"detail": "Internal server error"}, status_code=500)
+    return JSONResponse({"detail": gettext("Internal server error")}, status_code=500)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """FastAPI's answer to a request that fails its checks, in the language of the request."""
+    return JSONResponse(
+        {"detail": jsonable_encoder(explain_validation_errors(exc.errors()))}, status_code=422
+    )
 
 
 for tag, router in routers.items():

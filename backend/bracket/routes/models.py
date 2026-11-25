@@ -1,5 +1,10 @@
-from bracket.models.db.club import Club, ClubMember
 from bracket.models.db.match import Match
+from bracket.models.db.organizer import Organizer
+from bracket.models.db.participation import (
+    TournamentPlayer,
+    TournamentTeam,
+    TournamentTeamWithPlayers,
+)
 from bracket.models.db.player import Player
 from bracket.models.db.ranking import Ranking
 from bracket.models.db.shared import ApiModel
@@ -9,7 +14,7 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputUpdate,
 )
 from bracket.models.db.stage_tree import StageWithStageItems
-from bracket.models.db.team import FullTeamWithPlayers, Team
+from bracket.models.db.team import TeamWithMembers
 from bracket.models.db.tournament import Tournament, TournamentWithAccess
 from bracket.models.db.tournament_details import (
     StageItemInputStanding,
@@ -29,15 +34,7 @@ class DataResponse[DataT](ApiModel):
     data: DataT
 
 
-class ClubsResponse(DataResponse[list[Club]]):
-    pass
-
-
-class ClubResponse(DataResponse[Club | None]):
-    pass
-
-
-class ClubMembersResponse(DataResponse[list[ClubMember]]):
+class OrganizersResponse(DataResponse[list[Organizer]]):
     pass
 
 
@@ -61,16 +58,20 @@ class TournamentAccessResponse(DataResponse[TournamentAccess]):
     pass
 
 
-class PaginatedPlayers(ApiModel):
-    count: int
-    players: list[Player]
-
-
-class PlayersResponse(DataResponse[PaginatedPlayers]):
+class PlayersResponse(DataResponse[list[Player]]):
     pass
 
 
 class SinglePlayerResponse(DataResponse[Player]):
+    pass
+
+
+class PaginatedTournamentPlayers(ApiModel):
+    count: int
+    players: list[TournamentPlayer]
+
+
+class TournamentPlayersResponse(DataResponse[PaginatedTournamentPlayers]):
     pass
 
 
@@ -82,16 +83,24 @@ class SingleMatchResponse(DataResponse[Match]):
     pass
 
 
-class PaginatedTeams(ApiModel):
-    count: int
-    teams: list[FullTeamWithPlayers]
-
-
-class TeamsWithPlayersResponse(DataResponse[PaginatedTeams]):
+class TeamsResponse(DataResponse[list[TeamWithMembers]]):
     pass
 
 
-class SingleTeamResponse(DataResponse[Team]):
+class SingleTeamResponse(DataResponse[TeamWithMembers]):
+    pass
+
+
+class PaginatedTournamentTeams(ApiModel):
+    count: int
+    teams: list[TournamentTeamWithPlayers]
+
+
+class TournamentTeamsResponse(DataResponse[PaginatedTournamentTeams]):
+    pass
+
+
+class TournamentTeamResponse(DataResponse[TournamentTeam]):
     pass
 
 

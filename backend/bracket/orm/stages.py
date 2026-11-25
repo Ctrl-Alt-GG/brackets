@@ -25,7 +25,7 @@ from bracket.orm.types import StageTypeEnum
 
 if TYPE_CHECKING:
     from bracket.orm.matches import Round
-    from bracket.orm.participants import Team
+    from bracket.orm.participants import TournamentTeam
 
 
 class StageItem(Base):
@@ -88,7 +88,8 @@ class StageItemInput(Base):
     wins: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     draws: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     losses: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    team: Mapped[Team | None] = relationship(lazy="raise", viewonly=True)
+    # The team's participation in the tournament, which holds the team.
+    team: Mapped[TournamentTeam | None] = relationship(lazy="raise", viewonly=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -108,8 +109,8 @@ class StageItemInput(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["team_id", "tournament_id"],
-            ["teams.id", "teams.tournament_id"],
+            ["tournament_id", "team_id"],
+            ["tournament_teams.tournament_id", "tournament_teams.team_id"],
             name="stage_item_inputs_team_id_fkey",
         ),
         ForeignKeyConstraint(

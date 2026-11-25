@@ -1,38 +1,44 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { addHours, startOfHour } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 
-import * as OpenApi from '../../openapi';
 import { createTournamentApiTournamentsPostMutation } from '../../openapi/@tanstack/react-query.gen';
 import { zTournamentBody } from '../../openapi/zod.gen';
+import { toDateTimeLocal } from '../format';
 import { zDetailsLink, zLocalDateTime } from '../forms';
+import { useOrganizerTranslation } from '../organizer-locales';
 import { CheckboxField, Field } from '../ui';
-import { DETAILS_PAGE_DESCRIPTION } from '../urls';
 
 const newTournamentSchema = zTournamentBody.extend({
   dashboard_endpoint: zDetailsLink,
   start_time: zLocalDateTime,
 });
 
-export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
+/** A new tournament, which the organizer who creates it owns. */
+export function NewTournamentForm() {
+  const { t } = useOrganizerTranslation();
   const navigate = useNavigate();
+  // Most tournaments start soon, on the hour. Worked out once, when the form opens.
+  const [startTime] = useState(() =>
+    toDateTimeLocal(addHours(startOfHour(new Date()), 1).toISOString()),
+  );
   const form = useForm({
     defaultValues: {
-      club_id: clubs[0]?.id,
       dashboard_endpoint: '',
       dashboard_public: true,
       duration_minutes: 30,
       margin_minutes: 5,
       name: '',
-      players_can_be_in_multiple_teams: false,
-      start_time: '',
+      start_time: startTime,
     },
     resolver: zodResolver(newTournamentSchema),
   });
   const create = useMutation({
     ...createTournamentApiTournamentsPostMutation(),
-    meta: { successMessage: 'Tournament created.' },
+    meta: { successMessage: t('newTournament.created') },
   });
   const { errors } = form.formState;
 
@@ -43,7 +49,7 @@ export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
         create.mutate({ body }, { onSuccess: ({ data }) => navigate(`/tournaments/${data.id}`) }),
       )}
     >
-      <Field error={errors.name?.message} label="Tournament name">
+      <Field error={errors.name?.message} label={t('common.tournamentName')}>
         <input
           className="input w-full"
           placeholder="Ctrl-Alt-GG Summer Cup"
@@ -51,21 +57,8 @@ export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
           {...form.register('name')}
         />
       </Field>
-      <Field label="Event">
-        <select
-          className="select w-full"
-          required
-          {...form.register('club_id', { valueAsNumber: true })}
-        >
-          {clubs.map((club) => (
-            <option key={club.id} value={club.id}>
-              {club.name}
-            </option>
-          ))}
-        </select>
-      </Field>
       <div className="grid gap-x-4 md:grid-cols-2">
-        <Field error={errors.start_time?.message} label="Start time">
+        <Field error={errors.start_time?.message} label={t('common.startTime')}>
           <input
             className="input w-full"
             required
@@ -73,14 +66,18 @@ export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
             {...form.register('start_time')}
           />
         </Field>
-        <Field error={errors.dashboard_endpoint?.message} label="Details link">
+        <Field
+          error={errors.dashboard_endpoint?.message}
+          hint={t('common.detailsLinkHint')}
+          label={t('common.detailsLink')}
+        >
           <input
             className="input w-full"
             placeholder="summer-cup-2026"
             {...form.register('dashboard_endpoint')}
           />
         </Field>
-        <Field error={errors.duration_minutes?.message} label="Match duration (minutes)">
+        <Field error={errors.duration_minutes?.message} label={t('common.matchDuration')}>
           <input
             className="input w-full"
             min={1}
@@ -89,7 +86,7 @@ export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
             {...form.register('duration_minutes', { valueAsNumber: true })}
           />
         </Field>
-        <Field error={errors.margin_minutes?.message} label="Break between rounds (minutes)">
+        <Field error={errors.margin_minutes?.message} label={t('common.breakBetweenRounds')}>
           <input
             className="input w-full"
             min={0}
@@ -101,18 +98,13 @@ export function NewTournamentForm({ clubs }: { clubs: OpenApi.Club[] }) {
       </div>
       <div className="mt-3 grid gap-3">
         <CheckboxField
-          description={DETAILS_PAGE_DESCRIPTION}
-          label="Enable the Details page"
+          description={t('common.detailsPageDescription')}
+          label={t('newTournament.enableDetails')}
           {...form.register('dashboard_public')}
-        />
-        <CheckboxField
-          description="Without this, a player can only be in one team."
-          label="Allow players in multiple teams"
-          {...form.register('players_can_be_in_multiple_teams')}
         />
       </div>
       <button className="btn btn-primary mt-4" disabled={create.isPending} type="submit">
-        {create.isPending ? 'Creating…' : 'Create tournament'}
+        {create.isPending ? t('common.creating') : t('newTournament.create')}
       </button>
     </form>
   );

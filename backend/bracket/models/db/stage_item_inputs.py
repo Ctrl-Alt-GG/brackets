@@ -2,8 +2,8 @@ from decimal import Decimal
 
 from pydantic import Field
 
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.shared import ApiModel, BaseModelORM
-from bracket.models.db.team import Team
 from bracket.utils.id_types import StageItemId, StageItemInputId, TeamId, TournamentId
 
 
@@ -39,7 +39,7 @@ class StageItemInputFinal(StageItemInputBase):
     team_id: TeamId
     winner_from_stage_item_id: StageItemId | None = None
     winner_position: int | None = None
-    team: Team
+    team: TournamentTeam
 
 
 class StageItemInputEmpty(StageItemInputBase):
@@ -119,7 +119,7 @@ class StageItemInputUpdate(ApiModel):
     """A team that takes a slot when the slot's stage is activated."""
 
     stage_item_input: StageItemInputTentative
-    team: Team
+    team: TournamentTeam
     # A team that is level with `team` on every criterion, but goes elsewhere or doesn't go
     # through: only their seeding decided which of the two takes this slot.
-    tied_team: Team | None = None
+    tied_team: TournamentTeam | None = None

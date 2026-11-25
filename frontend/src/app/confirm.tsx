@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { confirmable, createConfirmation, type ConfirmDialogProps } from 'react-confirm';
 
+import { useOrganizerTranslation } from './organizer-locales';
+
 type ConfirmOptions = {
   /** What is about to happen, as a question, or the paragraphs that lead up to it. */
   message: ReactNode;
@@ -23,6 +25,7 @@ function ConfirmDialog({
   proceed,
   show,
 }: ConfirmDialogProps<ConfirmOptions, boolean>) {
+  const { t } = useOrganizerTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -44,7 +47,7 @@ function ConfirmDialog({
         {typeof message === 'string' ? <p>{message}</p> : message}
         <div className="modal-action">
           <button className="btn btn-ghost" onClick={() => proceed(false)} type="button">
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className={destructive ? 'btn btn-error' : 'btn btn-primary'}
@@ -59,7 +62,7 @@ function ConfirmDialog({
           the keyboard has Escape and the Cancel button. */}
       <form className="modal-backdrop" method="dialog">
         <button aria-hidden="true" onClick={() => proceed(false)} tabIndex={-1} type="submit">
-          Cancel
+          {t('common.cancel')}
         </button>
       </form>
     </dialog>

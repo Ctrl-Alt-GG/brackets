@@ -3,7 +3,6 @@ from collections.abc import Mapping, Sequence
 from pydantic import TypeAdapter
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from bracket import orm
 from bracket.models.db.stage_item_inputs import (
@@ -17,6 +16,7 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputUpdateBodyTentative,
 )
 from bracket.models.results import TeamStatistics
+from bracket.sql.stages import SLOT_TEAM
 from bracket.utils.id_types import StageItemId, StageItemInputId, TeamId, TournamentId
 
 
@@ -29,7 +29,7 @@ async def get_stage_item_input_by_id(
             orm.StageItemInput.id == stage_item_input_id,
             orm.StageItemInput.tournament_id == tournament_id,
         )
-        .options(joinedload(orm.StageItemInput.team))
+        .options(SLOT_TEAM)
         .execution_options(populate_existing=True)
     )
     if entity is None:

@@ -33,12 +33,8 @@ async def test_create_round(
     session: AsyncSession, startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(
-            DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team1_inserted,
-        inserted_team(
-            DUMMY_TEAM2.model_copy(update={"tournament_id": auth_context.tournament.id})
-        ) as team2_inserted,
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id) as team1_inserted,
+        inserted_team(DUMMY_TEAM2, auth_context.tournament.id) as team2_inserted,
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,
@@ -92,7 +88,7 @@ async def test_delete_round(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,
@@ -124,7 +120,7 @@ async def test_delete_round_of_fixed_format(
 ) -> None:
     """Only Swiss rounds are drawn one at a time. The rounds of the other formats stay."""
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,
@@ -155,7 +151,7 @@ async def test_update_round(
     """A Swiss round can be renamed and withdrawn into a draft."""
     body = {"name": "Some new name", "is_draft": True}
     async with (
-        inserted_team(DUMMY_TEAM1.model_copy(update={"tournament_id": auth_context.tournament.id})),
+        inserted_team(DUMMY_TEAM1, auth_context.tournament.id),
         inserted_stage(
             DUMMY_STAGE1.model_copy(update={"tournament_id": auth_context.tournament.id})
         ) as stage_inserted,

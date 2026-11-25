@@ -40,8 +40,6 @@ def match_fields(**fields: Any) -> dict[str, Any]:
         "round_id": RoundId(1),
         "stage_item_input1_score": 0,
         "stage_item_input2_score": 0,
-        "stage_item_input1_conflict": False,
-        "stage_item_input2_conflict": False,
     } | fields
 
 

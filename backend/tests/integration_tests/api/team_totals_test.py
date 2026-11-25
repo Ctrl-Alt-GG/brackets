@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bracket.logic.participation import get_tournament_team_with_totals
 from bracket.logic.ranking.team_totals import add_team_totals
-from bracket.logic.teams import get_team_with_totals
 from bracket.logic.tournament_graph import TournamentGraph
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.stage_tree import StageWithStageItems
@@ -178,7 +178,9 @@ async def test_filtered_stage_responses_keep_tournament_totals_without_duplicate
         ordinary = await team_totals(flow)
         assert_totals(ordinary["Alpha"], wins=3, elo=1244)
         assert_totals(ordinary["Bravo"], losses=3, elo=1156)
-        single = await get_team_with_totals(session, TournamentId(flow.id), TeamId(teams["Alpha"]))
+        single = await get_tournament_team_with_totals(
+            session, TournamentId(flow.id), TeamId(teams["Alpha"])
+        )
         assert_totals(single.model_dump(mode="json"), wins=3, elo=1244)
 
         query_count = 0

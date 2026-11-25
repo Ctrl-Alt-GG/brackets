@@ -33,8 +33,13 @@ def test_slot_union_from_orm_attributes(
     position: int | None,
     expected_type: type[StageItemInput],
 ) -> None:
-    team = (
-        orm.Team(**{**DUMMY_TEAM1.model_dump(), "id": team_id, "tournament_id": 1})
+    participation = (
+        orm.TournamentTeam(
+            tournament_id=1,
+            team_id=team_id,
+            active=True,
+            team=orm.Team(**DUMMY_TEAM1.model_dump(), id=team_id),
+        )
         if team_id is not None
         else None
     )
@@ -50,7 +55,7 @@ def test_slot_union_from_orm_attributes(
         wins=0,
         draws=0,
         losses=0,
-        team=team,
+        team=participation,
     )
 
     parsed = TypeAdapter(StageItemInput).validate_python(slot)
@@ -62,6 +67,8 @@ def test_slot_union_from_orm_attributes(
     if isinstance(parsed, StageItemInputFinal):
         assert parsed.team.id == team_id
         assert parsed.team.name == DUMMY_TEAM1.name
+        assert parsed.team.tournament_id == 1
+        assert parsed.team.active
 
 
 @pytest.mark.parametrize("stage_type", list(StageType))

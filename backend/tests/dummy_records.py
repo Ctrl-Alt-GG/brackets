@@ -3,8 +3,8 @@ from zoneinfo import ZoneInfo
 
 from heliclockter import datetime_utc
 
-from bracket.models.db.club import ClubInsertable
 from bracket.models.db.match import MatchInsertable
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.player import PlayerInsertable
 from bracket.models.db.ranking import RankingInsertable
 from bracket.models.db.round import RoundInsertable
@@ -15,12 +15,12 @@ from bracket.models.db.tournament import TournamentInsertable
 from bracket.models.db.user import UserInsertable
 from bracket.models.enums import StageType, UserAccountType
 from bracket.utils.id_types import (
-    ClubId,
     RankingId,
     RoundId,
     StageId,
     StageItemId,
     StageItemInputId,
+    TeamId,
     TournamentId,
 )
 from bracket.utils.security import hash_password
@@ -30,20 +30,13 @@ DUMMY_MOCK_TIME = datetime_utc(2022, 1, 11, 4, 32, 11, tzinfo=ZoneInfo("UTC"))
 # We don't know any db IDs here, so we use a placeholder for foreign keys.
 DB_PLACEHOLDER_ID = -42
 
-DUMMY_CLUB = ClubInsertable(
-    name="Some Cool Club",
-    created=DUMMY_MOCK_TIME,
-)
-
 DUMMY_TOURNAMENT = TournamentInsertable(
-    club_id=ClubId(DB_PLACEHOLDER_ID),
     name="Some Cool Tournament",
     created=DUMMY_MOCK_TIME,
     start_time=DUMMY_MOCK_TIME,
     dashboard_public=True,
     dashboard_endpoint="endpoint-test",
     logo_path=None,
-    players_can_be_in_multiple_teams=True,
     duration_minutes=10,
     margin_minutes=5,
 )
@@ -124,8 +117,6 @@ DUMMY_MATCH1 = MatchInsertable(
     margin_minutes=5,
     custom_duration_minutes=None,
     custom_margin_minutes=None,
-    stage_item_input1_conflict=False,
-    stage_item_input2_conflict=False,
 )
 
 DUMMY_USER = UserInsertable(
@@ -139,86 +130,62 @@ DUMMY_USER = UserInsertable(
 DUMMY_TEAM1 = TeamInsertable(
     created=DUMMY_MOCK_TIME,
     name="Team 1",
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-    active=True,
 )
 
 DUMMY_TEAM2 = TeamInsertable(
     created=DUMMY_MOCK_TIME,
     name="Team 2",
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-    active=True,
 )
 
 DUMMY_TEAM3 = TeamInsertable(
     created=DUMMY_MOCK_TIME,
     name="Team 3",
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-    active=True,
 )
 
 DUMMY_TEAM4 = TeamInsertable(
     created=DUMMY_MOCK_TIME,
     name="Team 4",
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
-    active=True,
 )
 
 
 DUMMY_PLAYER1 = PlayerInsertable(
     name="Player 01",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER2 = PlayerInsertable(
     name="Player 02",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER3 = PlayerInsertable(
     name="Player 03",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER4 = PlayerInsertable(
     name="Player 04",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER5 = PlayerInsertable(
     name="Player 05",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER6 = PlayerInsertable(
     name="Player 06",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER7 = PlayerInsertable(
     name="Player 07",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_PLAYER8 = PlayerInsertable(
     name="Player 08",
-    active=True,
     created=DUMMY_MOCK_TIME,
-    tournament_id=TournamentId(DB_PLACEHOLDER_ID),
 )
 
 DUMMY_RANKING1 = RankingInsertable(
@@ -229,3 +196,19 @@ DUMMY_RANKING1 = RankingInsertable(
     add_score_points=False,
     position=0,
 )
+
+
+def tournament_team(
+    team: TeamInsertable,
+    team_id: int,
+    *,
+    tournament_id: int = DB_PLACEHOLDER_ID,
+    active: bool = True,
+) -> TournamentTeam:
+    """A team as it takes part in a tournament, for tests that build a stage tree by hand."""
+    return TournamentTeam(
+        **team.model_dump(),
+        id=TeamId(team_id),
+        tournament_id=TournamentId(tournament_id),
+        active=active,
+    )

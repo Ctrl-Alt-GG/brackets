@@ -14,6 +14,7 @@ dependencies = [
     "limits==5.8.0",
     "networkx==3.7",
     "pillow==13.0.0",
+    "polib==1.2.0",
     "pwdlib[argon2,bcrypt]==0.3.1",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.2",
@@ -58,6 +59,7 @@ dev = [
     "ruff==0.17.5",
     "types-aiofiles==25.1.0.20261107",
     "types-networkx==3.6.1.20261108",
+    "types-polib==1.2.0.20260518",
     "types-zxcvbn==4.5.0.20260518",
     "vulture==2.16",
 ]

@@ -68,14 +68,16 @@ docker exec -it bracket-backend python cli.py set-password    # a forgotten pass
 docker exec -it bracket-backend python cli.py clear-user-lock --email someone@example.org
 ```
 
-- **Sharing an event.** The owner of an event adds other accounts on the Events
-  page, by email. They can manage its tournaments; only the owner renames or
-  deletes the event and decides who helps. Nobody needs to share a login. An
-  owner who leaves the organizing team makes another organizer the owner there.
-- **An event without a reachable owner.** When the owner's account is gone or
-  they can't sign in, `docker exec -it bracket-backend python cli.py
-  set-event-owner` makes another account the owner (it asks for the event's
-  name or id and the account's email).
+- **Sharing a tournament.** The owner of a tournament adds other accounts in
+  its Settings, by email. They can manage the tournament; only the owner decides
+  who helps, hands the tournament over and deletes it. Nobody needs to share a
+  login. An owner who leaves the organizing team makes another organizer the
+  owner there.
+- **A tournament without a reachable owner.** When the owner's account is gone
+  or they can't sign in, `docker exec -it bracket-backend python cli.py
+  set-tournament-owner` makes another account the owner (it asks for the
+  tournament's name or id and the account's email). The previous owner stays
+  on as an organizer.
 - **Failed logins.** Five wrong passwords lock an account for fifteen minutes,
   but only for the client address they came from. Someone guessing from
   elsewhere doesn't lock the organizer out. `clear-user-lock` lifts a lock
@@ -155,12 +157,15 @@ in agreement. Relationships require explicit eager loading.
 
 GET, HEAD and OPTIONS requests use read-only `REPEATABLE READ` transactions, so loaded
 graphs, standings and totals share a database snapshot. Commands use `READ COMMITTED` and
-commit before the response is sent. Locks are taken event first, then tournament, then
-account: a tournament command takes a shared lock on its event before checking access and
-then locks the tournament, so someone who loses access to the event loses it once the
-commands already let in have finished. Membership edits lock the event exclusively, and
-rules that cover all events of an account (their names and number) lock the account. A
-logo stored for a command is removed again unless the command commits.
+commit before the response is sent. A tournament command locks the tournament before it
+checks access, so someone who loses access loses it once the commands already let in have
+finished; changing who runs a tournament is such a command too. Commands that make lineups
+follow rosters lock tournaments before teams: adding teams to a tournament or reopening it
+locks those teams against changes. A roster change is the exception: it locks the team, then
+the team's open tournaments by id. `bracket/logic/participation.py` explains why that can't
+deadlock. Creating a tournament locks the account, so that two creations can't both take the
+last place its limit of owned tournaments allows. A logo stored for a command is removed
+again unless the command commits.
 
 The cached Details loader owns its snapshot transaction. Its authorization check releases
 its connection before waiting for that loader, so requests waiting on the cache do not
@@ -231,6 +236,34 @@ Otherwise set it to the backend's **origin only**, such as
 refuses to start with anything else, such as a value with a path or a trailing
 `/`. The page and its Content-Security-Policy both use the checked value.
 
+### API
+
+Everything the frontend does goes through the API, so scripts and other tools can do the same.
+`backend/openapi/openapi.json` describes every route and model, and a unit test fails when it falls
+behind the code. Production serves neither this description nor the interactive docs: open the
+file in an OpenAPI viewer, or open `http://127.0.0.1:8400/docs` while the development backend runs.
+
+A script logs in with `POST /api/token`, sending the email as `username` and the `password` as form
+fields. The answer's `access_token` is the session; send it as `Authorization: Bearer <token>`, and
+reuse it, because logins are rate limited. The frontend gets a cookie instead (see Sessions).
+Messages are in English, or in Hungarian for a request with `Accept-Language: hu`.
+
+### Languages
+
+Every page, and every message of the API, is in Hungarian and English. The page uses the language
+chosen with its switch, or else the browser's, and asks the API for the same with
+`Accept-Language`.
+
+- The frontend's texts are in `frontend/src/app/locales.ts`, for the pages everyone opens, and in
+  `frontend/src/app/organizer-locales.ts`, which loads with the organizer pages only.
+- The API writes its messages in English, through `gettext` and `ngettext` from
+  `bracket/utils/i18n.py`. Their Hungarian texts are in
+  `backend/bracket/locale/hu/LC_MESSAGES/messages.po`, which the API reads when it starts. A unit
+  test fails when a message has no Hungarian text there, or the catalog has one nothing uses.
+- The API stores English names for what it names itself: rounds ("Round 01"), a new stage
+  ("Stage") and a stage item created without a name (its format). Pages and messages show these in
+  their own language; a name an organizer typed stays as it is.
+
 ### Sessions
 
 Logging in sets an HttpOnly session cookie, so scripts on the page can't read
@@ -250,6 +283,25 @@ copy of its token. Changing the password signs out every other session.
 A request without a valid session answers 401, and the page asks to log in
 again. A valid session that may not do something answers 403 and stays signed
 in.
+
+### Teams and players
+
+Teams and players don't belong to a tournament. Every organizer shares them on the Teams and
+players page, and a team can take part in several tournaments at once. A tournament's lineup is
+the active members of its teams; inactive members stay in the roster without playing. A player
+can be an active member of only one of a tournament's teams, so a roster change or a joining
+team that would make someone play for two of them is refused, with the player's name. Roster
+changes reach the lineups of open tournaments. An archived tournament keeps the lineup it was
+played with, and reopening it takes the current rosters again, unless they break that rule.
+
+Match times avoid the other tournaments: a match starts once its teams and the players of their
+lineups are free from the matches of other open tournaments. A tournament's times are planned
+again when its matches change, its stages are activated, its knockout results come in, a roster
+of its teams changes or it is reopened. Matches that still clash, for example because two
+tournaments were planned at the same moment, are listed in the organizer view of the Schedule,
+where Recalculate times plans the tournament again.
+
+Team logos are public, since a team appears on the Details pages of every tournament it plays in.
 
 ### Organizer edits
 

@@ -25,6 +25,7 @@ from bracket.sql.rounds import (
 from bracket.sql.stage_items import get_stage_item
 from bracket.sql.tournaments import count_tournament_records
 from bracket.sql.validation import validate_round_create
+from bracket.utils.i18n import gettext, round_label
 from bracket.utils.id_types import RoundId, TournamentId
 
 
@@ -69,15 +70,18 @@ async def create_swiss_round(
     if not stage_item.type.supports_dynamic_number_of_rounds:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Rounds of {stage_item.type_name.lower()} stage items are created automatically"
+            detail=gettext(
+                "Rounds of {format} stage items are created automatically",
+                format=stage_item.type.translated_label.lower(),
             ),
         )
 
     if (draft_round := get_draft_round(stage_item)) is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Publish or discard the draft {draft_round.name} first",
+            detail=gettext(
+                "Publish or discard the draft {round} first", round=round_label(draft_round.name)
+            ),
         )
 
     # The pairing search is the heaviest computation of the app. In a worker thread, other
@@ -87,9 +91,9 @@ async def create_swiss_round(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Assign at least two active teams to this stage item first"
+                gettext("Assign at least two active teams to this stage item first")
                 if len(pairing.unpaired) < 2
-                else "Every team has already played every other team"
+                else gettext("Every team has already played every other team")
             ),
         )
 
@@ -107,9 +111,11 @@ async def regenerate_swiss_round(
     """Replace the pairings of a Swiss draft, keeping the draft if no replacement is possible."""
     stage_item = await get_stage_item(session, tournament.id, round_.stage_item_id)
     if not round_.is_draft or not stage_item.type.supports_dynamic_number_of_rounds:
-        raise HTTPException(400, "Only a draft Swiss round can be regenerated")
+        raise HTTPException(400, gettext("Only a draft Swiss round can be regenerated"))
     if any(is_played(match) for match in round_.matches):
-        raise HTTPException(400, "Clear the draft's results before regenerating its pairings")
+        raise HTTPException(
+            400, gettext("Clear the draft's results before regenerating its pairings")
+        )
 
     previous_rounds = stage_item.model_copy(
         update={
@@ -118,7 +124,9 @@ async def regenerate_swiss_round(
     )
     pairing = await run_in_threadpool(get_swiss_pairing, previous_rounds)
     if not pairing.pairs:
-        raise HTTPException(400, "No replacement pairings are available. The draft was kept.")
+        raise HTTPException(
+            400, gettext("No replacement pairings are available. The draft was kept.")
+        )
 
     await sql_delete_matches(session, [match.id for match in round_.matches])
     await write_swiss_pairings(session, tournament, round_.id, pairing)
@@ -134,9 +142,9 @@ async def delete_swiss_round(
     if not stage_item.type.supports_dynamic_number_of_rounds:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"The rounds of a {stage_item.type_name.lower()} belong to its format and "
-                "can't be deleted"
+            detail=gettext(
+                "The rounds of a {format} belong to its format and can't be deleted",
+                format=stage_item.type.translated_label.lower(),
             ),
         )
 
@@ -165,9 +173,9 @@ async def update_round(
     if publication_changes and not stage_item.type.supports_dynamic_number_of_rounds:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"The rounds of a {stage_item.type_name.lower()} are always published. Only "
-                "Swiss rounds can be drafts."
+            detail=gettext(
+                "The rounds of a {format} are always published. Only Swiss rounds can be drafts.",
+                format=stage_item.type.translated_label.lower(),
             ),
         )
 

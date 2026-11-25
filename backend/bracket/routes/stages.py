@@ -21,6 +21,7 @@ from bracket.routes.models import (
     SuccessResponse,
 )
 from bracket.routes.resources import disallow_archived_tournament, stage_dependency
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import TournamentId
 
 router = APIRouter(prefix=config.api_prefix)
@@ -40,7 +41,7 @@ async def get_stages(
     if no_draft_rounds is False and user is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Can't view draft rounds when not authorized",
+            detail=gettext("Can't view draft rounds when not authorized"),
         )
 
     return StagesWithStageItemsResponse(

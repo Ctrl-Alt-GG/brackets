@@ -27,6 +27,7 @@ from bracket.sql.users import (
     update_user_password,
 )
 from bracket.utils.errors import UniqueIndex, check_unique_constraint_violation
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import UserId
 from bracket.utils.rate_limit import (
     enforce_account_lockout,
@@ -49,7 +50,9 @@ EMAIL_UNIQUE_INDEXES = {UniqueIndex.ix_users_email, UniqueIndex.ix_users_email_l
 
 def check_is_same_user(user_public: UserPublic, user_id: UserId) -> None:
     if user_public.id != user_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only manage your own account")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, gettext("You can only manage your own account")
+        )
 
 
 async def current_password_is_valid(request: Request, user: UserInDB, password: str | None) -> bool:
@@ -92,7 +95,8 @@ async def update_user_details(
         user = assert_some(await get_user_in_db(session, user_public.id))
         if not await current_password_is_valid(request, user, user_to_update.current_password):
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Enter your current password to change your email"
+                status.HTTP_400_BAD_REQUEST,
+                gettext("Enter your current password to change your email"),
             )
 
     with check_unique_constraint_violation(EMAIL_UNIQUE_INDEXES):
@@ -124,7 +128,9 @@ async def put_user_password(
 
     user = assert_some(await get_user_in_db(session, user_public.id))
     if not await current_password_is_valid(request, user, user_to_update.current_password):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "The current password is incorrect")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, gettext("The current password is incorrect")
+        )
 
     try:
         await run_in_threadpool(
@@ -148,7 +154,9 @@ async def register_user(
     session: DbSession, request: Request, response: Response, user_to_register: UserToRegister
 ) -> TokenResponse:
     if not config.allow_user_registration:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account creation is unavailable for now")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, gettext("Account creation is unavailable for now")
+        )
 
     user = UserInsertable(
         email=user_to_register.email,
@@ -158,7 +166,7 @@ async def register_user(
         account_type=UserAccountType.REGULAR,
     )
     if await check_whether_email_is_in_use(session, user.email):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address already in use")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, gettext("Email address already in use"))
 
     with check_unique_constraint_violation(EMAIL_UNIQUE_INDEXES):
         user_created = await create_user(session, user)

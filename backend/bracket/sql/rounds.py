@@ -10,6 +10,7 @@ from bracket import orm
 from bracket.models.db.round import Round, RoundUpdateBody
 from bracket.models.db.stage_tree import RoundWithMatches
 from bracket.sql.stages import get_full_tournament_details
+from bracket.utils.i18n import gettext
 from bracket.utils.id_types import RoundId, StageItemId, TournamentId
 
 
@@ -58,7 +59,7 @@ async def get_round_by_id(
                 return round_
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Could not find round with id {round_id}",
+        detail=gettext("Could not find round with id {id}", id=round_id),
     )
 
 

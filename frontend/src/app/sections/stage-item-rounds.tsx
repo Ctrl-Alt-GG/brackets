@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
 import { useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +23,10 @@ import {
   isBracket,
   isEmptySlot,
   isScored,
+  roundName,
+  stageTypeName,
 } from '../matches';
+import { useOrganizerTranslation } from '../organizer-locales';
 import { Disclosure } from '../ui';
 
 type Match = OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive;
@@ -50,30 +54,46 @@ function pairKey(input1Id: number | null, input2Id: number | null) {
   return `${Math.min(input1Id ?? 0, input2Id ?? 0)}-${Math.max(input1Id ?? 0, input2Id ?? 0)}`;
 }
 
-/** Where a stage item stands and what the organizer should do next, in one line. */
-export function stageItemStatus(stageItem: StageItem) {
+/**
+ * Where a stage item stands and what the organizer should do next, in one line. `t` gives the
+ * organizer texts, `shared` the round names that every page shows.
+ */
+export function stageItemStatus(
+  stageItem: StageItem,
+  t: TFunction<'organizer'>,
+  shared: TFunction,
+) {
   const emptySlots = stageItem.inputs.filter(isEmptySlot).length;
   if (emptySlots > 0) {
-    return `${stageItem.inputs.length - emptySlots} of ${stageItem.inputs.length} slots filled`;
+    return t('slots.filled', {
+      filled: stageItem.inputs.length - emptySlots,
+      total: stageItem.inputs.length,
+    });
   }
 
   const rounds = sortedRounds(stageItem);
   const draft = rounds.find((round) => round.is_draft);
-  if (draft) return `${draft.name} is waiting to be published`;
+  if (draft) return t('rounds.waitingToPublish', { round: roundName(draft, shared) });
 
   const current = rounds.find((round) => playedCount(round) < round.matches.length);
   if (current) {
-    return `${current.name}: ${playedCount(current)} of ${current.matches.length} matches played`;
+    return t('rounds.progress', {
+      played: playedCount(current),
+      round: roundName(current, shared),
+      total: current.matches.length,
+    });
   }
 
-  if (stageItem.type === 'SWISS') return `Ready for round ${rounds.length + 1}`;
-  return 'All matches played';
+  if (stageItem.type === 'SWISS') return t('rounds.readyForRound', { number: rounds.length + 1 });
+  return t('rounds.allPlayed');
 }
 
 export function StageItemRounds({
   stageItem,
   ...context
 }: RoundContext & { stageItem: StageItem }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const rounds = sortedRounds(stageItem);
   const draft = rounds.find((round) => round.is_draft) ?? null;
   const published = rounds.filter((round) => !round.is_draft);
@@ -85,11 +105,10 @@ export function StageItemRounds({
     <div className="space-y-4">
       {!isSwiss ? (
         <p className="text-sm text-base-content/70">
-          All rounds of a {stageItem.type_name.toLowerCase()} are created together with it. Enter
-          the scores as matches finish.
-          {stageItem.inputs.some(isEmptySlot)
-            ? ' Assign teams to the slots to fill in the matches.'
-            : ''}
+          {t('rounds.createdTogether', {
+            format: stageTypeName(stageItem, shared).toLowerCase(),
+          })}
+          {stageItem.inputs.some(isEmptySlot) ? ` ${t('rounds.assignTeams')}` : ''}
         </p>
       ) : draft ? (
         <DraftRound context={context} round={draft} stageItem={stageItem} />
@@ -127,31 +146,25 @@ function NextSwissRound({
   roundNumber: number;
   stageItem: StageItem;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const canGenerate = activeTeamInputs(stageItem).length >= 2;
   const unplayed = previous ? previous.matches.length - playedCount(previous) : 0;
+  const previousName = previous ? roundName(previous, shared) : '';
   const generate = useMutation({
     ...createRoundApiTournamentsTournamentIdRoundsPostMutation(),
-    meta: {
-      successMessage: `Round ${roundNumber} pairings are ready. Publish them when they look right.`,
-    },
+    meta: { successMessage: t('rounds.pairingsReady', { number: roundNumber }) },
   });
 
   return (
     <div className="space-y-3 rounded-box border border-dashed border-base-300 bg-base-100/30 p-4">
-      <p className="text-sm text-base-content/80">
-        Every active team is paired with an opponent it hasn't played yet, as close to it in the
-        standings as possible. With an odd number of teams, one team sits out. You can adjust the
-        pairings before publishing them.
-      </p>
+      <p className="text-sm text-base-content/80">{t('rounds.swissHelp')}</p>
       {canGenerate ? null : (
-        <p className="text-sm text-base-content/70">
-          Assign at least two teams to the slots first.
-        </p>
+        <p className="text-sm text-base-content/70">{t('rounds.needTwoTeams')}</p>
       )}
       {canGenerate && previous && unplayed > 0 ? (
         <p className="text-sm text-warning">
-          {previous.name} still has {unplayed} {unplayed === 1 ? 'match' : 'matches'} without a
-          score. The pairings are based on the results entered so far.
+          {t('rounds.unplayed', { count: unplayed, round: previousName })}
         </p>
       ) : null}
       <button
@@ -162,8 +175,8 @@ function NextSwissRound({
             previous &&
             unplayed > 0 &&
             !(await confirm({
-              confirmLabel: `Generate round ${roundNumber}`,
-              message: `${previous.name} isn't finished. Generate round ${roundNumber} anyway?`,
+              confirmLabel: t('rounds.generate', { number: roundNumber }),
+              message: t('rounds.generateAnyway', { number: roundNumber, round: previousName }),
             }))
           )
             return;
@@ -174,7 +187,9 @@ function NextSwissRound({
         }}
         type="button"
       >
-        {generate.isPending ? 'Generating…' : `Generate round ${roundNumber}`}
+        {generate.isPending
+          ? t('common.generating')
+          : t('rounds.generate', { number: roundNumber })}
       </button>
     </div>
   );
@@ -189,19 +204,22 @@ function DraftRound({
   round: Round;
   stageItem: StageItem;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
+  const name = roundName(round, shared);
   const path = { round_id: round.id, tournament_id: context.tournamentId };
   const publish = useMutation({
     ...updateRoundByIdApiTournamentsTournamentIdRoundsRoundIdPutMutation(),
-    meta: { successMessage: `${round.name} is published.` },
+    meta: { successMessage: t('rounds.published', { round: name }) },
   });
   // Replacement is one server transaction: if pairing fails, the original draft stays intact.
   const regenerate = useMutation({
     ...regenerateRoundApiTournamentsTournamentIdRoundsRoundIdRegeneratePostMutation(),
-    meta: { successMessage: 'New pairings generated.' },
+    meta: { successMessage: t('rounds.regenerated') },
   });
   const discard = useMutation({
     ...deleteRoundApiTournamentsTournamentIdRoundsRoundIdDeleteMutation(),
-    meta: { successMessage: 'Draft discarded.' },
+    meta: { successMessage: t('rounds.discarded') },
   });
   const busy = publish.isPending || regenerate.isPending || discard.isPending;
 
@@ -223,16 +241,14 @@ function DraftRound({
     <div className="space-y-4 rounded-box border border-accent/40 bg-accent/10 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-semibold">{round.name}</p>
-          <p className="text-sm text-base-content/80">
-            Only organizers can see these pairings until you publish them.
-          </p>
+          <p className="font-semibold">{name}</p>
+          <p className="text-sm text-base-content/80">{t('rounds.draftHelp')}</p>
         </div>
-        <span className="badge badge-soft badge-accent">Draft</span>
+        <span className="badge badge-soft badge-accent">{t('rounds.draft')}</span>
       </div>
 
       {round.matches.length === 0 ? (
-        <p className="text-sm text-base-content/70">No pairings yet.</p>
+        <p className="text-sm text-base-content/70">{t('rounds.noPairings')}</p>
       ) : (
         <ul className="space-y-2">
           {round.matches.map((match) => (
@@ -243,7 +259,9 @@ function DraftRound({
 
       {unpaired.length > 0 ? (
         <p className="text-sm text-base-content/80">
-          Sitting out this round: {unpaired.map((input) => input.team.name).join(', ')}
+          {t('rounds.sittingOut', {
+            teams: unpaired.map((input) => input.team.name).join(', '),
+          })}
         </p>
       ) : null}
       {unpaired.length >= 2 ? (
@@ -263,7 +281,7 @@ function DraftRound({
           onClick={() => publish.mutate({ body: { is_draft: false, name: round.name }, path })}
           type="button"
         >
-          {publish.isPending ? 'Publishing…' : `Publish ${round.name}`}
+          {publish.isPending ? t('rounds.publishing') : t('rounds.publish', { round: name })}
         </button>
         <button
           className="btn btn-soft"
@@ -271,8 +289,8 @@ function DraftRound({
           onClick={async () => {
             if (
               await confirm({
-                confirmLabel: 'Regenerate pairings',
-                message: 'Replace these pairings with newly generated ones?',
+                confirmLabel: t('rounds.regenerate'),
+                message: t('rounds.regenerateQuestion'),
               })
             ) {
               regenerate.mutate({ path });
@@ -280,7 +298,7 @@ function DraftRound({
           }}
           type="button"
         >
-          {regenerate.isPending ? 'Generating…' : 'Regenerate pairings'}
+          {regenerate.isPending ? t('common.generating') : t('rounds.regenerate')}
         </button>
         <button
           className="btn btn-ghost"
@@ -288,9 +306,9 @@ function DraftRound({
           onClick={async () => {
             if (
               await confirm({
-                confirmLabel: 'Discard draft',
+                confirmLabel: t('rounds.discard'),
                 destructive: true,
-                message: `Discard the draft ${round.name}?`,
+                message: t('rounds.discardQuestion', { round: name }),
               })
             ) {
               discard.mutate({ path });
@@ -298,7 +316,7 @@ function DraftRound({
           }}
           type="button"
         >
-          {discard.isPending ? 'Discarding…' : 'Discard draft'}
+          {discard.isPending ? t('rounds.discarding') : t('rounds.discard')}
         </button>
       </div>
     </div>
@@ -312,15 +330,16 @@ function TeamWithRecord({
   context: RoundContext;
   input: StageItemInput | null;
 }) {
-  const { t } = useTranslation();
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const played = input ? input.wins + input.draws + input.losses : 0;
 
   return (
     <span>
-      {inputLabel(input, context.stageItemsById, t)}
+      {inputLabel(input, context.stageItemsById, shared)}
       {input && played > 0 ? (
         <span className="ml-1 text-xs text-base-content/70">
-          ({input.wins}W {input.draws}D {input.losses}L)
+          {t('rounds.record', { draws: input.draws, losses: input.losses, wins: input.wins })}
         </span>
       ) : null}
     </span>
@@ -336,16 +355,18 @@ function DraftPairing({
   disabled: boolean;
   match: Match;
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const remove = useMutation({
     ...deleteMatchApiTournamentsTournamentIdMatchesMatchIdDeleteMutation(),
-    meta: { successMessage: 'Pairing removed.' },
+    meta: { successMessage: t('rounds.pairingRemoved') },
   });
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 rounded-field bg-base-100/50 px-3 py-2">
       <span className="text-sm">
         <TeamWithRecord context={context} input={match.stage_item_input1} />{' '}
-        <span className="text-base-content/70">vs</span>{' '}
+        <span className="text-base-content/70">{shared('common.vs')}</span>{' '}
         <TeamWithRecord context={context} input={match.stage_item_input2} />
       </span>
       <button
@@ -356,7 +377,7 @@ function DraftPairing({
         }
         type="button"
       >
-        {remove.isPending ? 'Removing…' : 'Remove'}
+        {remove.isPending ? t('common.removing') : t('common.remove')}
       </button>
     </li>
   );
@@ -375,11 +396,13 @@ function AddPairingForm({
   roundId: number;
   teams: OpenApi.StageItemInputFinal[];
 }) {
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
   const form = useCreateForm({ defaultValues: { first: '', second: '' } });
   const [firstId, secondId] = useWatch({ control: form.control, name: ['first', 'second'] });
   const add = useMutation({
     ...createMatchApiTournamentsTournamentIdMatchesPostMutation(),
-    meta: { successMessage: 'Pairing added.' },
+    meta: { successMessage: t('rounds.pairingAdded') },
   });
 
   return (
@@ -400,7 +423,7 @@ function AddPairingForm({
     >
       <fieldset className="contents" disabled={form.locked}>
         <select
-          aria-label="First team"
+          aria-label={t('rounds.firstTeam')}
           className="select w-auto min-w-44"
           {...form.register('first', {
             onChange: (event) => {
@@ -408,31 +431,32 @@ function AddPairingForm({
             },
           })}
         >
-          <option value="">Pick a team</option>
+          <option value="">{t('rounds.pickTeam')}</option>
           {teams.map((input) => (
             <option key={input.id} value={input.id}>
               {input.team.name}
             </option>
           ))}
         </select>
-        <span className="text-sm text-base-content/70">vs</span>
+        <span className="text-sm text-base-content/70">{shared('common.vs')}</span>
         <select
-          aria-label="Second team"
+          aria-label={t('rounds.secondTeam')}
           className="select w-auto min-w-44"
           {...form.register('second')}
         >
-          <option value="">Pick a team</option>
+          <option value="">{t('rounds.pickTeam')}</option>
           {teams
             .filter((input) => String(input.id) !== firstId)
             .map((input) => (
               <option key={input.id} value={input.id}>
-                {input.team.name}
-                {firstId && playedPairs.has(pairKey(Number(firstId), input.id)) ? ' (rematch)' : ''}
+                {firstId && playedPairs.has(pairKey(Number(firstId), input.id))
+                  ? t('rounds.rematch', { team: input.team.name })
+                  : input.team.name}
               </option>
             ))}
         </select>
         <button className="btn btn-soft" disabled={disabled || !firstId || !secondId} type="submit">
-          {add.isPending ? 'Adding…' : 'Add pairing'}
+          {add.isPending ? t('common.adding') : t('rounds.addPairing')}
         </button>
       </fieldset>
     </form>
@@ -452,12 +476,14 @@ function PublishedRound({
   open: boolean;
   round: Round;
 }) {
-  const { t } = useTranslation();
+  const { t } = useOrganizerTranslation();
+  const { t: shared } = useTranslation();
+  const name = roundName(round, shared);
   const played = playedCount(round);
   const startTime = round.matches.find((match) => match.start_time)?.start_time ?? null;
   const remove = useMutation({
     ...deleteRoundApiTournamentsTournamentIdRoundsRoundIdDeleteMutation(),
-    meta: { successMessage: `${round.name} deleted.` },
+    meta: { successMessage: t('rounds.deleted', { round: name }) },
   });
 
   return (
@@ -467,14 +493,17 @@ function PublishedRound({
       summary={
         <>
           <span className="flex flex-wrap items-center gap-2 font-semibold">
-            {round.name}
+            {name}
             {round.matches.length > 0 && played === round.matches.length ? (
-              <span className="badge badge-soft badge-success badge-sm">Done</span>
+              <span className="badge badge-soft badge-success badge-sm">{t('rounds.done')}</span>
             ) : null}
           </span>
           <span className="block text-sm text-base-content/70">
-            {startTime ? formatDateTime(startTime) : 'Not scheduled yet'} · {played} of{' '}
-            {round.matches.length} matches played
+            {t('rounds.summary', {
+              played,
+              time: startTime ? formatDateTime(startTime) : shared('time.notScheduled'),
+              total: round.matches.length,
+            })}
           </span>
         </>
       }
@@ -484,8 +513,8 @@ function PublishedRound({
           <ScoreForm
             allowsDraw={allowsDraw}
             key={`${match.id}:${inputTeamId(match.stage_item_input1)}:${inputTeamId(match.stage_item_input2)}`}
-            label1={inputLabel(match.stage_item_input1, context.stageItemsById, t)}
-            label2={inputLabel(match.stage_item_input2, context.stageItemsById, t)}
+            label1={inputLabel(match.stage_item_input1, context.stageItemsById, shared)}
+            label2={inputLabel(match.stage_item_input2, context.stageItemsById, shared)}
             match={match}
             tournamentId={context.tournamentId}
           />
@@ -497,9 +526,9 @@ function PublishedRound({
             onClick={async () => {
               if (
                 await confirm({
-                  confirmLabel: `Delete ${round.name}`,
+                  confirmLabel: t('rounds.deleteRound', { round: name }),
                   destructive: true,
-                  message: `Delete ${round.name} and its results?`,
+                  message: t('rounds.deleteQuestion', { round: name }),
                 })
               ) {
                 remove.mutate({
@@ -509,7 +538,7 @@ function PublishedRound({
             }}
             type="button"
           >
-            {remove.isPending ? 'Deleting…' : `Delete ${round.name}`}
+            {remove.isPending ? t('common.deleting') : t('rounds.deleteRound', { round: name })}
           </button>
         ) : null}
       </div>

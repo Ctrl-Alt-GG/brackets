@@ -7,6 +7,7 @@ from bracket.models.db.stage_item import SINGLE_ELIMINATION_TEAM_COUNTS
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
 from bracket.models.db.tournament import Tournament
 from bracket.sql.matches import sql_create_matches
+from bracket.utils.i18n import gettext
 
 
 def determine_matches_first_round(
@@ -88,8 +89,9 @@ def get_number_of_rounds_to_create_single_elimination(team_count: int) -> int:
     if team_count not in SINGLE_ELIMINATION_TEAM_COUNTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Number of teams invalid, should be one of {list(SINGLE_ELIMINATION_TEAM_COUNTS)}"
+            detail=gettext(
+                "Number of teams invalid, should be one of {counts}",
+                counts=list(SINGLE_ELIMINATION_TEAM_COUNTS),
             ),
         )
 

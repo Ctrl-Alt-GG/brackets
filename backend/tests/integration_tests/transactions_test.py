@@ -20,11 +20,11 @@ from bracket.config import config
 from bracket.database import DbSession, engine, session_scope
 from bracket.development_seed import create_dev_db
 from bracket.logic.authentication import Credentials
-from bracket.logic.clubs import remove_club_member, transfer_club_ownership
+from bracket.logic.organizers import remove_organizer, transfer_ownership
 from bracket.models.db.user import UserPublic
-from bracket.models.enums import UserXClubRelation
+from bracket.models.enums import TournamentRole
 from bracket.routes import access, tournaments
-from bracket.sql.clubs import get_club_members, sql_give_user_access_to_club
+from bracket.sql.organizers import get_organizers, sql_add_organizer
 from tests.dummy_records import DUMMY_USER
 from tests.integration_tests.api.shared import UvicornTestServer, find_free_port
 from tests.integration_tests.mocks import get_mock_token
@@ -35,14 +35,14 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 async def test_read_transaction_has_one_snapshot_and_refuses_writes() -> None:
     async with session_scope() as session:
-        club = orm.Club(name="Before")
-        session.add(club)
+        player = orm.Player(name="Before")
+        session.add(player)
         await session.flush()
-        club_id = club.id
+        player_id = player.id
 
     try:
         async with session_scope(read_only=True) as reader:
-            query = select(orm.Club.name).where(orm.Club.id == club_id)
+            query = select(orm.Player.name).where(orm.Player.id == player_id)
             assert await reader.scalar(query) == "Before"
             assert await reader.scalar(func.current_setting("transaction_isolation")) == (
                 "repeatable read"
@@ -53,7 +53,7 @@ async def test_read_transaction_has_one_snapshot_and_refuses_writes() -> None:
                     "read committed"
                 )
                 await writer.execute(
-                    update(orm.Club).where(orm.Club.id == club_id).values(name="After")
+                    update(orm.Player).where(orm.Player.id == player_id).values(name="After")
                 )
             assert await reader.scalar(query) == "Before"
 
@@ -62,23 +62,23 @@ async def test_read_transaction_has_one_snapshot_and_refuses_writes() -> None:
 
         with pytest.raises(DBAPIError, match="read-only transaction"):
             async with session_scope(read_only=True) as reader:
-                reader.add(orm.Club(name="Forbidden write"))
+                reader.add(orm.Player(name="Forbidden write"))
                 await reader.flush()
     finally:
         async with session_scope() as session:
-            await session.execute(delete(orm.Club).where(orm.Club.id == club_id))
+            await session.execute(delete(orm.Player).where(orm.Player.id == player_id))
 
 
 async def test_command_failure_rolls_back_flushed_changes() -> None:
     name = f"Rollback {uuid4().hex}"
     with pytest.raises(ValueError, match="Cancel changes"):
         async with session_scope() as session:
-            session.add(orm.Club(name=name))
+            session.add(orm.Player(name=name))
             await session.flush()
             raise ValueError("Cancel changes")
 
     async with session_scope(read_only=True) as reader:
-        assert await reader.scalar(select(orm.Club.id).where(orm.Club.name == name)) is None
+        assert await reader.scalar(select(orm.Player.id).where(orm.Player.name == name)) is None
 
 
 async def test_request_commits_pending_changes_before_sending_response() -> None:
@@ -87,7 +87,7 @@ async def test_request_commits_pending_changes_before_sending_response() -> None
 
     @app.post("/write")
     async def write(session: DbSession) -> dict[str, str]:
-        session.add(orm.Club(name=name))
+        session.add(orm.Player(name=name))
         return {"status": "saved"}
 
     port = find_free_port()
@@ -99,25 +99,28 @@ async def test_request_commits_pending_changes_before_sending_response() -> None
                 assert response.status == 200
                 assert await response.json() == {"status": "saved"}
         async with session_scope(read_only=True) as reader:
-            assert await reader.scalar(select(orm.Club.id).where(orm.Club.name == name)) is not None
+            assert (
+                await reader.scalar(select(orm.Player.id).where(orm.Player.name == name))
+                is not None
+            )
     finally:
         await server.down()
         async with session_scope() as session:
-            await session.execute(delete(orm.Club).where(orm.Club.name == name))
+            await session.execute(delete(orm.Player).where(orm.Player.name == name))
 
 
 async def test_get_request_keeps_snapshot_across_concurrent_commit() -> None:
     async with session_scope() as session:
-        club = orm.Club(name="Before request")
-        session.add(club)
+        player = orm.Player(name="Before request")
+        session.add(player)
         await session.flush()
-        club_id = club.id
+        player_id = player.id
     first_read, writer_committed = asyncio.Event(), asyncio.Event()
     app = FastAPI()
 
     @app.get("/snapshot")
     async def snapshot(session: DbSession) -> dict[str, str | None]:
-        query = select(orm.Club.name).where(orm.Club.id == club_id)
+        query = select(orm.Player.name).where(orm.Player.id == player_id)
         before = await session.scalar(query)
         first_read.set()
         await writer_committed.wait()
@@ -142,7 +145,9 @@ async def test_get_request_keeps_snapshot_across_concurrent_commit() -> None:
                 await asyncio.wait_for(first_read.wait(), timeout=2)
                 async with session_scope() as writer:
                     await writer.execute(
-                        update(orm.Club).where(orm.Club.id == club_id).values(name="After request")
+                        update(orm.Player)
+                        .where(orm.Player.id == player_id)
+                        .values(name="After request")
                     )
                 writer_committed.set()
                 await request
@@ -152,7 +157,7 @@ async def test_get_request_keeps_snapshot_across_concurrent_commit() -> None:
     finally:
         await server.down()
         async with session_scope() as session:
-            await session.execute(delete(orm.Club).where(orm.Club.id == club_id))
+            await session.execute(delete(orm.Player).where(orm.Player.id == player_id))
 
 
 async def test_cached_details_release_authorization_connection(
@@ -204,7 +209,7 @@ async def test_cached_details_release_authorization_connection(
 
 
 @pytest.mark.parametrize("second_action", ["transfer", "leave"])
-async def test_membership_changes_recheck_permissions_after_waiting_for_club_lock(
+async def test_organizer_changes_recheck_permissions_after_waiting_for_the_tournament(
     second_action: str,
 ) -> None:
     async with (
@@ -218,8 +223,8 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
     ):
         async with session_scope() as session:
             for user in (successor, another):
-                await sql_give_user_access_to_club(
-                    session, user.id, context.club.id, UserXClubRelation.COLLABORATOR
+                await sql_add_organizer(
+                    session, context.tournament.id, user.id, TournamentRole.COLLABORATOR
                 )
         lock_held, finish_transfer, lock_attempted = (
             asyncio.Event(),
@@ -231,15 +236,17 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
 
         async def authorize(session: AsyncSession, credentials: Credentials) -> UserPublic:
             user = await access.user_authenticated(session, Response(), credentials)
-            return await access.user_authenticated_for_club(context.club.id, session, request, user)
+            return await access.user_authenticated_for_tournament(
+                context.tournament.id, session, request, user
+            )
 
         async def transfer() -> None:
             async with session_scope() as session:
                 owner = await authorize(session, owner_credentials)
-                await access.user_owns_club(context.club.id, session, owner)
+                await access.user_owns_tournament(context.tournament.id, session, owner)
                 lock_held.set()
                 await finish_transfer.wait()
-                await transfer_club_ownership(session, context.club.id, successor.id)
+                await transfer_ownership(session, context.tournament.id, successor.id)
 
         def on_statement(
             _connection: Connection,
@@ -249,7 +256,7 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
             _context: Any,
             _executemany: bool,
         ) -> None:
-            if "FOR UPDATE" in statement and "clubs" in statement:
+            if "FOR UPDATE" in statement and "tournaments" in statement:
                 lock_attempted.set()
 
         async def competing_change() -> None:
@@ -261,10 +268,10 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
                 )
                 user = await authorize(session, credentials)
                 if second_action == "transfer":
-                    await access.user_owns_club(context.club.id, session, user)
-                    await transfer_club_ownership(session, context.club.id, another.id)
+                    await access.user_owns_tournament(context.tournament.id, session, user)
+                    await transfer_ownership(session, context.tournament.id, another.id)
                 else:
-                    await remove_club_member(session, context.club.id, successor.id, user)
+                    await remove_organizer(session, context.tournament.id, successor.id, user)
 
         first = asyncio.create_task(transfer())
         await asyncio.wait_for(lock_held.wait(), timeout=2)
@@ -277,9 +284,9 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
             with pytest.raises(HTTPException) as rejected:
                 await second
             assert rejected.value.detail == (
-                "Only the owner of this event can do that"
+                "Only the owner of this tournament can do that"
                 if second_action == "transfer"
-                else "The owner can't be removed from the event. Delete the event instead."
+                else "The owner can't leave the tournament. Make someone else the owner first."
             )
         finally:
             finish_transfer.set()
@@ -288,9 +295,9 @@ async def test_membership_changes_recheck_permissions_after_waiting_for_club_loc
 
         async with session_scope(read_only=True) as session:
             owners = [
-                member.user_id
-                for member in await get_club_members(session, context.club.id)
-                if member.relation is UserXClubRelation.OWNER
+                organizer.user_id
+                for organizer in await get_organizers(session, context.tournament.id)
+                if organizer.role is TournamentRole.OWNER
             ]
             assert owners == [successor.id]
 
@@ -325,23 +332,25 @@ async def test_development_seed_preserves_one_configured_owner(
         factory = async_sessionmaker(isolated, expire_on_commit=False)
         async with factory() as session, session.begin():
             dummy_id = await create_dev_db(session)
-            members = (
+            organizers = (
                 await session.execute(
-                    select(orm.User.email, orm.UserXClub.relation).join(
-                        orm.UserXClub, orm.UserXClub.user_id == orm.User.id
+                    select(orm.User.email, orm.TournamentOrganizer.role).join(
+                        orm.TournamentOrganizer, orm.TournamentOrganizer.user_id == orm.User.id
                     )
                 )
             ).all()
-            assert [
-                email for email, relation in members if relation is UserXClubRelation.OWNER
-            ] == [admin_email]
-            dummy_membership = await session.scalar(
-                select(orm.UserXClub.relation).where(orm.UserXClub.user_id == dummy_id)
+            assert [email for email, role in organizers if role is TournamentRole.OWNER] == [
+                admin_email
+            ]
+            dummy_role = await session.scalar(
+                select(orm.TournamentOrganizer.role).where(
+                    orm.TournamentOrganizer.user_id == dummy_id
+                )
             )
-            assert dummy_membership is (
-                UserXClubRelation.OWNER
+            assert dummy_role is (
+                TournamentRole.OWNER
                 if admin_email == DUMMY_USER.email
-                else UserXClubRelation.COLLABORATOR
+                else TournamentRole.COLLABORATOR
             )
             assert await session.scalar(select(func.count()).select_from(orm.Team)) == 8
-            assert await session.scalar(select(func.count()).select_from(orm.PlayerXTeam)) == 16
+            assert await session.scalar(select(func.count()).select_from(orm.TeamMember)) == 16

@@ -118,6 +118,33 @@ export function Field({
   );
 }
 
+/**
+ * The submit button of a form that edits something saved. It stands out while the form has changes
+ * that aren't saved yet and stays quiet otherwise, so a page of editors shows what still needs
+ * saving.
+ */
+export function SaveButton({
+  children,
+  className,
+  dirty,
+  disabled = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  dirty: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      className={cx('btn', dirty ? 'btn-primary' : 'btn-soft', className)}
+      disabled={disabled}
+      type="submit"
+    >
+      {children}
+    </button>
+  );
+}
+
 /** A checkbox with its label, and a description that screen readers read after the label. */
 export function CheckboxField({
   className,
@@ -166,7 +193,7 @@ export function Disclosure({
   open = false,
   summary,
 }: {
-  /** Its content, with the `collapse-content` class. */
+  /** Its content: `collapse-content` elements, which only show as direct children. */
   children: ReactNode;
   className?: string;
   /** Opens it, also when this becomes true later on. */
@@ -236,6 +263,9 @@ export function EmptyState({
   );
 }
 
+/** The pages where organizers log in or sign up, which don't link to themselves. */
+const AUTH_PATHS: ReadonlySet<string> = new Set(['/login', '/create-account']);
+
 export function TopNav({
   currentUserName,
   logoutPending = false,
@@ -272,7 +302,7 @@ export function TopNav({
           <div className="order-last flex w-full gap-5 text-sm font-semibold md:order-none md:w-auto">
             {[
               ['/', t('nav.tournaments')],
-              ['/events', t('nav.events')],
+              ['/roster', t('nav.roster')],
             ].map(([to, label]) => (
               <NavLink
                 className={({ isActive }) =>
@@ -309,7 +339,7 @@ export function TopNav({
                 {logoutPending ? t('nav.loggingOut') : t('nav.logOut')}
               </button>
             </>
-          ) : (
+          ) : AUTH_PATHS.has(pathname) ? null : (
             // Players never need an account, so visitors only get a quiet way in for organizers.
             <Link className="link link-hover text-sm font-semibold" to={loginPath(pathname)}>
               {t('nav.organizerLogin')}

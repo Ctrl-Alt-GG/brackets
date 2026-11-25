@@ -5,6 +5,7 @@ import pytest
 from limits import RateLimitItemPerMinute
 
 from bracket.utils import rate_limit
+from bracket.utils.types import JsonDict
 from tests.integration_tests.api.flows import api_tournament, names, parse_time, result
 from tests.integration_tests.api.shared import SUCCESS_RESPONSE
 from tests.integration_tests.models import AuthContext
@@ -365,7 +366,7 @@ async def test_delaying_the_schedule_leaves_the_round_being_played(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_assigning_a_team_to_parallel_groups_updates_schedule_conflicts(
+async def test_assigning_a_team_to_parallel_groups_shows_a_conflict(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with api_tournament(auth_context) as flow:
@@ -375,21 +376,24 @@ async def test_assigning_a_team_to_parallel_groups_updates_schedule_conflicts(
         group_b = await flow.add_stage_item(stage, "ROUND_ROBIN", 2, "Group B")
         await flow.fill(group_a, teams["Alpha"], teams["Bravo"])
         await flow.fill(group_b, teams["Alpha"], teams["Charlie"])
-        conflicting = [(await flow.matches(group))[0][0] for group in (group_a, group_b)]
+        matches = [(await flow.matches(group))[0][0]["id"] for group in (group_a, group_b)]
+        conflicting = await flow.conflicts()
 
         await flow.set_slot(group_b, 1, {"team_id": teams["Delta"]})
-        resolved = [(await flow.matches(group))[0][0] for group in (group_a, group_b)]
-        await flow.set_slot(group_b, 1, {"team_id": teams["Alpha"]})
-        await flow.call(HTTPMethod.DELETE, f"stage_items/{group_b}")
-        after_deletion = (await flow.matches(group_a))[0][0]
+        resolved = await flow.conflicts()
 
-    assert all(match["stage_item_input1_conflict"] for match in conflicting)
-    assert all(not match["stage_item_input2_conflict"] for match in conflicting)
-    assert all(
-        not match["stage_item_input1_conflict"] and not match["stage_item_input2_conflict"]
-        for match in resolved
-    )
-    assert not after_deletion["stage_item_input1_conflict"]
+    assert conflicting == [
+        {
+            "match_id": match_id,
+            "team_id": teams["Alpha"],
+            "player_ids": [],
+            "other_match_id": other_match_id,
+            "other_tournament_id": flow.id,
+            "other_tournament_name": "Flow tournament",
+        }
+        for match_id, other_match_id in (matches, matches[::-1])
+    ]
+    assert resolved == []
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -419,44 +423,34 @@ async def test_details_are_one_answer_for_everyone(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_player_is_in_one_team_unless_the_tournament_allows_more(
+async def test_a_player_is_an_active_member_of_one_team_per_tournament(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
     async with api_tournament(auth_context) as flow:
         teams = await flow.add_teams("Alpha, Anna", "Bravo")
-        players = (await flow.call(HTTPMethod.GET, "players"))["data"]["players"]
-        body = {"name": "Bravo", "active": True, "player_ids": [players[0]["id"]]}
+        [anna] = (await flow.call(HTTPMethod.GET, "players"))["data"]["players"]
 
-        refused = await flow.call(HTTPMethod.PUT, f"teams/{teams['Bravo']}", body)
-        free_players = await flow.call(HTTPMethod.GET, "players?not_in_team=true")
+        def roster(*, active: bool) -> JsonDict:
+            return {"name": "Bravo", "members": [{"player_id": anna["id"], "active": active}]}
 
-        settings = await flow.tournament()
-        await flow.call(
-            HTTPMethod.PUT,
-            "",
-            {
-                key: settings[key]
-                for key in (
-                    "name",
-                    "start_time",
-                    "dashboard_public",
-                    "dashboard_endpoint",
-                    "duration_minutes",
-                    "margin_minutes",
-                )
-            }
-            | {"players_can_be_in_multiple_teams": True},
+        refused = await flow.call_shared(
+            HTTPMethod.PUT, f"teams/{teams['Bravo']}", roster(active=True)
         )
-        allowed = await flow.call(HTTPMethod.PUT, f"teams/{teams['Bravo']}", body)
+        on_the_bench = await flow.call_shared(
+            HTTPMethod.PUT, f"teams/{teams['Bravo']}", roster(active=False)
+        )
+        lineup = (await flow.call(HTTPMethod.GET, "players"))["data"]["players"]
 
     assert refused == {
         "detail": (
-            "Anna is already in Alpha. Players can be in one team, unless the tournament's "
-            "settings allow more."
+            "Anna can't play for both Alpha and Bravo in Flow tournament. A player can be an "
+            "active member of only one of a tournament's teams."
         )
     }
-    assert free_players["data"] == {"count": 0, "players": []}
-    assert allowed["data"]["name"] == "Bravo"
+    assert [
+        (member["player"]["name"], member["active"]) for member in on_the_bench["data"]["members"]
+    ] == [("Anna", False)]
+    assert [(player["name"], player["team_id"]) for player in lineup] == [("Anna", teams["Alpha"])]
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -611,26 +605,31 @@ async def test_only_swiss_rounds_can_be_drafts(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_saving_a_player_answers_with_their_results(
+async def test_a_player_has_results_of_their_own_in_every_tournament(
     startup_and_shutdown_uvicorn_server: None, auth_context: AuthContext
 ) -> None:
-    """The result columns of the players table are never updated, so they must not be returned."""
-    async with api_tournament(auth_context) as flow:
-        teams = await flow.add_teams("Alpha,Ann", "Bravo,Ben")
-        group = await flow.add_stage_item(await flow.add_stage(), "ROUND_ROBIN", 2, "Group")
-        await flow.fill(group, *teams.values())
-        match = (await flow.matches(group))[0][0]
+    """Ann plays in both tournaments, as the same player, but only wins in the first one."""
+    async with (
+        api_tournament(auth_context, "First cup") as first,
+        api_tournament(auth_context, "Second cup") as second,
+    ):
+        teams = await first.add_teams("Alpha,Ann", "Bravo,Ben")
+        group = await first.add_stage_item(await first.add_stage(), "ROUND_ROBIN", 2, "Group")
+        await first.fill(group, *teams.values())
+        match = (await first.matches(group))[0][0]
         alpha_first = names(match)[0] == "Alpha"
-        await flow.score(match, 2 if alpha_first else 0, 0 if alpha_first else 2)
-        players = (await flow.call(HTTPMethod.GET, "players"))["data"]["players"]
-        ann = next(player for player in players if player["name"] == "Ann")
+        await first.score(match, 2 if alpha_first else 0, 0 if alpha_first else 2)
+        await second.add_teams("Gamma,ann")
 
-        saved = await flow.call(
-            HTTPMethod.PUT, f"players/{ann['id']}", {"name": "Ann", "active": True}
-        )
+        def ann(players: list[JsonDict]) -> JsonDict:
+            return next(player for player in players if player["name"] == "Ann")
 
-    assert (saved["data"]["wins"], saved["data"]["losses"]) == (1, 0)
-    assert saved["data"]["elo_score"] == ann["elo_score"]
+        in_first = ann((await first.call(HTTPMethod.GET, "players"))["data"]["players"])
+        in_second = ann((await second.call(HTTPMethod.GET, "players"))["data"]["players"])
+
+    assert in_first["id"] == in_second["id"]
+    assert (in_first["wins"], in_first["losses"]) == (1, 0)
+    assert (in_second["wins"], in_second["losses"]) == (0, 0)
 
 
 @pytest.mark.asyncio(loop_scope="session")

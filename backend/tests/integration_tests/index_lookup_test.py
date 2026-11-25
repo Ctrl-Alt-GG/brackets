@@ -13,7 +13,8 @@ from bracket.utils.errors import (
 async def test_all_unique_indices_in_lookup(session: AsyncSession) -> None:
     query = """
     SELECT
-        idx.relname AS index_name
+        idx.relname AS index_name,
+        pgi.indisprimary AS is_primary
     FROM pg_index pgi
         JOIN pg_class idx ON idx.oid = pgi.indexrelid
         JOIN pg_namespace insp ON insp.oid = idx.relnamespace
@@ -21,11 +22,12 @@ async def test_all_unique_indices_in_lookup(session: AsyncSession) -> None:
         JOIN pg_namespace tnsp ON tnsp.oid = tbl.relnamespace
     WHERE pgi.indisunique
         AND tnsp.nspname = 'public'
-        AND idx.relname NOT LIKE '%_pkey'
         AND idx.relname !='alembic_version_pkc'
     """
-    result = await session.execute(text(query))
-    indices = {ix.index_name for ix in result}
+    result = (await session.execute(text(query))).all()
+    indices = {ix.index_name for ix in result if not ix.is_primary}
+    # Some primary keys are rules too, such as one team per player and tournament.
+    primary_keys = {ix.index_name for ix in result if ix.is_primary}
 
     expected_indices = {ix.name for ix in unique_index_violation_error_lookup.keys()}
     # Supporting composite foreign keys need unique parent keys as well as public uniqueness rules.
@@ -41,7 +43,7 @@ async def test_all_unique_indices_in_lookup(session: AsyncSession) -> None:
         if isinstance(constraint, UniqueConstraint)
     }
     assert indices == metadata_indices
-    assert expected_indices <= indices
+    assert expected_indices <= indices | primary_keys
 
 
 @pytest.mark.asyncio(loop_scope="session")

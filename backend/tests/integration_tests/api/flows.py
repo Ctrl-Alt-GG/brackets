@@ -24,6 +24,9 @@ class TournamentFlow:
     def __init__(self, auth_context: AuthContext, tournament: JsonDict) -> None:
         self.auth_context = auth_context
         self.id: int = tournament["id"]
+        # Teams and players outlive the tournament, so the flow deletes the ones it created.
+        self.team_ids: set[int] = set()
+        self.player_ids: set[int] = set()
 
     async def call(
         self,
@@ -37,6 +40,15 @@ class TournamentFlow:
         if anonymous:
             return await send_request(method, path, json=json)
         return await send_auth_request(method, path, self.auth_context, json=json)
+
+    async def call_shared(
+        self, method: HTTPMethod, endpoint: str, json: JsonDict | None = None
+    ) -> JsonDict:
+        """A request about the teams and players that every tournament shares."""
+        return await send_auth_request(method, endpoint, self.auth_context, json=json)
+
+    async def conflicts(self) -> list[JsonDict]:
+        return list((await self.call(HTTPMethod.GET, "workspace"))["data"]["conflicts"])
 
     async def tournament(self) -> JsonDict:
         return JsonDict((await self.call(HTTPMethod.GET))["data"])
@@ -56,10 +68,42 @@ class TournamentFlow:
         """The matches of a stage item, per round."""
         return [round_["matches"] for round_ in (await self.stage_item(stage_item_id))["rounds"]]
 
-    async def add_teams(self, *names: str) -> dict[str, int]:
-        await self.call(HTTPMethod.POST, "teams_multi", {"names": "\n".join(names), "active": True})
-        teams = (await self.call(HTTPMethod.GET, "teams?limit=500"))["data"]["teams"]
+    async def teams(self) -> list[JsonDict]:
+        return list((await self.call(HTTPMethod.GET, "teams?limit=500"))["data"]["teams"])
+
+    async def all_player_ids(self) -> set[int]:
+        return {
+            player["id"] for player in (await self.call_shared(HTTPMethod.GET, "players"))["data"]
+        }
+
+    async def add_teams(self, *lines: str) -> dict[str, int]:
+        """
+        Create teams that take part, from lines as organizers type them: a team's name, then its
+        players. Returns every team of the tournament by name.
+        """
+        teams_before = {team["id"] for team in await self.teams()}
+        players_before = await self.all_player_ids()
+        response = await self.call(HTTPMethod.POST, "teams_multi", {"names": "\n".join(lines)})
+        assert response == {"success": True}, response
+        teams = await self.teams()
+        self.team_ids.update({team["id"] for team in teams} - teams_before)
+        self.player_ids.update(await self.all_player_ids() - players_before)
         return {team["name"]: team["id"] for team in teams}
+
+    async def join(self, *team_ids: int) -> None:
+        """Let teams that already exist, such as another tournament's, take part as well."""
+        response = await self.call(HTTPMethod.POST, "teams", {"team_ids": list(team_ids)})
+        assert response == {"success": True}, response
+
+    async def delete_participants(self) -> None:
+        """Delete the teams and players the flow created, once they take part nowhere."""
+        for team_id in self.team_ids:
+            deleted = await send_auth_request(
+                HTTPMethod.DELETE, f"teams/{team_id}", self.auth_context
+            )
+            assert deleted == {"success": True}, deleted
+        for player_id in self.player_ids:
+            await send_auth_request(HTTPMethod.DELETE, f"players/{player_id}", self.auth_context)
 
     async def add_stage(self) -> int:
         await self.call(HTTPMethod.POST, "stages")
@@ -136,11 +180,9 @@ async def api_tournament(
         auth_context,
         json={
             "name": name,
-            "club_id": auth_context.club.id,
             "start_time": "2030-06-01T10:00:00Z",
             "dashboard_public": False,
             "dashboard_endpoint": None,
-            "players_can_be_in_multiple_teams": False,
             "duration_minutes": 30,
             "margin_minutes": 5,
         },
@@ -151,3 +193,4 @@ async def api_tournament(
     finally:
         deleted = await send_auth_request(HTTPMethod.DELETE, f"tournaments/{flow.id}", auth_context)
         assert deleted == {"success": True}, deleted
+        await flow.delete_participants()

@@ -1,4 +1,4 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import NamedTuple, assert_never
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from bracket.logic.scheduling.round_robin import (
     build_round_robin_stage_item,
     get_number_of_rounds_to_create_round_robin,
 )
+from bracket.models.db.participation import TournamentTeam
 from bracket.models.db.stage_item import StageItem
 from bracket.models.db.stage_item_inputs import (
     StageItemInputFinal,
@@ -20,7 +21,6 @@ from bracket.models.db.stage_item_inputs import (
     StageItemInputTentative,
 )
 from bracket.models.db.stage_tree import StageItemWithRounds, StageWithStageItems
-from bracket.models.db.team import FullTeamWithPlayers
 from bracket.models.db.tournament import Tournament
 from bracket.models.enums import StageType
 from bracket.sql.rounds import sql_create_rounds
@@ -79,15 +79,12 @@ async def build_matches_for_stage_item(
 
 
 def determine_available_inputs(
-    teams: list[FullTeamWithPlayers],
+    teams: Sequence[TournamentTeam],
     stages: list[StageWithStageItems],
 ) -> dict[StageId, list[StageItemInputOptionTentative | StageItemInputOptionFinal]]:
     """
-    Returns available inputs for the given stage.
-
-    Inputs are either from:
-    - Teams directly
-    - Previous ROUND_ROBIN or SWISS stage items (tentative options)
+    What the slots of each stage can take: a team that takes part in the tournament, or a place
+    of a group or Swiss stage item of an earlier stage.
     """
     all_team_options = {
         team.id: StageItemInputOptionFinal(team_id=team.id, already_taken=False) for team in teams

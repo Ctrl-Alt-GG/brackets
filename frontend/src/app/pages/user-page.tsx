@@ -15,6 +15,7 @@ import {
 import { zUserPasswordToUpdate, zUserToUpdate } from '../../openapi/zod.gen';
 import { useCreateForm } from '../create-form';
 import { useSession } from '../hooks';
+import { organizerT, useOrganizerTranslation } from '../organizer-locales';
 import { queryClient } from '../query-client';
 import { useSavedForm } from '../saved-form';
 import {
@@ -24,6 +25,7 @@ import {
   Field,
   LoadingState,
   PageShell,
+  SaveButton,
   Surface,
   SurfaceHeading,
 } from '../ui';
@@ -31,6 +33,7 @@ import { getErrorMessage } from '../errors';
 import { formatDateTime } from '../format';
 
 function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
+  const { t } = useOrganizerTranslation();
   const form = useSavedForm({
     resolver: zodResolver(zUserToUpdate),
     values: { current_password: '', email: user.email, name: user.name },
@@ -41,7 +44,7 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
     ...form.saveCallbacks,
     ...updateUserDetailsApiUsersUserIdPutMutation(),
     // The answer is the saved account, which is all that changed. The header follows its name.
-    meta: { invalidates: [], successMessage: 'Account saved.' },
+    meta: { invalidates: [], successMessage: t('account.saved') },
     onSuccess: (response) => {
       queryClient.setQueryData(getUserApiUsersMeGetQueryKey(), response);
       form.saveCallbacks.onSuccess();
@@ -59,15 +62,15 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
         }),
       )}
     >
-      <Field error={errors.name?.message} label="Display name">
+      <Field error={errors.name?.message} label={t('common.displayName')}>
         <input className="input w-full" required {...form.register('name')} />
       </Field>
-      <Field error={errors.email?.message} label="Email">
+      <Field error={errors.email?.message} label={t('common.email')}>
         <input className="input w-full" required type="email" {...form.register('email')} />
       </Field>
       {emailChanged ? (
         // The email is what the account signs in with, so changing it takes the password.
-        <Field error={errors.current_password?.message} label="Current password">
+        <Field error={errors.current_password?.message} label={t('common.currentPassword')}>
           <input
             autoComplete="current-password"
             className="input w-full"
@@ -78,11 +81,11 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
         </Field>
       ) : null}
       <p className="mt-3 text-sm text-base-content/70">
-        Account created {formatDateTime(user.created)}
+        {t('account.created', { date: formatDateTime(user.created) })}
       </p>
-      <button className="btn btn-primary mt-4" disabled={update.isPending} type="submit">
-        {update.isPending ? 'Saving…' : 'Save profile'}
-      </button>
+      <SaveButton className="mt-4" dirty={form.formState.isDirty} disabled={update.isPending}>
+        {update.isPending ? t('common.saving') : t('account.saveProfile')}
+      </SaveButton>
     </form>
   );
 }
@@ -92,11 +95,12 @@ function IdentityForm({ user }: { user: OpenApi.UserPublic }) {
 const passwordSchema = zUserPasswordToUpdate
   .extend({ repeated_password: z.string() })
   .refine((values) => values.password === values.repeated_password, {
-    message: "The two new passwords aren't the same",
+    error: () => organizerT('validation.passwordsDiffer'),
     path: ['repeated_password'],
   });
 
 function PasswordForm({ userId }: { userId: number }) {
+  const { t } = useOrganizerTranslation();
   const [showPasswords, setShowPasswords] = useState(false);
   const form = useCreateForm({
     defaultValues: { current_password: '', password: '', repeated_password: '' },
@@ -104,7 +108,7 @@ function PasswordForm({ userId }: { userId: number }) {
   });
   const update = useMutation({
     ...putUserPasswordApiUsersUserIdPasswordPutMutation(),
-    meta: { invalidates: [], successMessage: 'Password updated.' },
+    meta: { invalidates: [], successMessage: t('account.passwordUpdated') },
   });
   const { errors } = form.formState;
   const type = showPasswords ? 'text' : 'password';
@@ -116,7 +120,7 @@ function PasswordForm({ userId }: { userId: number }) {
       )}
     >
       <fieldset className="contents" disabled={form.locked}>
-        <Field error={errors.current_password?.message} label="Current password">
+        <Field error={errors.current_password?.message} label={t('common.currentPassword')}>
           <input
             autoComplete="current-password"
             className="input w-full"
@@ -125,17 +129,17 @@ function PasswordForm({ userId }: { userId: number }) {
             {...form.register('current_password')}
           />
         </Field>
-        <Field error={errors.password?.message} label="New password">
+        <Field error={errors.password?.message} label={t('account.newPassword')}>
           <input
             autoComplete="new-password"
             className="input w-full"
-            placeholder="At least twelve characters"
+            placeholder={t('account.newPasswordPlaceholder')}
             required
             type={type}
             {...form.register('password')}
           />
         </Field>
-        <Field error={errors.repeated_password?.message} label="Repeat the new password">
+        <Field error={errors.repeated_password?.message} label={t('account.repeatPassword')}>
           <input
             autoComplete="new-password"
             className="input w-full"
@@ -147,11 +151,11 @@ function PasswordForm({ userId }: { userId: number }) {
         <CheckboxField
           checked={showPasswords}
           className="mt-3"
-          label="Show the passwords"
+          label={t('account.showPasswords')}
           onChange={(event) => setShowPasswords(event.target.checked)}
         />
         <button className="btn btn-primary mt-4" type="submit">
-          {update.isPending ? 'Updating…' : 'Update password'}
+          {update.isPending ? t('account.updating') : t('account.updatePassword')}
         </button>
       </fieldset>
     </form>
@@ -159,47 +163,48 @@ function PasswordForm({ userId }: { userId: number }) {
 }
 
 export function UserPage() {
+  const { t } = useOrganizerTranslation();
   const [session] = useSession();
   const profile = useQuery({ ...getUserApiUsersMeGetOptions(), enabled: Boolean(session) });
 
   if (!session) {
     return (
-      <PageShell title="Account">
+      <PageShell title={t('account.title')}>
         <EmptyState
           action={
             <Link className="btn btn-primary btn-sm" to="/login">
-              Organizer login
+              {t('account.logIn')}
             </Link>
           }
-          text="Log in first to view or update your account."
-          title="Organizers only"
+          text={t('account.signedOutText')}
+          title={t('account.signedOutTitle')}
         />
       </PageShell>
     );
   }
 
   return (
-    <PageShell title="Account">
-      {profile.isPending ? <LoadingState title="Loading account…" /> : null}
+    <PageShell title={t('account.title')}>
+      {profile.isPending ? <LoadingState title={t('account.loading')} /> : null}
       {profile.error ? (
         <ErrorState
           action={
             <button className="btn btn-sm" onClick={() => void profile.refetch()} type="button">
-              Retry
+              {t('common.retry')}
             </button>
           }
           error={getErrorMessage(profile.error)}
-          title="Unable to load account"
+          title={t('account.loadFailed')}
         />
       ) : null}
       {profile.data ? (
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <Surface>
-            <SurfaceHeading title="Identity" />
+            <SurfaceHeading title={t('account.identity')} />
             <IdentityForm user={profile.data.data} />
           </Surface>
           <Surface>
-            <SurfaceHeading title="Password" />
+            <SurfaceHeading title={t('account.password')} />
             <PasswordForm userId={profile.data.data.id} />
           </Surface>
         </div>

@@ -5,7 +5,6 @@ from typing import Any
 
 DECIMAL_FIELDS = {"points", "elo_score", "swiss_score", "win_points", "draw_points", "loss_points"}
 REFERENCE_TYPES = {
-    "club_id": "club",
     "tournament_id": "tournament",
     "stage_id": "stage",
     "stage_item_id": "item",
@@ -34,17 +33,18 @@ def entity_type(record: dict[str, Any]) -> str:
         return "slot"
     if "win_points" in record:
         return "ranking"
-    if "club_id" in record:
+    if "dashboard_endpoint" in record:
         return "tournament"
     if "players" in record or "logo_path" in record:
         return "team"
-    if "active" in record:
+    # A player of a tournament's lineup, or of a team's.
+    if "team_id" in record or set(record) == {"id", "name", "created"}:
         return "player"
     raise AssertionError(f"Unrecognized entity fields: {sorted(record)}")
 
 
-def canonical_tournament(value: dict[str, Any], *, club_id: int) -> dict[str, Any]:
-    identifiers: dict[tuple[str, int], str] = {("club", club_id): "event"}
+def canonical_tournament(value: dict[str, Any]) -> dict[str, Any]:
+    identifiers: dict[tuple[str, int], str] = {}
     tournaments = value["tournaments?filter_=ALL"]["data"]
     for tournament in tournaments:
         identifiers["tournament", tournament["id"]] = f"tournament:{tournament['name']}"

@@ -3,11 +3,13 @@ import { useMutation } from '@tanstack/react-query';
 import { useWatch } from 'react-hook-form';
 
 import { useSavedForm } from '../saved-form';
+import { SaveButton } from '../ui';
 
 import * as OpenApi from '../../openapi';
 import { updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutMutation } from '../../openapi/@tanstack/react-query.gen';
 import { zMatchBody } from '../../openapi/zod.gen';
 import { hasTeam } from '../matches';
+import { useOrganizerTranslation } from '../organizer-locales';
 
 type Match = OpenApi.MatchWithDetails | OpenApi.MatchWithDetailsDefinitive;
 
@@ -36,6 +38,7 @@ export function ScoreForm({
   match: Match;
   tournamentId: number;
 }) {
+  const { t } = useOrganizerTranslation();
   const ready = hasTeam(match.stage_item_input1) && hasTeam(match.stage_item_input2);
   const form = useSavedForm({
     resolver: zodResolver(scoresSchema),
@@ -51,7 +54,7 @@ export function ScoreForm({
   const save = useMutation({
     ...form.saveCallbacks,
     ...updateMatchByIdApiTournamentsTournamentIdMatchesMatchIdPutMutation(),
-    meta: { successMessage: `Score saved: ${label1} vs ${label2}.` },
+    meta: { successMessage: t('score.saved', { team1: label1, team2: label2 }) },
   });
   const path = { match_id: match.id, tournament_id: tournamentId };
   const timing = {
@@ -69,11 +72,11 @@ export function ScoreForm({
       onSubmit={form.handleSubmit((scores) =>
         save.mutate({ body: { ...timing, ...scores, scoreless_result: false }, path }),
       )}
-      title={ready ? undefined : 'Waiting for both teams to be known'}
+      title={ready ? undefined : t('score.waiting')}
     >
       <span className="truncate text-sm">{label1}</span>
       <input
-        aria-label={`${label1} score`}
+        aria-label={t('score.scoreOf', { team: label1 })}
         className="input input-sm w-16 text-center"
         disabled={!ready || save.isPending}
         max={100000}
@@ -84,7 +87,7 @@ export function ScoreForm({
       />
       <span className="truncate text-sm">{label2}</span>
       <input
-        aria-label={`${label2} score`}
+        aria-label={t('score.scoreOf', { team: label2 })}
         className="input input-sm w-16 text-center"
         disabled={!ready || save.isPending}
         max={100000}
@@ -94,13 +97,13 @@ export function ScoreForm({
         {...form.register('stage_item_input2_score', { valueAsNumber: true })}
       />
       {/* Below the scores on narrow screens, next to them otherwise. */}
-      <button
-        className="btn btn-soft btn-sm col-span-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1"
+      <SaveButton
+        className="btn-sm col-span-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1"
+        dirty={form.formState.isDirty}
         disabled={!ready || save.isPending}
-        type="submit"
       >
-        {save.isPending ? 'Saving…' : 'Save'}
-      </button>
+        {save.isPending ? t('common.saving') : t('common.save')}
+      </SaveButton>
       {scoreError ? (
         <p className="col-span-2 text-xs text-error sm:col-span-3" role="alert">
           {scoreError}
@@ -109,10 +112,10 @@ export function ScoreForm({
       {ready && allowsDraw && isGoalless ? (
         <p className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/70 sm:col-span-3">
           {match.scoreless_result ? (
-            'Recorded as a 0–0 draw. Save 0–0 to mark it as not played.'
+            t('score.recordedDraw')
           ) : (
             <>
-              0–0 means not played yet.
+              {t('score.goallessMeansUnplayed')}
               <button
                 className="link"
                 disabled={save.isPending}
@@ -129,7 +132,7 @@ export function ScoreForm({
                 }
                 type="button"
               >
-                It ended 0–0
+                {t('score.endedGoalless')}
               </button>
             </>
           )}

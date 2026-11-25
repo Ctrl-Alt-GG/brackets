@@ -45,15 +45,14 @@ describe('links', () => {
 
   it('has no logo address without a logo', () => {
     expect(tournamentLogoUrl(tournament())).toBeNull();
-    expect(teamLogoUrl({ id: 4, logo_path: null, tournament_id: 7 })).toBeNull();
+    expect(teamLogoUrl({ id: 4, logo_path: null })).toBeNull();
   });
 
   it('changes the logo address with every upload, so browsers fetch the new picture', () => {
     expect(tournamentLogoUrl(tournament({ logo_path: 'a b.png' }))).toBe(
       '/api/tournaments/7/logo?v=a%20b.png',
     );
-    expect(teamLogoUrl({ id: 4, logo_path: 'new.jpg', tournament_id: 7 })).toBe(
-      '/api/tournaments/7/teams/4/logo?v=new.jpg',
-    );
+    // A team's logo is the same in every tournament it plays in.
+    expect(teamLogoUrl({ id: 4, logo_path: 'new.jpg' })).toBe('/api/teams/4/logo?v=new.jpg');
   });
 });

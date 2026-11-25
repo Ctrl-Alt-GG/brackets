@@ -3,7 +3,6 @@ from heliclockter import datetime_utc
 from bracket.models.db.match import MatchWithDetails, MatchWithDetailsDefinitive
 from bracket.models.db.stage_item_inputs import StageItemInputFinal
 from bracket.models.db.stage_tree import RoundWithMatches, StageItemWithRounds
-from bracket.models.db.team import Team
 from bracket.models.enums import StageType
 from bracket.utils.id_types import (
     MatchId,
@@ -15,7 +14,14 @@ from bracket.utils.id_types import (
     TeamId,
     TournamentId,
 )
-from tests.dummy_records import DUMMY_MOCK_TIME, DUMMY_TEAM1, DUMMY_TEAM2, DUMMY_TEAM3, DUMMY_TEAM4
+from tests.dummy_records import (
+    DUMMY_MOCK_TIME,
+    DUMMY_TEAM1,
+    DUMMY_TEAM2,
+    DUMMY_TEAM3,
+    DUMMY_TEAM4,
+    tournament_team,
+)
 
 
 def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInputFinal]:
@@ -26,7 +32,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team_id=TeamId(-1),
             slot=1,
             tournament_id=tournament_id,
-            team=Team(**DUMMY_TEAM1.model_dump(), id=TeamId(-1)),
+            team=tournament_team(DUMMY_TEAM1, -1),
         ),
         StageItemInputFinal(
             stage_item_id=StageItemId(-1),
@@ -34,7 +40,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team_id=TeamId(-2),
             slot=2,
             tournament_id=tournament_id,
-            team=Team(**DUMMY_TEAM2.model_dump(), id=TeamId(-2)),
+            team=tournament_team(DUMMY_TEAM2, -2),
         ),
         StageItemInputFinal(
             stage_item_id=StageItemId(-1),
@@ -42,7 +48,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team_id=TeamId(-1),
             slot=3,
             tournament_id=tournament_id,
-            team=Team(**DUMMY_TEAM3.model_dump(), id=TeamId(-3)),
+            team=tournament_team(DUMMY_TEAM3, -3),
         ),
         StageItemInputFinal(
             stage_item_id=StageItemId(-1),
@@ -50,7 +56,7 @@ def get_stage_item_inputs_mock(tournament_id: TournamentId) -> list[StageItemInp
             team_id=TeamId(-4),
             slot=4,
             tournament_id=tournament_id,
-            team=Team(**DUMMY_TEAM4.model_dump(), id=TeamId(-4)),
+            team=tournament_team(DUMMY_TEAM4, -4),
         ),
     ]
 
@@ -71,8 +77,6 @@ def get_2_definitive_matches_mock(
         round_id=RoundId(-3),
         stage_item_input1_score=2,
         stage_item_input2_score=0,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
     )
     match2 = MatchWithDetailsDefinitive(
         id=MatchId(-2),
@@ -87,8 +91,6 @@ def get_2_definitive_matches_mock(
         round_id=RoundId(-3),
         stage_item_input1_score=2,
         stage_item_input2_score=3,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
     )
     return match1, match2
 
@@ -107,8 +109,6 @@ def get_2_definitive_and_2_tentative_matches_mock(
         round_id=RoundId(-2),
         stage_item_input1_score=4,
         stage_item_input2_score=0,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
         stage_item_input1_winner_from_match_id=match1.id,
         stage_item_input2_winner_from_match_id=match2.id,
     )
@@ -120,8 +120,6 @@ def get_2_definitive_and_2_tentative_matches_mock(
         round_id=RoundId(-1),
         stage_item_input1_score=3,
         stage_item_input2_score=2,
-        stage_item_input1_conflict=False,
-        stage_item_input2_conflict=False,
         stage_item_input1_winner_from_match_id=match2.id,
         stage_item_input2_winner_from_match_id=match3.id,
     )
